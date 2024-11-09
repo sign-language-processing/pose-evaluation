@@ -1,0 +1,45 @@
+[project]
+name = "pose-evaluation"
+description = "Automatic Evaluation for Pose Files"
+version = "0.0.1"
+authors = [
+    { name = "Zifan Jiang", email = "zifan.jiang@uzh.ch" },
+    { name = "Amit Moryossef", email = "amitmoryossef@gmail.com" }
+]
+readme = "README.md"
+dependencies = [
+    "pose-format",
+    "scipy",
+    # For segment similarity
+    "segmentation @ git+https://github.com/sign-language-processing/segmentation"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pylint",
+    # to plot metric evaluation results
+    "matplotlib"
+]
+
+[tool.yapf]
+based_on_style = "google"
+column_limit = 120
+
+[tool.pylint]
+max-line-length = 120
+disable = [
+    "C0114", # Missing module docstring
+    "C0115", # Missing class docstring
+    "C0116", # Missing function or method docstring
+]
+
+[tool.setuptools]
+packages = [
+    "pose_evaluation",
+    "pose_evaluation.metrics",
+]
+
+[tool.pytest.ini_options]
+addopts = "-v"
+testpaths = ["pose_evaluation"]
