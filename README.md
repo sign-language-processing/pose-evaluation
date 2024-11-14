@@ -45,6 +45,8 @@ INSERT TABLE HERE
 
 Given an isolated sign corpus such as AUTSL[^2], we repeat the evaluation of Ham2Pose[^1] on our metrics.
 
+We also repeat the experiments of Atwell et al.[^3] to evaluate the bias of our metrics on different protected attributes.
+
 ### Continuous Sign Evaluation
 
 We evaluate each metric in the context of continuous signing with our continuous metrics alongside our segmented metrics
@@ -77,3 +79,6 @@ If you use our toolkit in your research or projects, please consider citing the 
 2022. [Ham2Pose: Animating Sign Language Notation into Pose Sequences](https://arxiv.org/abs/2211.13613).
 [^2]: Ozge Mercanoglu Sincan and Hacer Yalim Keles.
 2020. [AUTSL: A Large Scale Multi-modal Turkish Sign Language Dataset and Baseline Methods](https://arxiv.org/abs/2008.00932).
+[^3]: Katherine Atwell, Danielle Bragg, and Malihe Alikhani. 
+2024. [Studying and Mitigating Biases in Sign Language Understanding Models.](https://aclanthology.org/2024.emnlp-main.17/)
+In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pages 268–283, Miami, Florida, USA. Association for Computational Linguistics.
