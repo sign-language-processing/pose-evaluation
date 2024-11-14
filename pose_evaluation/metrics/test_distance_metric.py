@@ -5,7 +5,7 @@ import numpy as np
 from pose_format import Pose
 from pose_format.numpy import NumPyPoseBody
 
-from pose_evaluation.metrics.distsance_metric import DistanceMetric
+from pose_evaluation.metrics.distance_metric import DistanceMetric
 
 
 def get_poses(length1: int, length2: int):
