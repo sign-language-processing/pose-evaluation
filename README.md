@@ -61,11 +61,15 @@ If you use our toolkit in your research or projects, please consider citing the 
 ```bib
 @misc{pose-evaluation2024,
     title={Pose Evaluation: Metrics for Evaluating Sign Langauge Generation Models},
-    author={Zifan Jiang and Amit Moryossef},
+    author={Zifan Jiang, Colin Leong, Amit Moryossef},
     howpublished={\url{https://github.com/sign-language-processing/pose-evaluation}},
     year={2024}
 }
 ```
+
+#### Contributions:
+- Zifan, Colin, and Amit developed the evaluation metrics and tools.
+- Zifan, Anne, and Lisa conducted the qualitative and quantitative evaluations.
 
 ## References
 

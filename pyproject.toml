@@ -4,6 +4,7 @@ description = "Automatic Evaluation for Pose Files"
 version = "0.0.1"
 authors = [
     { name = "Zifan Jiang", email = "zifan.jiang@uzh.ch" },
+    { name = "Colin Leong", email = "cleong1@udayton.edu" },
     { name = "Amit Moryossef", email = "amitmoryossef@gmail.com" }
 ]
 readme = "README.md"
@@ -11,7 +12,7 @@ dependencies = [
     "pose-format",
     "scipy",
     # For segment similarity
-    "segmentation @ git+https://github.com/sign-language-processing/segmentation"
+    "sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation"
 ]
 
 [project.optional-dependencies]
