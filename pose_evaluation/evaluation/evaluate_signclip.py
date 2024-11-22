@@ -34,28 +34,35 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
     Returns:
         pd.DataFrame: Updated DataFrame with an additional column for embeddings.
     """
-    # Map video file IDs to embeddings
-    embeddings_map = {}
-    for npy_file in emb_dir.glob("*.npy"):
-        numerical_id = npy_file.stem.split("-")[0]
-        embeddings_map[numerical_id] = npy_file
+    import time
 
-    # Match embeddings to glosses
-    embeddings = []
-    for _, row in split_df.iterrows():
-        video_file = row["Video file"]
+    # Step 1: Create a mapping of numerical IDs to .npy files
+    map_start = time.perf_counter()
+    embeddings_map = {
+        npy_file.stem.split("-")[0]: npy_file
+        for npy_file in emb_dir.glob("*.npy")
+    }
+    map_end = time.perf_counter()
+    print(f"Creating embeddings map took {map_end - map_start:.4f} seconds")
+
+    # Step 2: Vectorized matching of embeddings
+    match_start = time.perf_counter()
+
+    def get_embedding(video_file):
         numerical_id = video_file.split("-")[0]
         npy_file = embeddings_map.get(numerical_id)
-
         if npy_file is not None:
-            embeddings.append(load_embedding(npy_file))
-        else:
-            embeddings.append(None)  # Placeholder if no matching file
+            return load_embedding(npy_file)
+        return None
 
-    split_df["embedding"] = embeddings
+    split_df["embedding"] = split_df["Video file"].apply(get_embedding)
+    match_end = time.perf_counter()
+    print(f"Matching embeddings to glosses took {match_end - match_start:.4f} seconds")
+
     return split_df
 
-def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine"):
+
+def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out_path=None):
     """
     Evaluate SignCLIP embeddings using score_all.
     
@@ -64,106 +71,136 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine"):
         split_file (Path): Path to the split CSV file.
         kind (str): Metric type ("cosine" or "l2"). Default is "cosine".
     """
-    # Load split file
+    overall_start = time.perf_counter()  # Start overall benchmarking
+
+    # Step 1: Load split file
+    split_load_start = time.perf_counter()
     split_df = pd.read_csv(split_file)
-    
-    # Match embeddings
+    split_load_end = time.perf_counter()
+    print(f"Loading split file took {split_load_end - split_load_start:.4f} seconds")
+    # print(f"{split_df.info()}")
+
+    # Step 2: Match embeddings to glosses
+    match_start = time.perf_counter()
     split_df = match_embeddings_to_glosses(emb_dir, split_df)
-    
-    # Filter out rows without embeddings
-    valid_df = split_df.dropna(subset=["embedding"]).reset_index(drop=True)
-    embeddings = valid_df["embedding"].tolist()
+    match_end = time.perf_counter()
+    print(f"Matching embeddings to glosses took {match_end - match_start:.4f} seconds")
+    # print(split_df.info())
 
-    # Initialize metric
+    # Step 3: Filter out rows without embeddings
+    filter_start = time.perf_counter()
+    items_with_embeddings_df = split_df.dropna(subset=["embedding"]).reset_index(drop=True)
+    embeddings = items_with_embeddings_df["embedding"].tolist()
+    filter_end = time.perf_counter()
+    print(f"Filtering embeddings took {filter_end - filter_start:.4f} seconds")
+    print(items_with_embeddings_df.info())
+
+    # Step 4: Initialize the distance metric
+    metric_start = time.perf_counter()
     metric = EmbeddingDistanceMetric(kind=kind, device="cpu")
+    metric_end = time.perf_counter()
+    print(f"Initializing metric took {metric_end - metric_start:.4f} seconds")
 
-    # Compute all pairwise scores
+    # Step 5: Compute all pairwise scores
+    score_start = time.perf_counter()
     print(f"Computing {kind} distances for {len(embeddings)} embeddings...")
-    
-    start_time = time.perf_counter()
     scores = metric.score_all(embeddings, embeddings)
-    score_duration = time.perf_counter() - start_time
-    print(f"Score_all took {score_duration:.3f} seconds")
+    score_end = time.perf_counter()
+    print(f"Score_all took {score_end - score_start:.3f} seconds")
+
+    # Step 6: Create output file path
+    output_file = out_path
+    if out_path is None:
+        output_file = Path(f"signclip_scores_{split_file.name}").with_suffix(".npz")
+
+    if not output_file.suffix == ".npz":
+        output_file = Path(f"{output_file}.npz")
+        
+
+    print(f"Scores will be saved to {output_file}")
+
+ 
+
+    # Step 7: Extract file list from DataFrame
+    files_start = time.perf_counter()
+    files = items_with_embeddings_df["Video file"].tolist()
+    files_end = time.perf_counter()
+    print(f"Extracting file list took {files_end - files_start:.4f} seconds")
 
 
+    analysis_start = time.perf_counter()    
+    index_to_check = 0
+    number_to_check = 10
+    print(f"The first {number_to_check} scores for {files[index_to_check]} to...")
+    for ref, score in list(zip(files, scores[index_to_check]))[:number_to_check]:
+        print("\t*------------->", f"{ref}".ljust(35), "\t", score.item())
 
-    # Extract the "Video file" column
-    files = valid_df["Video file"].tolist()
+    unique_glosses = items_with_embeddings_df['Gloss'].unique()
+    print(f"We have a vocabulary of {len(unique_glosses)} glosses")
+    gloss_indices = {}
+    for gloss in items_with_embeddings_df['Gloss'].unique():
+        gloss_indices[gloss] = items_with_embeddings_df.index[items_with_embeddings_df['Gloss'] == gloss].tolist()
 
-    # Create output file path
-    output_file = Path("signclip_scores.csv")
+    for gloss, indices in gloss_indices.items():
+        print(f"Here are the {len(indices)} indices for {gloss}:{indices}")
 
-    # Start timer
-    start_time = time.perf_counter()
+    # Assuming 'scores' is your distance matrix and 'gloss_indices' is your dictionary of gloss indices
+    find_class_distances_start = time.perf_counter()
+    all_within_class_distances = np.array([])  # Initialize as empty NumPy array
+    all_between_class_distances = np.array([])  # Initialize as empty NumPy array
 
-    # Create the Cartesian product of `files` with itself
-    n = len(files)
-    data = {
-        "hyp": [files[i] for i in range(n) for j in range(n)],
-        "ref": [files[j] for i in range(n) for j in range(n)],
-        "score": scores.flatten()  # Flatten the 2D score matrix into a 1D array
-    }
+    for gloss, indices in tqdm(gloss_indices.items()):
+        # Within-class distances
+        within_class_distances = scores[np.ix_(indices, indices)]
+        within_class_distances = within_class_distances[np.triu_indices(len(indices), k=1)]
+        all_within_class_distances = np.concatenate([all_within_class_distances, within_class_distances.ravel()])
 
-
-    # Construct the DataFrame
-    results_df = pd.DataFrame(data)
-
-    # Save to CSV
-    results_df.to_csv(output_file, index=False)
-
-    # End timer
-    end_time = time.perf_counter()
-    print(f"Saving DataFrame and writing to CSV took {end_time - start_time:.2f} seconds")
-
-
-
-    # Save scores to a CSV file
-    output_file = Path("signclip_scores.csv")
-    results = []
-    for i, hyp_row in tqdm(valid_df.iterrows(), total=valid_df.shape[0]):
-        for j, ref_row in valid_df.iterrows():
-            results.append({
-                "hyp": hyp_row["Video file"],
-                "ref": ref_row["Video file"],
-                "score": scores[i, j].item()
-            })
-
-    df_start = time.perf_counter()
-    results_df = pd.DataFrame(results)
-    df_end = time.perf_counter()
-    df_duration = df_end - df_start
-    print(f"df took {df_duration}")
-
-
+        # Between-class distances
+        other_indices = np.setdiff1d(np.arange(len(scores)), indices)
+        between_class_distances = scores[np.ix_(indices, other_indices)]
+        all_between_class_distances = np.concatenate([all_between_class_distances, between_class_distances.ravel()])
+    find_class_distances_end = time.perf_counter()
+    print(f"Finding within and without took {find_class_distances_end-find_class_distances_start}")
 
     
 
+    print(f"Mean within classes: {np.mean(all_within_class_distances)}")
+    print(f"Mean between classes: {np.mean(all_between_class_distances)}")
 
-    csv_start = time.perf_counter()    
-    results_df.to_csv(output_file, index=False)
-    csv_end = time.perf_counter()
-    csv_duration = csv_end - csv_start
-    print(f"CSV took {csv_duration}")
+    
+    analysis_end = time.perf_counter()
+    analysis_duration = analysis_end - analysis_start
+    print(f"Analysis took {analysis_duration} seconds")
+    
+    
 
-    json_start = time.perf_counter()
-    results_df.to_json(output_file.with_suffix(".json"), index=False)
-    json_end = time.perf_counter()
-    json_duration = json_end - json_start
-    print(f"JSON took {json_duration}")
-    
-    np_start = time.perf_counter()
-    np.save(output_file.with_suffix(".npy"), scores)
-    np_end = time.perf_counter()
-    np_duration = np_end-np_start
-    print(f"np took {np_duration}")
-    
-    
-    
-    
-    print(f"Scores of shape {scores.shape} saved to {output_file}")
-    read_back_in = np.load(output_file.with_suffix(".npy"))    
-    if np.allclose(read_back_in, scores):
-        print("yay! All the same!")
+    # Step 8: Save the scores and files to a compressed file
+    save_start = time.perf_counter()
+    np.savez(output_file, scores=scores, files=files)
+    save_end = time.perf_counter()
+    print(f"Saving scores and files took {save_end - save_start:.4f} seconds")
+    print(f"Scores of shape {scores.shape} with files list of length {len(files)} saved to {output_file}")
+
+    # Step 9: Read back the saved scores
+    read_start = time.perf_counter()
+    read_back_in = np.load(f"{output_file}")
+    read_end = time.perf_counter()
+    print(f"Reading back the file took {read_end - read_start:.4f} seconds")
+
+    # Step 10: Verify if the read data matches the original scores
+    verify_start = time.perf_counter()
+    if np.allclose(read_back_in["scores"], scores):
+        print("Yay! All the same!")
+    else:
+        print("Mismatch found!")
+    verify_end = time.perf_counter()
+    print(f"Verification step took {verify_end - verify_start:.4f} seconds")
+
+    # Overall time
+    overall_end = time.perf_counter()
+    print(f"Total script runtime: {overall_end - overall_start:.4f} seconds")
+
+
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate SignCLIP embeddings with score_all.")
@@ -177,10 +214,14 @@ def main():
         "--kind", type=str, choices=["cosine", "l2"], default="cosine",
         help="Type of distance metric to use (default: cosine)"
     )
+
+    parser.add_argument("--out_path", 
+                        type=Path, 
+                        help="Where to save output distance npz matrix+file list")
+
     args = parser.parse_args()
 
-    evaluate_signclip(emb_dir=args.emb_dir, split_file=args.split_file, kind=args.kind)
+    evaluate_signclip(emb_dir=args.emb_dir, split_file=args.split_file, kind=args.kind, out_path=args.out_path)
 
 if __name__ == "__main__":
     main()
-    print(f"THIS SCRIPT NEEDS TESTING")
