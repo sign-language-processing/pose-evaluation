@@ -6,6 +6,7 @@ from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceM
 from tqdm import tqdm
 import time
 import torch
+import json
 from typing import List, Tuple
 # python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/400_words_10_examples_each.csv
 # (pose_evaluation) (base) vlab@vlab-desktop:~/projects/sign_language_processing/pose-evaluation/pose_evaluation$ python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/20x5_curated_sample.csv 
@@ -196,7 +197,8 @@ def evaluate_signclip(emb_dir: Path, split_file:Path, out_path:Path, kind: str =
 
     # Step 4: Initialize the distance metric
     metric_start = time.perf_counter()
-    metric = EmbeddingDistanceMetric(kind=kind, device="cpu")
+    #metric = EmbeddingDistanceMetric(kind=kind, device="cpu")
+    metric = EmbeddingDistanceMetric(kind=kind)
     metric_end = time.perf_counter()
     print(f"Initializing metric took {metric_end - metric_start:.4f} seconds")
 
@@ -228,7 +230,7 @@ def evaluate_signclip(emb_dir: Path, split_file:Path, out_path:Path, kind: str =
     for gloss in items_with_embeddings_df['Gloss'].unique():
         gloss_indices[gloss] = items_with_embeddings_df.index[items_with_embeddings_df['Gloss'] == gloss].tolist()
 
-    for gloss, indices in gloss_indices.items():
+    for gloss, indices in list(gloss_indices.items())[:10]:
         print(f"Here are the {len(indices)} indices for {gloss}:{indices}")
 
     find_class_distances_start = time.perf_counter()
@@ -236,6 +238,7 @@ def evaluate_signclip(emb_dir: Path, split_file:Path, out_path:Path, kind: str =
     #synthetic_classes, synthetic_distances = generate_synthetic_data(30000, 2700, 8)
     #class_means = calculate_class_means(synthetic_classes, synthetic_distances)
     class_means = calculate_class_means(gloss_indices, scores)
+
 
     find_class_distances_end = time.perf_counter()
 
@@ -245,14 +248,28 @@ def evaluate_signclip(emb_dir: Path, split_file:Path, out_path:Path, kind: str =
     
     analysis_end = time.perf_counter()
     analysis_duration = analysis_end - analysis_start
+
+    in_class_means = [mean_dict["in_class"] for mean_dict in class_means.values()]
+    out_class_means = [mean_dict["out_of_class"] for mean_dict in class_means.values()]
+
+
+    for gloss, means in list(class_means.items())[:10]:
+        print(gloss, means)
+
+    print(f"Mean of in-class means: {np.mean(in_class_means)}")
+    print(f"Mean of out-of-class means: {np.mean(out_class_means)}")
+    
     print(f"Analysis took {analysis_duration} seconds")
     
     
-    for gloss, means in class_means.items():
-        print(gloss, means)
 
     # Step 8: Save the scores and files to a compressed file
+
     save_start = time.perf_counter()
+    class_means_json = out_path.with_name(f"{out_path.stem}_class_means").with_suffix(".json")
+    with open(class_means_json, "w") as f:
+        print(f"Writing class means to {f}")
+        json.dump(class_means, f)
     np.savez(out_path, scores=scores, files=files)
     save_end = time.perf_counter()
     print(f"Saving scores and files took {save_end - save_start:.4f} seconds")
