@@ -156,7 +156,7 @@ def test_score_symmetric(cosine_metric: EmbeddingDistanceMetric) -> None:
     assert pytest.approx(score1) == score2, "Score should be symmetric."
 
 
-def test_score_with_path(metric: EmbeddingDistanceMetric, tmp_path: Path) -> None:
+def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path) -> None:
     """Test that score works with embeddings loaded from file paths."""
     emb1 = random_tensor(768).cpu().numpy()  # Save as NumPy for file storage
     emb2 = random_tensor(768).cpu().numpy()
@@ -179,13 +179,13 @@ def test_score_with_path(metric: EmbeddingDistanceMetric, tmp_path: Path) -> Non
 
 
 def test_score_all_against_self(
-    metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor], distance_range_checker
+    cosine_metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor], distance_range_checker
 ) -> None:
     """Test the score_all function."""
     scores = cosine_metric.score_all(embeddings, embeddings)
     assert scores.shape == (len(embeddings), len(embeddings)), "Output shape mismatch for score_all."
     assert torch.allclose(
-        torch.diagonal(scores), torch.zeros(len(embeddings), device=DEVICE), atol=1e-6
+        torch.diagonal(scores), torch.zeros(len(embeddings)), atol=1e-6
     ), "Self-comparison scores should be zero for cosine distance."
     distance_range_checker(scores, min_val=0, max_val=2)
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
