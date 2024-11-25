@@ -5,7 +5,7 @@ import numpy as np
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 from tqdm import tqdm
 import time
-
+import torch
 # python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/400_words_10_examples_each.csv
 # (pose_evaluation) (base) vlab@vlab-desktop:~/projects/sign_language_processing/pose-evaluation/pose_evaluation$ python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/20x5_curated_sample.csv 
 def load_embedding(file_path: Path) -> np.ndarray:
@@ -149,9 +149,12 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out
     all_within_class_distances = np.array([])  # Initialize as empty NumPy array
     all_between_class_distances = np.array([])  # Initialize as empty NumPy array
 
-    for gloss, indices in tqdm(gloss_indices.items()):
+    within_class_means_by_gloss = {}
+    for gloss, indices in tqdm(gloss_indices.items(), desc="Finding mean values by gloss"):
         # Within-class distances
         within_class_distances = scores[np.ix_(indices, indices)]
+        within_class_mean = torch.mean(within_class_distances)
+        within_class_means_by_gloss[gloss] = within_class_mean
         within_class_distances = within_class_distances[np.triu_indices(len(indices), k=1)]
         all_within_class_distances = np.concatenate([all_within_class_distances, within_class_distances.ravel()])
 
@@ -160,9 +163,12 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out
         between_class_distances = scores[np.ix_(indices, other_indices)]
         all_between_class_distances = np.concatenate([all_between_class_distances, between_class_distances.ravel()])
     find_class_distances_end = time.perf_counter()
+
+
     print(f"Finding within and without took {find_class_distances_end-find_class_distances_start}")
 
-    
+    for gloss, mean in within_class_means_by_gloss.items():
+        print(f"Within {gloss}: {within_class_means_by_gloss[gloss]}")
 
     print(f"Mean within classes: {np.mean(all_within_class_distances)}")
     print(f"Mean between classes: {np.mean(all_between_class_distances)}")
