@@ -6,6 +6,7 @@ from scipy.spatial.distance import cosine
 import torch
 import torch.nn.functional as F
 
+
 class SignCLIPEmbeddingDistanceMetric(NumpyArrayEmbeddingMetric):
     def __init__(self, kind: str = "cosine", device: torch.device | str = "cuda"):
         """
@@ -17,8 +18,6 @@ class SignCLIPEmbeddingDistanceMetric(NumpyArrayEmbeddingMetric):
         """
         self.kind = kind
         self.device = torch.device(device) if isinstance(device, str) else device
-
-    
 
     def score_all(self, embeddings: torch.Tensor) -> torch.Tensor:
         """
@@ -48,4 +47,3 @@ class SignCLIPEmbeddingDistanceMetric(NumpyArrayEmbeddingMetric):
             raise ValueError(f"Unsupported distance metric: {self.kind}")
 
         return distance_matrix
-

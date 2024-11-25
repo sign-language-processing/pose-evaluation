@@ -57,11 +57,11 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             # Cosine similarity, converted to distance
             similarity = torch.dot(hypothesis, reference).item()
             return 1 - similarity
-        elif self.kind == "l2":
+        if self.kind == "l2":
             # L2 distance
             return torch.norm(hypothesis - reference).item()
-        else:
-            raise ValueError(f"Unsupported distance metric: {self.kind}")
+
+        raise ValueError(f"Unsupported distance metric: {self.kind}")
 
     def score_all(
         self,

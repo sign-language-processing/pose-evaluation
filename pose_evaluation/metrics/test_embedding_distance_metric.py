@@ -8,7 +8,7 @@ import logging
 from typing import List
 from pathlib import Path
 
-# TODO: many fixes. Including the fact that we test cosine but not Euclidean, 
+# TODO: many fixes. Including the fact that we test cosine but not Euclidean,
 
 
 # Configure logging
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Device configuration for PyTorch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 @pytest.fixture
 def cosine_metric():
@@ -50,9 +51,11 @@ def save_and_plot_distances(distances, matrix_name, num_points, dim):
     print(f"Distances plot saved to {plot_path}")
     plt.close()
 
+
 def random_tensor(size: int) -> torch.Tensor:
     """Generate a random tensor on the appropriate device."""
     return torch.rand(size, dtype=torch.float32, device=DEVICE)
+
 
 def generate_unit_circle_points(num_points: int, dim: int = 2) -> torch.Tensor:
     angles = torch.linspace(0, 2 * np.pi, num_points + 1)[:-1]
@@ -64,18 +67,18 @@ def generate_unit_circle_points(num_points: int, dim: int = 2) -> torch.Tensor:
         points = torch.cat([points, padding], dim=1)
     return points
 
+
 def generate_orthogonal_rows_with_repeats(num_rows: int, dim: int) -> torch.Tensor:
     orthogonal_rows = torch.empty(0, dim)
     for _ in range(min(num_rows, dim)):
         random_vector = torch.randn(1, dim)
         if orthogonal_rows.shape[0] > 0:
             random_vector -= (
-                torch.matmul(random_vector, orthogonal_rows.T) @ orthogonal_rows
+                torch.matmul(random_vector, orthogonal_rows.T)
+                @ orthogonal_rows
                 / torch.norm(orthogonal_rows, dim=1, keepdim=True) ** 2
             )
-        orthogonal_rows = torch.cat(
-            [orthogonal_rows, random_vector / torch.norm(random_vector)]
-        )
+        orthogonal_rows = torch.cat([orthogonal_rows, random_vector / torch.norm(random_vector)])
     if num_rows > dim:
         orthogonal_rows = orthogonal_rows.repeat(num_rows // dim + 1, 1)[:num_rows]
     return orthogonal_rows
@@ -110,16 +113,19 @@ def generate_orthogonal_rows_in_pairs(num_pairs: int, dim: int) -> torch.Tensor:
 
     return orthogonal_rows
 
+
 def generate_ones_tensor(rows: int, dims: int) -> torch.Tensor:
     """Generates a tensor with all elements equal to 1.0 (float)."""
     return torch.ones(rows, dims, dtype=torch.float32)
 
+
 def generate_identity_matrix_rows(rows, cols):
-  """
-  Returns an identity matrix with the specified number of rows and columns.
-  """
-  identity = torch.eye(max(rows, cols))
-  return identity[:rows, :cols]
+    """
+    Returns an identity matrix with the specified number of rows and columns.
+    """
+    identity = torch.eye(max(rows, cols))
+    return identity[:rows, :cols]
+
 
 def create_increasing_rows_tensor(num_rows: int, num_cols: int) -> torch.Tensor:
     """
@@ -138,8 +144,6 @@ def create_increasing_rows_tensor(num_rows: int, num_cols: int) -> torch.Tensor:
     return tensor
 
 
-
-
 def test_score_symmetric(cosine_metric: EmbeddingDistanceMetric) -> None:
     """Test that the metric is symmetric for cosine distance."""
     emb1 = random_tensor(768)
@@ -150,9 +154,9 @@ def test_score_symmetric(cosine_metric: EmbeddingDistanceMetric) -> None:
 
     logger.info(f"Score 1: {score1}, Score 2: {score2}")
     assert pytest.approx(score1) == score2, "Score should be symmetric."
-    
 
-def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path) -> None:
+
+def test_score_with_path(metric: EmbeddingDistanceMetric, tmp_path: Path) -> None:
     """Test that score works with embeddings loaded from file paths."""
     emb1 = random_tensor(768).cpu().numpy()  # Save as NumPy for file storage
     emb2 = random_tensor(768).cpu().numpy()
@@ -174,15 +178,18 @@ def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path)
     assert pytest.approx(score) == expected_score, "Score with paths should match direct computation."
 
 
-def test_score_all_against_self(cosine_metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor], distance_range_checker) -> None:
+def test_score_all_against_self(
+    metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor], distance_range_checker
+) -> None:
     """Test the score_all function."""
     scores = cosine_metric.score_all(embeddings, embeddings)
     assert scores.shape == (len(embeddings), len(embeddings)), "Output shape mismatch for score_all."
-    assert torch.allclose(torch.diagonal(scores), torch.zeros(len(embeddings), device=DEVICE), atol=1e-6), (
-        "Self-comparison scores should be zero for cosine distance."
-    )
-    distance_range_checker(scores, min_val=0, max_val=2)  
+    assert torch.allclose(
+        torch.diagonal(scores), torch.zeros(len(embeddings), device=DEVICE), atol=1e-6
+    ), "Self-comparison scores should be zero for cosine distance."
+    distance_range_checker(scores, min_val=0, max_val=2)
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
+
 
 def test_score_all_with_different_sizes(cosine_metric, distance_range_checker):
     """Test score_all with different sizes for hypotheses and references."""
@@ -190,14 +197,18 @@ def test_score_all_with_different_sizes(cosine_metric, distance_range_checker):
     refs = [np.random.rand(768) for _ in range(5)]
 
     scores = cosine_metric.score_all(hyps, refs)
-    assert scores.shape == (len(hyps), len(refs)), f"Output shape mismatch ({scores.shape}) vs {(len(hyps), len(refs))} for score_all with different sizes. "
-    distance_range_checker(scores, min_val=0, max_val=2)  
+    assert scores.shape == (
+        len(hyps),
+        len(refs),
+    ), f"Output shape mismatch ({scores.shape}) vs {(len(hyps), len(refs))} for score_all with different sizes. "
+    distance_range_checker(scores, min_val=0, max_val=2)
 
 
 # def test_score_all_with_empty_inputs(metric):
 #     """Test score_all with empty inputs."""
 #     scores = metric.score_all([], [])
 #     assert scores.shape == (0,), f"Score_all should return an empty array for empty inputs. Output: {scores.shape}"
+
 
 def test_invalid_input(cosine_metric: EmbeddingDistanceMetric) -> None:
     """Test the metric with invalid inputs."""
@@ -209,6 +220,7 @@ def test_invalid_input(cosine_metric: EmbeddingDistanceMetric) -> None:
             cosine_metric.score(emb1, invalid_input)
 
     logger.info("Invalid input test passed.")
+
 
 def test_score_tensor_input(cosine_metric):
     """Test score function with torch.Tensor inputs."""
@@ -255,6 +267,7 @@ def test_mixed_input(cosine_metric):
     score = cosine_metric.score(emb1, emb2)
     assert isinstance(score, float), "Output should be a float."
 
+
 @pytest.mark.parametrize("num_points, dim", [(16, 2)])
 def test_unit_circle_points(cosine_metric, num_points, dim):
     embeddings = generate_unit_circle_points(num_points, dim)
@@ -266,7 +279,9 @@ def test_unit_circle_points(cosine_metric, num_points, dim):
 def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
     embeddings = generate_orthogonal_rows_with_repeats(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
-    save_and_plot_distances(distances=distances, matrix_name="Orthogonal Rows (with repeats)", num_points=num_points, dim=dim)
+    save_and_plot_distances(
+        distances=distances, matrix_name="Orthogonal Rows (with repeats)", num_points=num_points, dim=dim
+    )
 
     # Create expected pattern directly within the test function
     expected_pattern = torch.zeros(num_points, num_points, dtype=torch.float32)
@@ -276,7 +291,9 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
                 expected_pattern[i, j] = 1
 
     # We expect 0 1 0  across and down
-    assert torch.allclose(distances, expected_pattern, atol=1e-6), "Output does not match the expected alternating pattern"
+    assert torch.allclose(
+        distances, expected_pattern, atol=1e-6
+    ), "Output does not match the expected alternating pattern"
 
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
@@ -285,6 +302,7 @@ def test_orthogonal_rows_in_pairs(cosine_metric, num_points, dim, distance_range
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "orthogonal_rows_in_pairs", num_points, dim)
     distance_range_checker(distances, min_val=0, max_val=2)  # Check distance range
+
 
 @pytest.mark.parametrize("num_points, dim", [(10, 5)])
 def test_ones_tensor(cosine_metric, num_points, dim, distance_range_checker):
