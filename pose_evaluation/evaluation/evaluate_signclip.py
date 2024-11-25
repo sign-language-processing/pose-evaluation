@@ -6,6 +6,7 @@ from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceM
 from tqdm import tqdm
 import time
 import torch
+from typing import List, Tuple
 # python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/400_words_10_examples_each.csv
 # (pose_evaluation) (base) vlab@vlab-desktop:~/projects/sign_language_processing/pose-evaluation/pose_evaluation$ python evaluation/evaluate_signclip.py /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/embeddings/sem-lex/ --split_file /media/vlab/Aqsa-Deep-Storage/colin/ASL_Citizen/splits/20x5_curated_sample.csv 
 def load_embedding(file_path: Path) -> np.ndarray:
@@ -62,7 +63,105 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
     return split_df
 
 
-def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out_path=None):
+def calculate_mean_distances(
+    distance_matrix: torch.Tensor, 
+    indices_a: torch.Tensor, 
+    indices_b: torch.Tensor, 
+    exclude_self: bool = False
+) -> float:
+    """
+    Calculate the mean of distances between two sets of indices in a 2D distance matrix.
+    
+    Args:
+        distance_matrix (torch.Tensor): A 2D tensor representing pairwise distances.
+        indices_a (torch.Tensor): A tensor of row indices.
+        indices_b (torch.Tensor): A tensor of column indices.
+        exclude_self (bool): Whether to exclude distances where indices_a == indices_b.
+        
+    Returns:
+        float: The mean distance between all pairs of (indices_a, indices_b).
+    """
+    # Create all pair combinations
+    row_indices, col_indices = torch.meshgrid(indices_a, indices_b, indexing="ij")
+    
+    if exclude_self:
+        # Apply a mask to remove self-distances
+        mask = row_indices != col_indices
+        row_indices = row_indices[mask]
+        col_indices = col_indices[mask]
+    
+    # Gather distances
+    selected_distances = distance_matrix[row_indices.flatten(), col_indices.flatten()]
+    
+    # Return the mean
+    return selected_distances.mean().item()
+
+def generate_synthetic_data(num_items, num_classes, num_items_per_class=4):
+    import random
+    torch.manual_seed(42)
+    random.seed(42)
+    # distance_matrix = torch.rand((num_items, num_items)) * 100
+    distance_matrix = torch.full((num_items, num_items), 10.0)
+    distance_matrix.fill_diagonal_(0)
+    indices = list(range(num_items))
+    random.shuffle(indices)
+
+    classes = {f"CLASS_{i}": torch.tensor([indices.pop() for _ in range(num_items_per_class)]) for i in range(num_classes)}
+    # Assign intra-class distances
+    mean_values_by_class ={}
+    for i, class_name in enumerate(classes.keys()):
+        mean_value = i+1
+        mean_values_by_class[class_name] = mean_value
+    for class_name, indices in classes.items():
+        mean_value = mean_values_by_class[class_name]
+        for i in indices:
+            for j in indices:
+                if i != j:  # Exclude self-distances
+                    distance_matrix[i, j] = mean_value
+    return classes, distance_matrix
+
+def calculate_class_means(gloss_indices, scores):
+    class_means_by_gloss = {}
+    all_indices = torch.arange(scores.size(0), dtype=int)
+
+    for gloss, indices in tqdm(gloss_indices.items(), desc="Finding mean values by gloss"):
+        indices = torch.LongTensor(indices)
+        class_means_by_gloss[gloss] ={} 
+        within_class_mean = calculate_mean_distances(scores, indices, indices, exclude_self=True)
+
+        class_means_by_gloss[gloss]["in_class"] = within_class_mean
+
+        complement_indices = all_indices[~torch.isin(all_indices, indices)]
+        without_class_mean = calculate_mean_distances(scores, indices, complement_indices)
+        class_means_by_gloss[gloss]["out_of_class"]=without_class_mean
+
+    return class_means_by_gloss
+
+#def calculate_class_means(gloss_indices, scores):
+#    all_within_class_distances = np.array([])  # Initialize as empty NumPy array
+#    all_between_class_distances = np.array([])  # Initialize as empty NumPy array
+#    within_class_means_by_gloss = {}
+#    for gloss, indices in tqdm(gloss_indices.items(), desc="Finding mean values by gloss"):
+#        # Within-class distances
+#        within_class_distances = scores[np.ix_(indices, indices)]
+#        within_class_mean = torch.mean(within_class_distances)
+#        within_class_means_by_gloss[gloss] = within_class_mean
+#        within_class_distances = within_class_distances[np.triu_indices(len(indices), k=1)]
+#        all_within_class_distances = np.concatenate([all_within_class_distances, within_class_distances.ravel()])
+#
+#        # Between-class distances
+#        other_indices = np.setdiff1d(np.arange(len(scores)), indices)
+#        between_class_distances = scores[np.ix_(indices, other_indices)]
+#        all_between_class_distances = np.concatenate([all_between_class_distances, between_class_distances.ravel()])
+#
+#    for gloss, mean in within_class_means_by_gloss.items():
+#        print(f"Within {gloss}: {within_class_means_by_gloss[gloss]}")
+#
+#    print(f"Mean within classes: {np.mean(all_within_class_distances)}")
+#    print(f"Mean between classes: {np.mean(all_between_class_distances)}")
+#    return within_class_means_by_gloss
+
+def evaluate_signclip(emb_dir: Path, split_file:Path, out_path:Path, kind: str = "cosine"):
     """
     Evaluate SignCLIP embeddings using score_all.
     
@@ -108,18 +207,6 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out
     score_end = time.perf_counter()
     print(f"Score_all took {score_end - score_start:.3f} seconds")
 
-    # Step 6: Create output file path
-    output_file = out_path
-    if out_path is None:
-        output_file = Path(f"signclip_scores_{split_file.name}").with_suffix(".npz")
-
-    if not output_file.suffix == ".npz":
-        output_file = Path(f"{output_file}.npz")
-        
-
-    print(f"Scores will be saved to {output_file}")
-
- 
 
     # Step 7: Extract file list from DataFrame
     files_start = time.perf_counter()
@@ -144,34 +231,16 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out
     for gloss, indices in gloss_indices.items():
         print(f"Here are the {len(indices)} indices for {gloss}:{indices}")
 
-    # Assuming 'scores' is your distance matrix and 'gloss_indices' is your dictionary of gloss indices
     find_class_distances_start = time.perf_counter()
-    all_within_class_distances = np.array([])  # Initialize as empty NumPy array
-    all_between_class_distances = np.array([])  # Initialize as empty NumPy array
 
-    within_class_means_by_gloss = {}
-    for gloss, indices in tqdm(gloss_indices.items(), desc="Finding mean values by gloss"):
-        # Within-class distances
-        within_class_distances = scores[np.ix_(indices, indices)]
-        within_class_mean = torch.mean(within_class_distances)
-        within_class_means_by_gloss[gloss] = within_class_mean
-        within_class_distances = within_class_distances[np.triu_indices(len(indices), k=1)]
-        all_within_class_distances = np.concatenate([all_within_class_distances, within_class_distances.ravel()])
+    #synthetic_classes, synthetic_distances = generate_synthetic_data(30000, 2700, 8)
+    #class_means = calculate_class_means(synthetic_classes, synthetic_distances)
+    class_means = calculate_class_means(gloss_indices, scores)
 
-        # Between-class distances
-        other_indices = np.setdiff1d(np.arange(len(scores)), indices)
-        between_class_distances = scores[np.ix_(indices, other_indices)]
-        all_between_class_distances = np.concatenate([all_between_class_distances, between_class_distances.ravel()])
     find_class_distances_end = time.perf_counter()
-
 
     print(f"Finding within and without took {find_class_distances_end-find_class_distances_start}")
 
-    for gloss, mean in within_class_means_by_gloss.items():
-        print(f"Within {gloss}: {within_class_means_by_gloss[gloss]}")
-
-    print(f"Mean within classes: {np.mean(all_within_class_distances)}")
-    print(f"Mean between classes: {np.mean(all_between_class_distances)}")
 
     
     analysis_end = time.perf_counter()
@@ -179,17 +248,19 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, kind: str = "cosine", out
     print(f"Analysis took {analysis_duration} seconds")
     
     
+    for gloss, means in class_means.items():
+        print(gloss, means)
 
     # Step 8: Save the scores and files to a compressed file
     save_start = time.perf_counter()
-    np.savez(output_file, scores=scores, files=files)
+    np.savez(out_path, scores=scores, files=files)
     save_end = time.perf_counter()
     print(f"Saving scores and files took {save_end - save_start:.4f} seconds")
-    print(f"Scores of shape {scores.shape} with files list of length {len(files)} saved to {output_file}")
+    print(f"Scores of shape {scores.shape} with files list of length {len(files)} saved to {out_path}")
 
     # Step 9: Read back the saved scores
     read_start = time.perf_counter()
-    read_back_in = np.load(f"{output_file}")
+    read_back_in = np.load(f"{out_path}")
     read_end = time.perf_counter()
     print(f"Reading back the file took {read_end - read_start:.4f} seconds")
 
@@ -225,9 +296,21 @@ def main():
                         type=Path, 
                         help="Where to save output distance npz matrix+file list")
 
-    args = parser.parse_args()
 
-    evaluate_signclip(emb_dir=args.emb_dir, split_file=args.split_file, kind=args.kind, out_path=args.out_path)
+ 
+    args = parser.parse_args()
+    
+
+    output_file = args.out_path
+    if output_file is None:
+        output_file = Path(f"signclip_scores_{args.split_file.name}").with_suffix(".npz")
+
+    if not output_file.suffix == ".npz":
+        output_file = Path(f"{output_file}.npz")
+
+    print(f"Scores will be saved to {output_file}")
+
+    evaluate_signclip(emb_dir=args.emb_dir, split_file=args.split_file, out_path=output_file, kind=args.kind)
 
 if __name__ == "__main__":
     main()
