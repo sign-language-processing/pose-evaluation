@@ -18,7 +18,7 @@ dependencies = [
     # For reading .csv files, etc
     "pandas", 
     # For segment similarity
-    #"sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation"
+    "sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation"
 ]
 
 [project.optional-dependencies]
@@ -40,6 +40,7 @@ disable = [
     "C0115", # Missing class docstring
     "C0116", # Missing function or method docstring
     "W0511", # TODO
+    "W1203", # use lazy % formatting in logging functions
 ]
 
 [tool.setuptools]

@@ -1,12 +1,15 @@
+from pathlib import Path
+from typing import List
+import logging
 import pytest
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-from pose_evaluation.metrics.conftest import distance_range_checker
-import matplotlib.pyplot as plt
-import logging
-from typing import List
-from pathlib import Path
+
+# no need to import. https://github.com/pylint-dev/pylint/issues/3493#issuecomment-616761997
+# from pose_evaluation.metrics.conftest import distance_range_checker
+
 
 # TODO: many fixes. Including the fact that we test cosine but not Euclidean,
 
@@ -19,14 +22,16 @@ logger = logging.getLogger(__name__)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-@pytest.fixture
-def cosine_metric():
+# named the fixture this way to solve many pylint W0621
+# https://stackoverflow.com/questions/46089480/pytest-fixtures-redefining-name-from-outer-scope-pylint
+@pytest.fixture(name="cosine_metric")
+def fixture_cosine_metric():
     """Fixture to create an EmbeddingDistanceMetric instance."""
     return EmbeddingDistanceMetric(kind="cosine")
 
 
-@pytest.fixture
-def embeddings() -> List[torch.Tensor]:
+@pytest.fixture(name="embeddings")
+def fixture_embeddings() -> List[torch.Tensor]:
     """Fixture to create dummy embeddings for testing."""
     return [random_tensor(768) for _ in range(5)]
 
@@ -185,7 +190,7 @@ def test_score_all_against_self(
     scores = cosine_metric.score_all(embeddings, embeddings)
     assert scores.shape == (len(embeddings), len(embeddings)), "Output shape mismatch for score_all."
     assert torch.allclose(
-        torch.diagonal(scores), torch.zeros(len(embeddings),dtype=scores.dtype), atol=1e-6
+        torch.diagonal(scores), torch.zeros(len(embeddings), dtype=scores.dtype), atol=1e-6
     ), "Self-comparison scores should be zero for cosine distance."
     distance_range_checker(scores, min_val=0, max_val=2)
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
