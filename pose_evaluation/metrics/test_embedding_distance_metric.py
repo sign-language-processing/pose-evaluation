@@ -185,7 +185,7 @@ def test_score_all_against_self(
     scores = cosine_metric.score_all(embeddings, embeddings)
     assert scores.shape == (len(embeddings), len(embeddings)), "Output shape mismatch for score_all."
     assert torch.allclose(
-        torch.diagonal(scores), torch.zeros(len(embeddings)), atol=1e-6
+        torch.diagonal(scores), torch.zeros(len(embeddings),dtype=scores.dtype), atol=1e-6
     ), "Self-comparison scores should be zero for cosine distance."
     distance_range_checker(scores, min_val=0, max_val=2)
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
@@ -216,10 +216,10 @@ def test_invalid_input(cosine_metric: EmbeddingDistanceMetric) -> None:
     invalid_inputs = ["invalid_input", None, -1, 1]
 
     for invalid_input in invalid_inputs:
-        with pytest.raises((TypeError, AttributeError)):
+        with pytest.raises((TypeError, AttributeError, ValueError)):
             cosine_metric.score(emb1, invalid_input)
 
-    logger.info("Invalid input test passed.")
+    logger.info("Invalid input successfully crashed as expected.")
 
 
 def test_score_tensor_input(cosine_metric):
@@ -284,7 +284,7 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
     )
 
     # Create expected pattern directly within the test function
-    expected_pattern = torch.zeros(num_points, num_points, dtype=torch.float32)
+    expected_pattern = torch.zeros(num_points, num_points, dtype=distances.dtype)
     for i in range(num_points):
         for j in range(num_points):
             if (i + j) % 2 != 0:
