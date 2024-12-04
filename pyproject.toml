@@ -11,8 +11,14 @@ readme = "README.md"
 dependencies = [
     "pose-format",
     "scipy",
+    "torch", 
+    "numpy", # possibly could replace all with torch
+    # for various vector/tensor similarities and distances in torch
+    "sentence-transformers",
+    # For reading .csv files, etc
+    "pandas", 
     # For segment similarity
-    "sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation"
+    #"sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation"
 ]
 
 [project.optional-dependencies]

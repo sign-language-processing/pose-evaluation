@@ -1,104 +1,170 @@
-from typing import Literal, Union, List
+from typing import Literal, List
 import torch
-import torch.nn.functional as F
+from torch import Tensor
 import numpy as np
-
+from sentence_transformers import util as st_util
 from pose_evaluation.metrics.base_embedding_metric import EmbeddingMetric
 
 
+# Useful reference: https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/util.py#L31
+# * Helper functions such as batch_to_device, _convert_to_tensor, _convert_to_batch, _convert_to_batch_tensor
+# * a whole semantic search function, with chunking and top_k
+
+# See also pgvector's C implementation: https://github.com/pgvector/pgvector/blob/master/src/vector.c
+# * cosine_distance: https://github.com/pgvector/pgvector/blob/master/src/vector.c#L658
+# * l2_distance https://github.com/pgvector/pgvector/blob/master/src/vector.c#L566
+
+
 class EmbeddingDistanceMetric(EmbeddingMetric):
-    def __init__(self, kind: Literal["cosine", "l2"] = "cosine", device: Union[torch.device, str] = None):
+    def __init__(
+        self,
+        kind: Literal["cosine", "euclidean", "dot"] = "cosine",
+        device: torch.device | str = None,
+        dtype=torch.float64,
+    ):
         """
         Initialize the embedding distance metric.
 
         Args:
-            kind (Literal["cosine", "l2"]): The type of distance metric.
+            kind (Literal["cosine", "euclidean"]): The type of distance metric.
             device (torch.device | str): The device to use for computation. If None, automatically detects.
         """
         super().__init__(f"EmbeddingDistanceMetric {kind}", higher_is_better=False)
         self.kind = kind
         if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device(st_util.get_device_name())
         else:
             self.device = torch.device(device) if isinstance(device, str) else device
 
-    def _to_tensor(self, data: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
-        """
-        Convert input to a PyTorch tensor if it is a NumPy array.
+        self.dtype = dtype
 
-        Args:
-            data (np.ndarray | torch.Tensor): Input data.
+    def _to_device_tensor(self, data: list | np.ndarray | Tensor, dtype=None) -> Tensor:
+        if dtype is None:
+            dtype = self.dtype
+        return st_util._convert_to_tensor(data).to(device=self.device, dtype=dtype)
 
-        Returns:
-            torch.Tensor: Tensor on the correct device.
-        """
-        if isinstance(data, np.ndarray):
-            data = torch.tensor(data, dtype=torch.float32)
-        return data.to(self.device)
+    def _to_batch_tensor_on_device(self, data: list | np.ndarray | Tensor, dtype=None) -> Tensor:
+        if dtype is None:
+            dtype = self.dtype
+        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=dtype)
 
-    def score(self, hypothesis: Union[np.ndarray, torch.Tensor], reference: Union[np.ndarray, torch.Tensor]) -> float:
+    def score(
+        self,
+        hypothesis: list | np.ndarray | Tensor,
+        reference: list | np.ndarray | Tensor,
+    ) -> float:
         """
         Compute the distance between two embeddings.
 
         Args:
-            hypothesis (np.ndarray | torch.Tensor): A single embedding vector.
-            reference (np.ndarray | torch.Tensor): Another single embedding vector.
+            hypothesis (list| np.ndarray | Tensor): A single embedding vector.
+            reference (list| np.ndarray | Tensor): Another single embedding vector.
 
         Returns:
             float: The calculated distance.
         """
-        hypothesis = self._to_tensor(hypothesis)
-        reference = self._to_tensor(reference)
+        if hypothesis is None or reference is None:
+            raise ValueError("Neither 'hypothesis' nor 'reference' can be None.")
 
-        if self.kind == "cosine":
-            # Normalize both embeddings to unit length
-            hypothesis = F.normalize(hypothesis, p=2, dim=0)
-            reference = F.normalize(reference, p=2, dim=0)
-            # Cosine similarity, converted to distance
-            similarity = torch.dot(hypothesis, reference).item()
-            return 1 - similarity
-        if self.kind == "l2":
-            # L2 distance
-            return torch.norm(hypothesis - reference).item()
-
-        raise ValueError(f"Unsupported distance metric: {self.kind}")
+        try:
+            hypothesis = self._to_batch_tensor_on_device(hypothesis)
+            reference = self._to_batch_tensor_on_device(reference)
+        except RuntimeError as e:
+            raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
+        return self.score_all(hypothesis, reference).item()
 
     def score_all(
         self,
-        hypotheses: List[Union[np.ndarray, torch.Tensor]],
-        references: List[Union[np.ndarray, torch.Tensor]],
+        hypotheses: List[list | np.ndarray | Tensor],
+        references: List[list | np.ndarray | Tensor],
         progress_bar: bool = True,
-    ) -> torch.Tensor:
+    ) -> Tensor:
         """
-        Compute the pairwise distance between all hypotheses and references. Expects 2D inputs.
+        Compute the pairwise distance between all hypotheses and references.
+        Expects 2D inputs, where each element in the second dimension is one embedding
 
         Args:
-            hypotheses (list[np.ndarray | torch.Tensor]): List of hypothesis embeddings.
-            references (list[np.ndarray | torch.Tensor]): List of reference embeddings.
+            hypotheses (list[list| np.ndarray | Tensor]): List of hypothesis embeddings.
+            references (list[list| np.ndarray | Tensor]): List of reference embeddings.
             progress_bar (bool): Whether to display a progress bar.
 
         Returns:
-            torch.Tensor, distance matrix. Row i is the distances of hypotheses[i] to all rows of references
+            Tensor, distance matrix. Row i is the distances of hypotheses[i] to all rows of references
         """
         # Convert inputs to tensors and stack
-        hypotheses = torch.stack([self._to_tensor(h) for h in hypotheses])
-        references = torch.stack([self._to_tensor(r) for r in references])
+        hypotheses = torch.stack([self._to_device_tensor(h) for h in hypotheses])
+        references = torch.stack([self._to_device_tensor(r) for r in references])
 
-        if self.kind == "cosine":
-            # Normalize the tensors along the feature dimension (dim=1)
-            normalized_hypotheses = F.normalize(hypotheses, dim=1)
-            normalized_references = F.normalize(references, dim=1)
+        if self.kind == "dot":
+            distance_matrix = self.dot_product(hypotheses, references)
 
-            # Calculate cosine similarity between all hypothesis-reference pairs
-            cosine_similarities = torch.matmul(normalized_hypotheses, normalized_references.T)
+        elif self.kind == "cosine":
+            distance_matrix = self.cosine_distances(hypotheses, references)
 
-            # Convert cosine similarities to cosine distances
-            distance_matrix = 1 - cosine_similarities
-        elif self.kind == "l2":
-            # Use broadcasting to calculate pairwise L2 distances
-            diff = hypotheses[:, None, :] - references[None, :, :]
-            distance_matrix = torch.norm(diff, dim=2)
+        elif self.kind == "euclidean":
+            distance_matrix = self.euclidean_distances(hypotheses, references)
+
+        elif self.kind == "manhattan":
+            distance_matrix = self.manhattan_distances(hypotheses, references)
+
         else:
             raise ValueError(f"Unsupported distance metric: {self.kind}")
 
-        return distance_matrix.cpu()
+        return distance_matrix
+
+    def dot_product(self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor) -> Tensor:
+        # TODO: test if this gives the same thing as previous matmul implementation, see stack overflow link below:
+        # https://stackoverflow.com/questions/73924697/whats-the-difference-between-torch-mm-torch-matmul-and-torch-mul
+        return st_util.dot_score(hypotheses, references)
+
+    def euclidean_similarities(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Returns the negative L2 norm/euclidean distances, which is what sentence-transformers uses for similarities.
+        """
+        return st_util.euclidean_sim(hypotheses, references)
+
+    def euclidean_distances(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Seeing as how sentence-transformers just negates the distances to get "similarities",
+        We can re-negate to get them positive again.
+        """
+        return -self.euclidean_similarities(hypotheses, references)
+
+    def cosine_similarities(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Calculates cosine similarities, which can be thought of as the angle between two embeddings.
+        The min value is -1 (least similar/pointing directly away), and the max is 1 (exactly the same angle).
+        """
+        return st_util.cos_sim(hypotheses, references)
+
+    def cosine_distances(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Converts cosine similarities to distances by simply subtracting from 1.
+        Max distance is 2, min distance is 0.
+        """
+        return 1 - self.cosine_similarities(hypotheses, references)
+
+    def manhattan_similarities(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Get the L1/Manhattan similarities, aka negative distances.
+        """
+        return st_util.manhattan_sim(hypotheses, references)
+
+    def manhattan_distances(
+        self, hypotheses: list | np.ndarray | Tensor, references: list | np.ndarray | Tensor
+    ) -> Tensor:
+        """
+        Sentence transformers defines similarity as negative distances.
+        We can re-negate to recover the distances.
+        """
+        return -self.manhattan_similarities(hypotheses, references)
