@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Callable, Tuple
 import logging
 import pytest
 import numpy as np
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Device configuration for PyTorch
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.set_default_device(DEVICE) # so that we get arrays on the same device
 
 
 # named the fixture this way to solve many pylint W0621
@@ -35,9 +36,16 @@ def fixture_embeddings() -> List[torch.Tensor]:
     """Fixture to create dummy embeddings for testing."""
     return [random_tensor(768) for _ in range(5)]
 
+def call_and_call_with_inputs_swapped(hyp:torch.Tensor, ref:torch.Tensor, scoring_function:Callable[[torch.Tensor, torch.Tensor], torch.Tensor])->Tuple[torch.Tensor, torch.Tensor]:
+    score1 = scoring_function(hyp, ref)
+    score2 = scoring_function(ref, hyp)
+    return score1, score2
+    
 
 def save_and_plot_distances(distances, matrix_name, num_points, dim):
     """Helper function to save distance matrix and plot distances."""
+
+    distances = distances.cpu()
     test_artifacts_dir = Path(__file__).parent / "tests"
     output_path = test_artifacts_dir / f"distance_matrix_{matrix_name}_{num_points}_{dim}D.csv"
     np.savetxt(output_path, distances.numpy(), delimiter=",", fmt="%.4f")
@@ -154,8 +162,9 @@ def test_score_symmetric(cosine_metric: EmbeddingDistanceMetric) -> None:
     emb1 = random_tensor(768)
     emb2 = random_tensor(768)
 
-    score1 = cosine_metric.score(emb1, emb2)
-    score2 = cosine_metric.score(emb2, emb1)
+    # score1 = cosine_metric.score(emb1, emb2)
+    # score2 = cosine_metric.score(emb2, emb1)
+    score1, score2 = call_and_call_with_inputs_swapped(emb1, emb2, cosine_metric.score)
 
     logger.info(f"Score 1: {score1}, Score 2: {score2}")
     assert pytest.approx(score1) == score2, "Score should be symmetric."
@@ -196,6 +205,18 @@ def test_score_all_against_self(
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
 
 
+def test_score_all_with_one_vs_batch(cosine_metric, distance_range_checker):
+    hyps = [np.random.rand(768) for _ in range(3)]
+    refs = np.random.rand(768)
+
+    # scores = cosine_metric.score_all(hyps, refs)
+    scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, cosine_metric.score_all)
+    
+
+    assert scores.shape == (len(hyps), 1)
+    assert scores2.shape == (1, len(hyps))
+    distance_range_checker(scores, min_val=0, max_val=2)
+
 def test_score_all_with_different_sizes(cosine_metric, distance_range_checker):
     """Test score_all with different sizes for hypotheses and references."""
     hyps = [np.random.rand(768) for _ in range(3)]
@@ -209,20 +230,50 @@ def test_score_all_with_different_sizes(cosine_metric, distance_range_checker):
     distance_range_checker(scores, min_val=0, max_val=2)
 
 
-# def test_score_all_with_empty_inputs(metric):
-#     """Test score_all with empty inputs."""
-#     scores = metric.score_all([], [])
-#     assert scores.shape == (0,), f"Score_all should return an empty array for empty inputs. Output: {scores.shape}"
+def test_invalid_input_mismatched_embedding_sizes(cosine_metric: EmbeddingDistanceMetric) -> None:
+    hyp = random_tensor(768)
+    ref = random_tensor(769)
 
+    with pytest.raises(RuntimeError):
+        # gives RuntimeError: mat1 and mat2 shapes cannot be multiplied (1x768 and 769x1
+        # TODO: we should probably raise a more descriptive/helpful error/ ValueError
+        call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
 
-def test_invalid_input(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_invalid_input_single_number(cosine_metric: EmbeddingDistanceMetric) -> None:
+    hyp = random_tensor(768)
+    for ref in range (-2, 2):
+        with pytest.raises(IndexError):
+            # TODO: we should probably raise a more descriptive/helpful error/ ValueError
+            # IndexError: Dimension out of range (expected to be in range of [-1, 0], but got 1)
+            call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
+
+    logger.info("Invalid input successfully crashed as expected.")
+
+def test_invalid_input_noncontainernonnumber_types(cosine_metric: EmbeddingDistanceMetric) -> None:
+    hyp = random_tensor(768)
+    invalid_inputs = [
+        "invalid_input", 
+        True
+        ]
+    for ref in invalid_inputs:
+        with pytest.raises((TypeError, IndexError)):
+            # TypeError: new(): invalid data type 'str'
+            # but True gives IndexError
+            # TODO: better TypeError, more descriptive
+            call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
+
+def test_invalid_input_empty_containers(cosine_metric: EmbeddingDistanceMetric) -> None:
     """Test the metric with invalid inputs."""
     emb1 = random_tensor(768)
-    invalid_inputs = ["invalid_input", None, -1, 1]
+    invalid_inputs = ["", list(), dict(), tuple(), set()]
 
     for invalid_input in invalid_inputs:
-        with pytest.raises((TypeError, AttributeError, ValueError)):
-            cosine_metric.score(emb1, invalid_input)
+        with pytest.raises((RuntimeError, TypeError, IndexError)):
+            # gives RuntimeError: mat1 and mat2 shapes cannot be multiplied (1x768 and 0x1)
+            # "" gives TypeError: new(): invalid data type 'str'
+            # IndexError: Dimension out of range (expected to be in range of [-1, 0], but got 1)
+            # TODO: we should probably raise a more descriptive/helpful error/ ValueError
+            call_and_call_with_inputs_swapped(emb1, invalid_input, cosine_metric.score)
 
     logger.info("Invalid input successfully crashed as expected.")
 
@@ -244,15 +295,31 @@ def test_score_ndarray_input(cosine_metric):
     score = cosine_metric.score(emb1, emb2)
     assert isinstance(score, float), "Output should be a float."
 
+def test_score_all_list_of_lists_of_floats(cosine_metric):
+    """Does a 2D list of floats work? """
+    hyps = [[np.random.rand() for _ in range(768)] for _ in range(5)]
+    refs = [[np.random.rand() for _ in range(768)] for _ in range(5)]
+    scores = cosine_metric.score_all(hyps, refs)
+    assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
+    assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"
 
-def test_score_all_tensor_input(cosine_metric):
-    """Test score_all function with torch.Tensor inputs."""
+def test_score_all_list_of_tensor_input(cosine_metric):
+    """Test score_all function with List of torch.Tensor inputs."""
     hyps = [torch.rand(768) for _ in range(5)]
     refs = [torch.rand(768) for _ in range(5)]
 
     scores = cosine_metric.score_all(hyps, refs)
     assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
     assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"
+
+def test_score_all_list_of_ndarray_input(cosine_metric):
+    """Test score_all function with List of np.ndarray inputs."""
+    hyps = [np.random.rand(768) for _ in range(5)]
+    refs = [np.random.rand(768) for _ in range(5)]
+
+    scores = cosine_metric.score_all(hyps, refs)
+    assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
+    assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"    
 
 
 def test_device_handling(cosine_metric):
