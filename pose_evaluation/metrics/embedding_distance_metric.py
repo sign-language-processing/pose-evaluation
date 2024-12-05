@@ -100,6 +100,16 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         if dtype is None:
             dtype = self.dtype
+
+        # better performance this way, see https://github.com/pytorch/pytorch/issues/13918
+        if isinstance(data, list) and all(isinstance(x, np.ndarray) for x in data):
+            data = np.asanyarray(data)
+
+        if isinstance(data, list) and all(isinstance(x, torch.Tensor) for x in data):
+            # prevents ValueError: only one element tensors can be converted to Python scalars
+            # https://stackoverflow.com/questions/55050717/converting-list-of-tensors-to-tensors-pytorch
+            data = torch.stack(data)
+
         return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=dtype)
 
     def score(
@@ -117,18 +127,8 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         Returns:
             Number: The calculated distance.
 
-        Raises:
-            ValueError: If either input is None.
-            TypeError: If inputs cannot be converted to tensors.
         """
-        if hypothesis is None or reference is None:
-            raise ValueError("Neither 'hypothesis' nor 'reference' can be None.")
 
-        try:
-            hypothesis = self._to_batch_tensor_on_device(hypothesis)
-            reference = self._to_batch_tensor_on_device(reference)
-        except RuntimeError as e:
-            raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
         return self.score_all(hypothesis, reference).item()
 
     def score_all(
@@ -154,11 +154,14 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
                 Shape is be NxM, where N is the number of hypotheses, and M is the number of references
 
         Raises:
+            TypeError: If either hypotheses or references cannot be converted to a batch tensor
             ValueError: If the specified metric is unsupported.
         """
-        # Convert inputs to tensors and stack
-        hypotheses = torch.stack([self._to_tensor_on_device(h) for h in hypotheses])
-        references = torch.stack([self._to_tensor_on_device(r) for r in references])
+        try:
+            hypotheses = self._to_batch_tensor_on_device(hypotheses)
+            references = self._to_batch_tensor_on_device(references)
+        except RuntimeError as e:
+            raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
         if self.kind not in self._metric_dispatch:
             logger.error(f"Unsupported distance metric: {self.kind}")
@@ -172,7 +175,6 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         Compute the dot product between embeddings.
         Uses sentence_transformers.util.dot_score
         """
-        # TODO: test if this gives the same thing as previous matmul implementation, see stack overflow link below:
         # https://stackoverflow.com/questions/73924697/whats-the-difference-between-torch-mm-torch-matmul-and-torch-mul
         return st_util.dot_score(hypotheses, references)
 
