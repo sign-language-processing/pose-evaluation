@@ -63,9 +63,6 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     def to(self, device: Union[torch.device, str]) -> None:
         """
         Explicitly set the device used for tensors.
-
-        Args:
-            device (Union[torch.device, str]): The device to use for computation.
         """
         self.device = torch.device(device)
         logger.info(f"Device set to: {self.device}")
