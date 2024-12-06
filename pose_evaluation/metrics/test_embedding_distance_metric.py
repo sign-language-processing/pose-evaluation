@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 from typing import List, Callable, Tuple
 import logging
@@ -6,9 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-
-# no need to import. https://github.com/pylint-dev/pylint/issues/3493#issuecomment-616761997
-# from pose_evaluation.metrics.conftest import distance_range_checker
 
 
 # TODO: many fixes. Including the fact that we test cosine but not Euclidean,
@@ -37,12 +35,52 @@ def fixture_embeddings() -> List[torch.Tensor]:
     return [random_tensor(768) for _ in range(5)]
 
 
+def test_shape_checker(distance_matrix_shape_checker):
+    emb_len = 768
+    hyps = torch.rand((3, emb_len))
+    refs = torch.rand((4, emb_len))
+
+    m = hyps.shape[0]
+    n = refs.shape[0]
+
+    wrong_shapes = [1, m, n, emb_len]
+    wrong_shapes.extend(list(itertools.permutations(wrong_shapes, r=2)))
+    for wrong_shape in wrong_shapes:
+        if wrong_shape != (m, n):
+            distances_with_wrong_shape = torch.rand(wrong_shape)
+            with pytest.raises(AssertionError, match="Distance Matrix should be MxN"):
+                # This SHOULD happen. If this doesn't happen then the checker itself is not working.
+                distance_matrix_shape_checker(m, n, distances_with_wrong_shape)
+
+
 def call_and_call_with_inputs_swapped(
-    hyp: torch.Tensor, ref: torch.Tensor, scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    hyps: torch.Tensor, refs: torch.Tensor, scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    score1 = scoring_function(hyp, ref)
-    score2 = scoring_function(ref, hyp)
+    score1 = scoring_function(hyps, refs)
+    score2 = scoring_function(refs, hyps)
     return score1, score2
+
+
+def call_with_both_input_orders_and_do_standard_checks(
+    hyps: torch.Tensor,
+    refs: torch.Tensor,
+    scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    distance_range_checker,
+    distance_matrix_shape_checker,
+    expected_shape: Tuple = None,
+):
+    scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
+    if expected_shape is not None:
+        m, n = expected_shape
+    else:
+        m = hyps.shape[0]
+        n = refs.shape[0]
+    distance_range_checker(scores, min_val=0, max_val=2)
+    distance_range_checker(scores2, min_val=0, max_val=2)
+    distance_matrix_shape_checker(m, n, scores)
+    distance_matrix_shape_checker(n, m, scores2)
+
+    return scores, scores2
 
 
 def save_and_plot_distances(distances, matrix_name, num_points, dim):
@@ -165,8 +203,6 @@ def test_score_symmetric(cosine_metric: EmbeddingDistanceMetric) -> None:
     emb1 = random_tensor(768)
     emb2 = random_tensor(768)
 
-    # score1 = cosine_metric.score(emb1, emb2)
-    # score2 = cosine_metric.score(emb2, emb1)
     score1, score2 = call_and_call_with_inputs_swapped(emb1, emb2, cosine_metric.score)
 
     logger.info(f"Score 1: {score1}, Score 2: {score2}")
@@ -196,44 +232,46 @@ def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path)
 
 
 def test_score_all_against_self(
-    cosine_metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor], distance_range_checker
+    cosine_metric: EmbeddingDistanceMetric,
+    embeddings: List[torch.Tensor],
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ) -> None:
     """Test the score_all function."""
     scores = cosine_metric.score_all(embeddings, embeddings)
-    assert scores.shape == (len(embeddings), len(embeddings)), "Output shape mismatch for score_all."
+    distance_matrix_shape_checker(len(embeddings), len(embeddings), scores)
+    distance_range_checker(scores, min_val=0, max_val=2)
+
     assert torch.allclose(
         torch.diagonal(scores), torch.zeros(len(embeddings), dtype=scores.dtype), atol=1e-6
     ), "Self-comparison scores should be zero for cosine distance."
-    distance_range_checker(scores, min_val=0, max_val=2)
+
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
 
 
-def test_score_all_with_one_vs_batch(cosine_metric, distance_range_checker):
+def test_score_all_with_one_vs_batch(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     hyps = [np.random.rand(768) for _ in range(3)]
     refs = np.random.rand(768)
 
-    # scores = cosine_metric.score_all(hyps, refs)
-    scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, cosine_metric.score_all)
+    expected_shape = (len(hyps), 1)
 
-    assert scores.shape == (len(hyps), 1)
-    assert scores2.shape == (1, len(hyps))
-    distance_range_checker(scores, min_val=0, max_val=2)
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps, refs, cosine_metric.score_all, distance_range_checker, distance_matrix_shape_checker, expected_shape
+    )
 
 
-def test_score_all_with_different_sizes(cosine_metric, distance_range_checker):
+def test_score_all_with_different_sizes(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Test score_all with different sizes for hypotheses and references."""
     hyps = [np.random.rand(768) for _ in range(3)]
     refs = [np.random.rand(768) for _ in range(5)]
 
-    scores = cosine_metric.score_all(hyps, refs)
-    assert scores.shape == (
-        len(hyps),
-        len(refs),
-    ), f"Output shape mismatch ({scores.shape}) vs {(len(hyps), len(refs))} for score_all with different sizes. "
-    distance_range_checker(scores, min_val=0, max_val=2)
+    expected_shape = (len(hyps), len(refs))
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps, refs, cosine_metric.score_all, distance_range_checker, distance_matrix_shape_checker, expected_shape
+    )
 
 
-def test_invalid_input_mismatched_embedding_sizes(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_mismatched_embedding_sizes(cosine_metric: EmbeddingDistanceMetric) -> None:
     hyp = random_tensor(768)
     ref = random_tensor(769)
 
@@ -243,10 +281,10 @@ def test_invalid_input_mismatched_embedding_sizes(cosine_metric: EmbeddingDistan
         call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
 
 
-def test_invalid_input_single_number(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_single_number(cosine_metric: EmbeddingDistanceMetric) -> None:
     hyp = random_tensor(768)
     for ref in range(-2, 2):
-        with pytest.raises(IndexError):
+        with pytest.raises(AssertionError, match="score_all received non-2D input"):
             # TODO: we should probably raise a more descriptive/helpful error/ ValueError
             # IndexError: Dimension out of range (expected to be in range of [-1, 0], but got 1)
             call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
@@ -254,18 +292,23 @@ def test_invalid_input_single_number(cosine_metric: EmbeddingDistanceMetric) -> 
     logger.info("Invalid input successfully crashed as expected.")
 
 
-def test_invalid_input_noncontainernonnumber_types(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_string(cosine_metric: EmbeddingDistanceMetric) -> None:
+    hyp = "invalid input"
+    ref = random_tensor(768)
+    with pytest.raises(TypeError, match="invalid data type 'str'"):
+        call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
+
+
+def test_score_with_invalid_input_bool(cosine_metric: EmbeddingDistanceMetric) -> None:
     hyp = random_tensor(768)
-    invalid_inputs = ["invalid_input", True]
+    invalid_inputs = [True, False]
     for ref in invalid_inputs:
-        with pytest.raises((TypeError, IndexError)):
-            # TypeError: new(): invalid data type 'str'
-            # but True gives IndexError
-            # TODO: better TypeError, more descriptive
+        with pytest.raises(AssertionError, match="score_all received non-2D input"):
             call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
+            # TODO: why does a bool make it all the way there?
 
 
-def test_invalid_input_empty_containers(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_empty_containers(cosine_metric: EmbeddingDistanceMetric) -> None:
     """Test the metric with invalid inputs."""
     emb1 = random_tensor(768)
     invalid_inputs = ["", [], {}, tuple(), set()]
@@ -299,33 +342,61 @@ def test_score_ndarray_input(cosine_metric):
     assert isinstance(score, float), "Output should be a float."
 
 
-def test_score_all_list_of_lists_of_floats(cosine_metric):
+def test_score_all_list_of_lists_of_floats(
+    cosine_metric,
+    distance_range_checker,
+    distance_matrix_shape_checker,
+):
     """Does a 2D list of floats work?"""
     hyps = [[np.random.rand() for _ in range(768)] for _ in range(5)]
     refs = [[np.random.rand() for _ in range(768)] for _ in range(5)]
-    scores = cosine_metric.score_all(hyps, refs)
-    assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
-    assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"
+    expected_shape = (len(hyps), len(refs))
+
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape=expected_shape,
+    )
 
 
-def test_score_all_list_of_tensor_input(cosine_metric):
+def test_score_all_list_of_tensor_input(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Test score_all function with List of torch.Tensor inputs."""
     hyps = [torch.rand(768) for _ in range(5)]
     refs = [torch.rand(768) for _ in range(5)]
 
-    scores = cosine_metric.score_all(hyps, refs)
-    assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
-    assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"
+    expected_shape = (len(hyps), len(refs))
+
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape=expected_shape,
+    )
 
 
-def test_score_all_list_of_ndarray_input(cosine_metric):
+def test_score_all_list_of_ndarray_input(
+    cosine_metric,
+    distance_range_checker,
+    distance_matrix_shape_checker,
+):
     """Test score_all function with List of np.ndarray inputs."""
     hyps = [np.random.rand(768) for _ in range(5)]
     refs = [np.random.rand(768) for _ in range(5)]
+    expected_shape = (len(hyps), len(refs))
 
-    scores = cosine_metric.score_all(hyps, refs)
-    assert len(scores) == len(hyps), f"Output row count mismatch for torch.Tensor input. Shape:{scores.shape}"
-    assert len(scores[0]) == len(refs), f"Output column count mismatch for torch.Tensor input. Shape:{scores.shape}"
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape=expected_shape,
+    )
 
 
 def test_device_handling(cosine_metric):
@@ -337,20 +408,39 @@ def test_device_handling(cosine_metric):
         assert cosine_metric.device.type == "cpu", "Should use 'cpu' when CUDA is unavailable."
 
 
-def test_mixed_input(cosine_metric):
+def test_score_mixed_input_types(cosine_metric):
     """Test score function with mixed input types."""
     emb1 = np.random.rand(768)
     emb2 = torch.rand(768)
 
-    score = cosine_metric.score(emb1, emb2)
-    assert isinstance(score, float), "Output should be a float."
+    all_scores = call_and_call_with_inputs_swapped(emb1, emb2, cosine_metric.score)
+    assert all([isinstance(score, float) for score in all_scores]), "Output should be a float."
+
+
+def test_score_all_mixed_input_types(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
+    """Test score function with mixed input types."""
+    hyps = np.random.rand(5, 768)
+    refs = torch.rand(3, 768)
+
+    expected_shape = (5, 3)
+
+    call_with_both_input_orders_and_do_standard_checks(
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape=expected_shape,
+    )
 
 
 @pytest.mark.parametrize("num_points, dim", [(16, 2)])
-def test_unit_circle_points(cosine_metric, num_points, dim):
+def test_unit_circle_points(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
     embeddings = generate_unit_circle_points(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances=distances, matrix_name="Unit Circle", num_points=num_points, dim=dim)
+    distance_range_checker(distances, min_val=0, max_val=2)  # Check distance range
+    distance_matrix_shape_checker(embeddings.shape[0], embeddings.shape[0], distances)
 
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
@@ -375,35 +465,29 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
 
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
-def test_orthogonal_rows_in_pairs(cosine_metric, num_points, dim, distance_range_checker):
+def test_orthogonal_rows_in_pairs(
+    cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker
+):
     embeddings = generate_orthogonal_rows_in_pairs(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "orthogonal_rows_in_pairs", num_points, dim)
     distance_range_checker(distances, min_val=0, max_val=2)  # Check distance range
+    distance_matrix_shape_checker(embeddings.shape[0], embeddings.shape[0], distances)
 
 
 @pytest.mark.parametrize("num_points, dim", [(10, 5)])
-def test_ones_tensor(cosine_metric, num_points, dim, distance_range_checker):
+def test_ones_tensor(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
     embeddings = generate_ones_tensor(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "ones_tensor", num_points, dim)
     distance_range_checker(distances, min_val=0, max_val=0)  # Expect all distances to be 0
+    distance_matrix_shape_checker(embeddings.shape[0], embeddings.shape[0], distances)
 
 
 @pytest.mark.parametrize("num_points, dim", [(15, 15)])  # dim should be equal to num_points for identity matrix
-def test_identity_matrix_rows(cosine_metric, num_points, dim, distance_range_checker):
+def test_identity_matrix_rows(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
     embeddings = generate_identity_matrix_rows(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "identity_matrix_rows", num_points, dim)
     distance_range_checker(distances, min_val=0, max_val=2)  # Check distance range
-
-
-# def test_progress_bar(cosine_metric):
-#     """Test score_all with progress_bar argument."""
-#     hyps = [np.random.rand(768) for _ in range(5)]
-#     refs = [np.random.rand(768) for _ in range(5)]
-
-#     # Disable progress bar
-#     scores = cosine_metric.score_all(hyps, refs, progress_bar=False)
-#     assert len(scores) == len(hyps), "Output row count mismatch with progress_bar=False."
-#     assert len(scores[0]) == len(refs), "Output column count mismatch with progress_bar=False."
+    distance_matrix_shape_checker(embeddings.shape[0], embeddings.shape[0], distances)

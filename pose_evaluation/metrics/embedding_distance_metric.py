@@ -69,13 +69,11 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         self.device = torch.device(device)
         logger.info(f"Device set to: {self.device}")
+        return self
 
     def _to_batch_tensor_on_device(self, data: TensorConvertableType) -> Tensor:
         """
         Convert input data to a batch tensor on the specified device.
-
-        Args:
-            data (TensorConvertableType): The input data to convert.
 
         Returns:
             Tensor: Batch tensor representation of the data on the specified device.
@@ -89,7 +87,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             # https://stackoverflow.com/questions/55050717/converting-list-of-tensors-to-tensors-pytorch
             data = torch.stack(data)
 
-        return st_util._convert_to_batch_tensor(data).to(device=self.device)
+        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype)
 
     def score(
         self,
@@ -98,10 +96,6 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     ) -> Number:
         """
         Compute the distance between two embeddings.
-
-        Args:
-            hypothesis (TensorConvertableType): A single embedding vector.
-            reference (TensorConvertableType): Another single embedding vector.
 
         Returns:
             Number: The calculated distance.
@@ -120,13 +114,6 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
         Expects 2D inputs. If not already Tensors, will attempt to convert them.
 
-        Args:
-            hypotheses (Union[List[TensorConvertableType], Tensor]):
-                List of hypothesis embeddings or a single tensor.
-            references (Union[List[TensorConvertableType], Tensor]):
-                List of reference embeddings or a single tensor.
-            progress_bar (bool): Whether to display a progress bar. (not implemented yet)
-
         Returns:
             Tensor: Distance matrix. Row `i` is the distances of `hypotheses[i]` to all rows of `references`.
                 Shape is be NxM, where N is the number of hypotheses, and M is the number of references
@@ -140,6 +127,10 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             references = self._to_batch_tensor_on_device(references)
         except RuntimeError as e:
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
+
+        assert (
+            hypotheses.ndim == 2 and references.ndim == 2
+        ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 
