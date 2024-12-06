@@ -17,9 +17,25 @@ def clean_test_artifacts():
     # (Optional) You can add cleanup logic here to run after the session if needed
 
 
+@pytest.fixture(name="distance_matrix_shape_checker")
+def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Tensor], None]:
+    def _check_shape(hyp_count: int, ref_count: int, distance_matrix: torch.Tensor):
+
+        expected_shape = torch.Size([hyp_count, ref_count])
+        assert (
+            distance_matrix.shape == expected_shape
+        ), f"For M={hyp_count} hypotheses, N={ref_count} references,  Distance Matrix should be MxN={expected_shape}. Instead, received {distance_matrix.shape}"
+
+    return _check_shape
+
+
 @pytest.fixture(name="distance_range_checker")
 def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray], float, float], None]:
-    def _check_range(distances: Union[torch.Tensor, np.ndarray], min_val: float = 0, max_val: float = 2) -> None:
+    def _check_range(
+        distances: Union[torch.Tensor, np.ndarray],
+        min_val: float = 0,
+        max_val: float = 2,
+    ) -> None:
         max_distance = distances.max().item()
         min_distance = distances.min().item()
 
