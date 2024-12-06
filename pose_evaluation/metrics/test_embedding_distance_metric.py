@@ -87,7 +87,7 @@ def save_and_plot_distances(distances, matrix_name, num_points, dim):
     """Helper function to save distance matrix and plot distances."""
 
     distances = distances.cpu()
-    test_artifacts_dir = Path(__file__).parent / "tests"
+    test_artifacts_dir = Path(__file__).parent / "temp"
     output_path = test_artifacts_dir / f"distance_matrix_{matrix_name}_{num_points}_{dim}D.csv"
     np.savetxt(output_path, distances.numpy(), delimiter=",", fmt="%.4f")
     print(f"Distance matrix saved to {output_path}")
