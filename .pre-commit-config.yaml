@@ -1,6 +1,6 @@
-repos:
-  - repo: local
-    files: ^signwriting/
+files: ^pose_evaluation/
+repos:  
+  - repo: local    
     hooks:
       - id: pylint
         name: pylint
