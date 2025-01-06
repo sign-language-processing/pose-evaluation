@@ -13,6 +13,8 @@ dependencies = [
     "scipy",
     "torch", 
     "numpy", # possibly could replace all with torch
+    "cython", # used to accelerate fastdtw
+    "fastdtw",
     # for various vector/tensor similarities and distances in torch
     "sentence-transformers",
     # For reading .csv files, etc
