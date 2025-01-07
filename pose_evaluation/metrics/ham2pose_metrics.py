@@ -3,11 +3,12 @@
 # and then code was copied to this repo by @cleong110
 
 import os
+from pathlib import Path
 import numpy as np
 from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
 
-from pose_evaluation.utils.pose_utils import get_preprocessed_pose, pose_hide_low_conf
+from pose_evaluation.utils.pose_utils import preprocess_pose, load_pose_file, pose_hide_low_conf
 
 # rootdir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 # sys.path.insert(0, rootdir)
@@ -98,8 +99,10 @@ def APE(trajectory1, trajectory2):
 
 
 def compare_pose_videos(pose1_id, pose2_id, keypoints_path, distance_function=fastdtw):
-    pose1 = get_preprocessed_pose(os.path.join(keypoints_path, pose1_id), pose1_id)
-    pose2 = get_preprocessed_pose(os.path.join(keypoints_path, pose2_id), pose2_id)
+    pose1 = load_pose_file(Path(keypoints_path/ pose1_id), pose1_id)
+    pose1 = preprocess_pose(os.path.join(keypoints_path, pose1_id), pose1_id)
+    pose2 = preprocess_pose(os.path.join(keypoints_path, pose2_id), pose2_id)
+    pose2 = load_pose_file(Path(keypoints_path/ pose2_id), pose2_id)
     return compare_poses(pose1, pose2, distance_function=distance_function)
 
 

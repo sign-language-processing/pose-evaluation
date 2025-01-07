@@ -5,8 +5,8 @@ from pose_format import Pose
 from pose_format.utils.generic import pose_normalization_info, pose_hide_legs
 
 
-def remove_world_landmarks(pose: Pose):
-    remove_specified_landmarks(pose, "POSE_WORLD_LANDMARKS")
+def pose_remove_world_landmarks(pose: Pose):
+    return remove_specified_landmarks(pose, "POSE_WORLD_LANDMARKS")
 
 
 def remove_specified_landmarks(pose: Pose, landmark_names: List[str]):
@@ -18,6 +18,7 @@ def remove_specified_landmarks(pose: Pose, landmark_names: List[str]):
     new_pose = pose.get_components(components_without_specified_names)
     pose.body = new_pose.body
     pose.header = new_pose.header
+    return new_pose
 
 
 def get_chosen_components_from_pose(
@@ -36,33 +37,65 @@ def get_face_and_hands_from_pose(pose: Pose) -> Pose:
     return pose.get_components(components_to_keep)
 
 
-def get_preprocessed_pose(pose_path: Path | str) -> Pose:
-
+def load_pose_file(pose_path: Path) -> Pose:
     pose_path = Path(pose_path).resolve()
-
     with pose_path.open("rb") as f:
         pose = Pose.read(f.read())
+    return pose
 
-    # normalize
-    # TODO: confirm this is correct. Previously used pose_format.utils.generic.pose_normalization_info(),
-    # but pose-format README advises using pose.normalize_distribution()
-    pose.normalize(pose_normalization_info(pose))
+
+def reduce_pose_components_to_intersection(poses: List[Pose]) -> List[Pose]:
+    component_names = [pose.header.components for pose in poses]
+    set_of_common_components = list(set.intersection(*component_names))
+    poses = [pose.get_components(set_of_common_components) for pose in poses]
+
+
+def preprocess_poses(
+    poses: List[Pose],
+    normalize_poses: bool = True,
+    reduce_poses_to_common_components: bool = False,
+    remove_legs: bool = True,
+    remove_world_landmarks: bool = False,
+    conf_threshold_to_drop_points: None | float = None,
+) -> List[Pose]:
+    # NOTE: this is a lot of arguments. Perhaps a list may be better? 
+    if reduce_poses_to_common_components:
+        reduce_pose_components_to_intersection(poses)
+
+    poses = [
+        preprocess_pose(
+            pose,
+            normalize_poses=normalize_poses,
+            remove_legs=remove_legs,
+            remove_world_landmarks=remove_world_landmarks,
+            conf_threshold_to_drop_points=conf_threshold_to_drop_points,
+        )
+        for pose in poses
+    ]
+    return poses
+
+
+def preprocess_pose(
+    pose: Pose,
+    normalize_poses: bool = True,
+    remove_legs: bool = True,
+    remove_world_landmarks: bool = False,
+    conf_threshold_to_drop_points: None | int = None,
+) -> Pose:
+    if normalize_poses:
+        # note: latest version (not yet released) does it automatically
+        pose = pose.normalize(pose_normalization_info(pose))
 
     # Drop legs
-    pose_hide_legs(pose)
+    if remove_legs:
+        pose_hide_legs(pose)
 
     # not used, typically.
-    remove_world_landmarks(pose)
+    if remove_world_landmarks:
+        pose_remove_world_landmarks(pose)
 
     # hide low conf
-    pose_hide_low_conf(pose)
-
-    pose.focus()
-
-    # TODO: prune leading/trailing frames without useful data (e.g. no hands, only zeroes, almost no face)
-    for frame_index in enumerate(pose.body.data):
-        # https://github.com/rotem-shalev/Ham2Pose/blob/main/metrics.py#L44-L60
-        pass
+    pose_hide_low_conf(pose, confidence_threshold=conf_threshold_to_drop_points)
 
     return pose
 

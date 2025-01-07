@@ -4,10 +4,10 @@ from numpy import ma
 from pose_format import Pose
 
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
-
+ValidDistanceKinds = Literal["euclidean", "manhattan"]
 
 class DistanceMetric(PoseMetric):
-    def __init__(self, kind: Literal["l1", "l2"] = "l2"):
+    def __init__(self, kind: ValidDistanceKinds = "euclidean"):
         super().__init__(f"DistanceMetric {kind}", higher_is_better=False)
         self.kind = kind
 
