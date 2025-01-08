@@ -49,7 +49,7 @@ def get_component_names_and_points_dict(pose:Pose)->Tuple[List[str], Dict[str, L
     return component_names, points_dict
 
 def remove_components(
-    pose: Pose, components_to_remove: List[str]|str, points_to_remove: List[str]|str=None
+    pose: Pose, components_to_remove: List[str]|str, points_to_remove: List[str]|str|None=None
 ):
     if points_to_remove is None:
         points_to_remove = []
@@ -153,7 +153,7 @@ def preprocess_pose(
     normalize_poses: bool = True,
     remove_legs: bool = True,
     remove_world_landmarks: bool = False,
-    conf_threshold_to_drop_points: None | int = None,
+    conf_threshold_to_drop_points: None | float = None,
 ) -> Pose:
     pose = copy_pose(pose)
     if normalize_poses:
@@ -169,7 +169,8 @@ def preprocess_pose(
         pose_remove_world_landmarks(pose)
 
     # hide low conf
-    pose_hide_low_conf(pose, confidence_threshold=conf_threshold_to_drop_points)
+    if conf_threshold_to_drop_points is not None:
+        pose_hide_low_conf(pose, confidence_threshold=conf_threshold_to_drop_points)
 
     return pose
 
