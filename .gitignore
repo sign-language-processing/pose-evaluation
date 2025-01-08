@@ -2,3 +2,5 @@
 build/
 pose_evaluation.egg-info/
 **/__pycache__/
+.coverage
+.vscode/
