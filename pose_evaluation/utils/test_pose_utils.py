@@ -163,8 +163,6 @@ def test_remove_one_point_and_one_component(test_mediapipe_poses: List[Pose]):
         original_component_names, original_points_dict = (
             get_component_names_and_points_dict(pose)
         )
-        with open("foo.json", "w") as f:
-            json.dump(original_points_dict, f)
 
         assert component_to_drop in original_component_names
         assert point_to_drop in original_points_dict["POSE_LANDMARKS"]
@@ -172,8 +170,6 @@ def test_remove_one_point_and_one_component(test_mediapipe_poses: List[Pose]):
         new_component_names, new_points_dict = get_component_names_and_points_dict(
             reduced_pose
         )
-        with open("bar.json", "w") as f:
-            json.dump(new_points_dict, f)
         assert component_to_drop not in new_component_names
         assert point_to_drop not in new_points_dict["POSE_LANDMARKS"]
 
@@ -205,29 +201,26 @@ def test_detect_format(
             detect_format(pose)
 
 
-# def test_preprocess_pose(test_mediapipe_poses_paths: List[Path]):
-#     poses = [load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths]
-#     preprocessed_poses = []
+def test_preprocess_pose(test_mediapipe_poses_paths: List[Path]):
+    poses = [load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths]
+    preprocessed_poses = []
 
-#     for pose in poses:
-#         processed_pose = preprocess_pose(pose,
-#                         normalize_poses=True,
-#                         remove_legs=True,
-#                         remove_world_landmarks=True,
-#                         conf_threshold_to_drop_points=0.2)
-#         #TODO:
+    for pose in poses:
+        processed_pose = preprocess_pose(pose,
+                        normalize_poses=True,
+                        remove_legs=True,
+                        remove_world_landmarks=True,
+                        conf_threshold_to_drop_points=0.2)
+        #TODO: check expected result
 
 
 def test_preprocess_poses(test_mediapipe_poses: List[Pose]):
-    for pose in test_mediapipe_poses:
-        component_names, points_dict = get_component_names_and_points_dict(pose)
-        assert "UNSUPPORTED" not in component_names
-
 
     preprocessed_poses = preprocess_poses(
         test_mediapipe_poses,
         normalize_poses=True,
         reduce_poses_to_common_components=True,
+        remove_world_landmarks=True,
         remove_legs=True,
         conf_threshold_to_drop_points=0.2,
     )
@@ -235,6 +228,7 @@ def test_preprocess_poses(test_mediapipe_poses: List[Pose]):
     for pose in preprocessed_poses:
         component_names, points_dict = get_component_names_and_points_dict(pose)
         assert "LEFT_KNEE" not in points_dict["POSE_LANDMARKS"]
+        assert "POSE_WORLD_LANDMARKS" not in component_names
 
 
 
