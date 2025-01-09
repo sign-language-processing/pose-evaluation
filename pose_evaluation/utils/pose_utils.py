@@ -167,7 +167,7 @@ def preprocess_pose(
 
     # not used, typically.
     if remove_world_landmarks:
-        pose_remove_world_landmarks(pose)
+        pose = pose_remove_world_landmarks(pose)
 
     # hide low conf
     if conf_threshold_to_drop_points is not None:

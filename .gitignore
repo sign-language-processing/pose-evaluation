@@ -4,3 +4,4 @@ pose_evaluation.egg-info/
 **/__pycache__/
 .coverage
 .vscode/
+coverage.lcov
