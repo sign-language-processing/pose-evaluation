@@ -162,7 +162,8 @@ def preprocess_pose(
 
     # Drop legs
     if remove_legs:
-        pose_hide_legs(pose)
+        # pose_hide_legs(pose)
+        pose = pose_remove_legs(pose)
 
     # not used, typically.
     if remove_world_landmarks:
