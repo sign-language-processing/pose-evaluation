@@ -20,7 +20,7 @@ def get_test_poses(length1: int, length2: int):
 
 class TestDistanceMetricGeneric(unittest.TestCase):
     def setUp(self):
-        self.metric = DistanceMetric("l2")
+        self.metric = DistanceMetric("euclidean")
 
     def test_scores_are_symmetric(self):
         hypothesis, reference = get_test_poses(2, 2)
@@ -41,7 +41,7 @@ class TestDistanceMetricGeneric(unittest.TestCase):
 
 class TestDistanceMetricL1(unittest.TestCase):
     def setUp(self):
-        self.metric = DistanceMetric("l1")
+        self.metric = DistanceMetric("manhattan")
 
     def test_score_equal_length(self):
         hypothesis, reference = get_test_poses(2, 2)
@@ -55,7 +55,7 @@ class TestDistanceMetricL1(unittest.TestCase):
 
 class TestDistanceMetricL2(unittest.TestCase):
     def setUp(self):
-        self.metric = DistanceMetric("l2")
+        self.metric = DistanceMetric("euclidean")
 
     def test_score_equal_length(self):
         hypothesis, reference = get_test_poses(2, 2)
