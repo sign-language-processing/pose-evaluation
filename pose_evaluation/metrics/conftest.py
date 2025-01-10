@@ -1,6 +1,9 @@
 import shutil
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
+from pose_format import Pose
+from pose_format.utils.generic import fake_pose
+from pose_format.numpy import NumPyPoseBody
 import torch
 import numpy as np
 import pytest
@@ -18,7 +21,7 @@ def clean_test_artifacts():
 
 
 @pytest.fixture(name="distance_matrix_shape_checker")
-def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Tensor], None]:
+def fixture_distance_matrix_shape_checker() -> Callable[[int, int, torch.Tensor], None]:
     def _check_shape(hyp_count: int, ref_count: int, distance_matrix: torch.Tensor):
 
         expected_shape = torch.Size([hyp_count, ref_count])
@@ -48,3 +51,12 @@ def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray
         ), f"Maximum distance ({max_distance}) is outside the expected range [{min_val}, {max_val}]"
 
     return _check_range
+
+
+
+
+
+# @pytest.fixture
+# def test_pose_pair():
+#     return get_test_poses(20, 30)
+
