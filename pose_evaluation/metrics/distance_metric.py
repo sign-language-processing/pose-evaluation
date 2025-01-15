@@ -25,8 +25,8 @@ class DistanceMetric(PoseMetric):
         # Calculate the error
         error = arrays[0] - arrays[1]
 
-        # for l2, we need to calculate the error for each point
-        if self.kind == "l2":
+        # for l2/euclidean, we need to calculate the error for each point
+        if self.kind == "euclidean":
             # the last dimension is the 3D coordinates
             error = ma.power(error, 2)
             error = error.sum(axis=-1)
