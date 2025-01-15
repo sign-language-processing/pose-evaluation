@@ -1,11 +1,13 @@
 from typing import Literal, List
 
 from pose_format import Pose
+from fastdtw import fastdtw
+from scipy.spatial.distance import euclidean
 
 from pose_evaluation.metrics.distance_metric import DistanceMetric, ValidDistanceKinds
 from pose_evaluation.utils.pose_utils import pose_hide_low_conf, preprocess_pose
 
-class DynamicTimeWarpingMeanJointError(DistanceMetric):
+class DynamicTimeWarpingMeanJointErrorMetric(DistanceMetric):
     def __init__(self, kind: ValidDistanceKinds = "euclidean", 
                  normalize_poses:bool=True,
                  reduce_poses:bool=False,
@@ -21,11 +23,10 @@ class DynamicTimeWarpingMeanJointError(DistanceMetric):
         self.remove_world_landmarks = remove_world_landmarks
         self.conf_threshold_to_drop_points = conf_threshold_to_drop_points
 
-    def score_all(self, hypotheses:List[Pose], references:List[Pose], progress_bar=True):
-        # TODO: 
-        return super().score_all(hypotheses, references, progress_bar)
     
     
     def score(self, hypothesis:Pose, reference:Pose):
-        # TODO
-        return super().score(hypothesis, reference)
+        #TODO: 
+        pass
+        
+        

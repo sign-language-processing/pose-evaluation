@@ -21,7 +21,6 @@ if __name__ == "__main__":
 
     print(len(original_component_names))
     print(len(preprocessed_component_names))
-    
     preprocessed_poses_not_normalized = [preprocess_pose(pose, normalize_poses=False) for pose in poses]
     
     
