@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 from pose_format import Pose
 
-from pose_evaluation.metrics import ndtw_mje, ape_metric, distance_metric
+from pose_evaluation.metrics import ape_metric, distance_metric, ndtw_mje_metric
 from pose_evaluation.utils.pose_utils import load_pose_file, preprocess_pose, get_component_names_and_points_dict
 
 if __name__ == "__main__":

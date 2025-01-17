@@ -1,12 +1,18 @@
 import shutil
 from pathlib import Path
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, List
+import torch
+import numpy as np
+import numpy.ma as ma
+import pytest
+import os
+import copy
+
 from pose_format import Pose
 from pose_format.utils.generic import fake_pose
 from pose_format.numpy import NumPyPoseBody
-import torch
-import numpy as np
-import pytest
+
+from pose_evaluation.utils.pose_utils import load_pose_file, copy_pose
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -54,9 +60,59 @@ def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray
 
 
 
+utils_test_data_dir = Path(os.path.dirname(os.path.realpath(__file__))).parent/'utils' / 'test'/'test_data'
+
+@pytest.fixture(scope="function")
+def test_mediapipe_poses_paths()->List[Path]:
+    pose_file_paths = list(utils_test_data_dir.glob("*.pose"))
+    return pose_file_paths
+
+@pytest.fixture(scope="function")
+def test_mediapipe_poses(test_mediapipe_poses_paths)->List[Pose]:
+    original_poses = [load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths]
+    # I ran into issues where if one test would modify a Pose, it would affect other tests. 
+    # specifically, pose.header.components[0].name = unsupported_component_name in test_detect_format
+    # this ensures we get a fresh object each time. 
+    return copy.deepcopy(original_poses) 
 
 
-# @pytest.fixture
-# def test_pose_pair():
-#     return get_test_poses(20, 30)
 
+
+@pytest.fixture(scope="function")
+def test_mediapipe_poses_zeros_and_ones_different_length(test_mediapipe_poses)->List[Pose]:
+    hypothesis = copy_pose(test_mediapipe_poses[0])
+
+    reference = copy_pose(test_mediapipe_poses[1])
+
+    
+    zeros_data = ma.array(np.zeros_like(hypothesis.body.data), mask=hypothesis.body.data.mask)
+    hypothesis_body = NumPyPoseBody(fps=hypothesis.body.fps, data=zeros_data, confidence= hypothesis.body.confidence)
+
+    ones_data = ma.array(np.ones_like(reference.body.data), mask=reference.body.data.mask)
+    reference_body = NumPyPoseBody(fps= reference.body.fps, data=ones_data, confidence=reference.body.confidence)
+
+
+    hypothesis = Pose(hypothesis.header, hypothesis_body)
+
+    reference = Pose(reference.header, reference_body)
+
+
+    return copy.deepcopy([hypothesis, reference]) 
+
+
+@pytest.fixture(scope="function")
+def test_mediapipe_poses_zeros_and_ones_same_length(test_mediapipe_poses)->List[Pose]:
+    hypothesis = copy_pose(test_mediapipe_poses[0])
+    reference = copy_pose(test_mediapipe_poses[0])
+
+    zeros_data = ma.array(np.zeros_like(hypothesis.body.data), mask=hypothesis.body.data.mask)
+    hypothesis_body = NumPyPoseBody(fps=hypothesis.body.fps, data=zeros_data, confidence= hypothesis.body.confidence)
+
+    ones_data = ma.array(np.ones_like(reference.body.data), mask=reference.body.data.mask)
+    reference_body = NumPyPoseBody(fps= reference.body.fps, data=ones_data, confidence=reference.body.confidence)
+
+
+    hypothesis = Pose(hypothesis.header, hypothesis_body)
+    reference = Pose(reference.header, reference_body)
+
+    return copy.deepcopy([hypothesis, reference]) 
