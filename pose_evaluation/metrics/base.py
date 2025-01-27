@@ -1,9 +1,59 @@
 # pylint: disable=undefined-variable
 from tqdm import tqdm
+from typing import Any
 
+class MetricSignature:
+    """Represents reproducibility signatures for metrics. Inspired by sacreBLEU
+    """
+    def __init__(self, args: dict):
+
+        self._abbreviated = {
+            "name":"n",
+            "higher_is_better":"hb"
+        }
+
+        self.signature_info = {
+            "name": args.get("name", None),
+            "higher_is_better": args.get("higher_is_better", None)
+        }
+
+    def update(self, key: str, value: Any):
+        self.signature_info[key] = value
+
+    def format(self, short: bool = False) -> str:
+        pairs = []
+        keys = list(self.signature_info.keys())
+        for name in keys:
+            value = self.signature_info[name]
+            if value is not None:
+                # Check for nested signature objects
+                if hasattr(value, "get_signature"):
+                    # Wrap nested signatures in brackets
+                    nested_signature = value.get_signature().format(short=short)
+                    value = f"{{{nested_signature}}}"
+                if isinstance(value, bool):
+                    # Replace True/False with yes/no
+                    value = "yes" if value else "no"
+                final_name = self._abbreviated[name] if short else name
+                pairs.append(f"{final_name}:{value}")
+
+        return "|".join(pairs)
+
+    def __str__(self):
+        return self.format()
+
+    def __repr__(self):
+        return self.format()
+
+
+class SignatureMixin:
+    def get_signature(self) -> str:
+        raise NotImplementedError("Components must implement `get_signature`.")
 
 class BaseMetric[T]:
     """Base class for all metrics."""
+    # Each metric should define its Signature class' name here
+    _SIGNATURE_TYPE = MetricSignature
 
     def __init__(self, name: str, higher_is_better: bool = True):
         self.name = name
@@ -38,3 +88,8 @@ class BaseMetric[T]:
 
     def __str__(self):
         return self.name
+    
+    def get_signature(self) -> MetricSignature:
+        return self._SIGNATURE_TYPE(self.__dict__)
+
+

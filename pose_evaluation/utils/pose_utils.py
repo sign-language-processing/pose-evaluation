@@ -209,6 +209,8 @@ def set_masked_to_origin_position(pose:Pose)->Pose:
     pose.body.data = np.ma.array(pose.body.data.filled(0), mask=False)
 
     return pose
+
+
 # def preprocess_pose(
 #     pose: Pose,
 #     normalize_poses: bool = True,

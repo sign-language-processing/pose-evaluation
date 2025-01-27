@@ -2,7 +2,7 @@ from typing import Any, List, Union, Iterable, Callable
 from pose_format import Pose
 
 from pose_evaluation.metrics.base import SignatureMixin
-from pose_evaluation.utils.pose_utils import remove_components, pose_remove_legs, get_face_and_hands_from_pose, reduce_pose_components_and_points_to_intersection, zero_pad_shorter_poses, copy_pose, pose_hide_legs, pose_hide_low_conf
+from pose_evaluation.utils.pose_utils import remove_components, pose_remove_legs, get_face_and_hands_from_pose, reduce_pose_components_and_points_to_intersection, zero_pad_shorter_poses, copy_pose, pose_hide_legs, pose_hide_low_conf, set_masked_to_origin_position
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 class PoseProcessor(SignatureMixin):
     def __init__(self, name="PoseProcessor") -> None:
@@ -67,8 +67,8 @@ class ReducePosesToCommonComponentsProcessor(PoseProcessor):
         return reduce_pose_components_and_points_to_intersection(poses)
     
 class ZeroPadShorterPosesProcessor(PoseProcessor):
-    def __init__(self, name="zero_pad_shorter_sequence") -> None:
-        super().__init__(name)
+    def __init__(self) -> None:
+        super().__init__(name="zero_pad_shorter_sequence")
 
     def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
         return zero_pad_shorter_poses(poses)
@@ -95,5 +95,11 @@ class HideLowConfProcessor(PoseProcessor):
         pose_hide_low_conf(pose, self.conf_threshold)
         return pose
         
-    
 
+
+class SetMaskedValuesToOriginPositionProcessor(PoseProcessor):
+    def __init__(self,) -> None:
+        super().__init__(name="set_masked_to_origin")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return set_masked_to_origin_position(pose)

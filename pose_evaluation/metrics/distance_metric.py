@@ -1,116 +1,156 @@
-from typing import Literal, Tuple, List, cast, get_args, Callable, Union, TYPE_CHECKING
+from typing import Literal, Iterable, Tuple, List, cast, get_args, Callable, Union, TYPE_CHECKING, Optional
 import numpy as np
 from numpy import ma
 import scipy.spatial.distance as scipy_distances
+from fastdtw import fastdtw
 if TYPE_CHECKING:
     from scipy.spatial.distance import _MetricKind
-from pose_format import Pose
-from pose_evaluation.metrics.base_pose_metric import PoseMetric
-from pose_evaluation.utils.pose_utils import PoseProcessor, NormalizePosesProcessor, RemoveLegsPosesProcessor, HideLowConfProcessor, ZeroPadShorterPosesProcessor, ReducePosesToCommonComponentsProcessor, RemoveWorldLandmarksProcessor, RemoveComponentsProcessor
-ValidDistanceKinds = Literal["euclidean", "manhattan"]
-UnequalSequenceLengthStrategy = Literal["zero_pad_shorter", "dynamic_time_warping"]
-MissingKeypointStrategy = Literal["interpolate"]
-MismatchedComponentsStrategy = Literal["reduce"]
-PosesTransformerFunctionType = Callable[[List[Pose]], List[Pose]]
+from pose_format import Pose, PoseBody
+from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
+from pose_evaluation.metrics.base import SignatureMixin
+from pose_evaluation.metrics.base_pose_metric import PoseMetric, PoseMetricSignature
+from pose_evaluation.metrics.aggregate_distances_strategy import DistancesAggregator
+from pose_evaluation.metrics.pose_processors import PoseProcessor, ZeroPadShorterPosesProcessor, SetMaskedValuesToOriginPositionProcessor
+
+# 
+TrajectoryAlignmentStrategy = Literal["zero_pad_shorter", "truncate", "dynamic_time_warping"]
+MaskedKeypointPositionStrategy = Literal["skip_masked", "return_zero", "masked_to_origin", "ref_return_zero_hyp_to_origin", "undefined"]
+
 KeypointPositionType = Union[Tuple[float, float, float], Tuple[float, float]] # XYZ or XY
+ValidPointDistanceKinds = Literal["euclidean", "manhattan"]
+
+
+
+class DistanceMetricSignature(PoseMetricSignature):
+    def __init__(self, args: dict):
+        super().__init__(args)
+
+        self._abbreviated.update({
+            "distance_measure": "dist",
+            "alignment_strategy":"align",
+            "distances_aggregator": "agg",
+            "mask_strategy":"mask",
+            }
+        )
+
+        self.signature_info.update(
+            {
+                "distance_measure": args.get("distance_measure", None),
+                "alignment_strategy":args.get("alignment_strategy", None),
+                "distances_aggregator": args.get("distances_aggregator", None),
+                "mask_strategy":args.get("mask_strategy", None),
+            }
+        )
+
 
 class DistanceMetric(PoseMetric):
-    def __init__(self, 
-                 spatial_distance_function_kind: ValidDistanceKinds = "euclidean",
-                 preprocessors: Union[None, List[PoseProcessor]] = None,
-                 normalize_poses:bool=True,
-                 reduce_poses_to_common_points:bool=True,
-                 zero_pad_shorter_sequence:bool=True,
-                 remove_legs:bool=True,
-                 remove_world_landmarks:bool=True,
-                 conf_threshold_to_drop_points:None|float=None,
+    """Metrics that compute some sort of distance"""
+    _SIGNATURE_TYPE = DistanceMetricSignature
+
+    def __init__(self, name: str = "DistanceMetric", 
+                 higher_is_better: bool = False, 
+                 pose_preprocessors: None | List[PoseProcessor] = None, 
+                 normalize_poses=True, 
+                 reduce_poses_to_common_points=True, 
+                 remove_legs=True, 
+                 remove_world_landmarks=True, 
+                 distance_measure:ValidPointDistanceKinds = 'euclidean',
+                 mask_strategy: Optional[MaskedKeypointPositionStrategy] = None,
+                 alignment_strategy: Optional[TrajectoryAlignmentStrategy] = None,
+                 distances_aggregator: Optional[DistancesAggregator] = None
                  ):
-        super().__init__(f"DistanceMetric {spatial_distance_function_kind}", higher_is_better=False)
-        if preprocessors is None:
-            self.preprocessers = [             
-            ]
-        if normalize_poses:
-            self.preprocessers.append(NormalizePosesProcessor())
-        if reduce_poses_to_common_points:
-            self.preprocessers.append(ReducePosesToCommonComponentsProcessor())
-        if zero_pad_shorter_sequence:
-            self.preprocessers.append(ZeroPadShorterPosesProcessor())
-        if remove_legs:
-            self.preprocessers.append(RemoveLegsPosesProcessor())
-        if remove_world_landmarks:
-            self.preprocessers.append(RemoveWorldLandmarksProcessor())
-        if conf_threshold_to_drop_points:
-            self.preprocessers.append(HideLowConfProcessor(conf_threshold=conf_threshold_to_drop_points))
+        super().__init__(name, higher_is_better, pose_preprocessors, normalize_poses, reduce_poses_to_common_points, remove_legs, remove_world_landmarks)
+
+        self.distance_measure = distance_measure
+        
+        self.alignment_strategy = alignment_strategy
         
 
-        if spatial_distance_function_kind == "euclidean":
-            self.__point_pair_metric_function = scipy_distances.euclidean
-        elif spatial_distance_function_kind == "manhattan":
-            self.__point_pair_metric_function = scipy_distances.cityblock
-            # return scipy_distances.cityblock(hyp_coordinate, ref_coordinate)
+        if distances_aggregator is None:
+            distances_aggregator = DistancesAggregator('mean')
         else:
+            self.distances_aggregator = distances_aggregator
 
-            # lambda
-            self.__point_pair_metric_function = None
-        # except ValueError as e:
-        #     raise NotImplementedError(f"{self.spatial_distance_function_kind} distance function not implemented, and not in scipy: {e}")
+        # self.set_mask_strategy(mask_strategy)
 
-        self.spatial_distance_function_kind = spatial_distance_function_kind
+        if self.alignment_strategy == "zero_pad":
+            self.pose_preprocessers.append(ZeroPadShorterPosesProcessor())
 
 
-    def point_pair_distance_function(self, hyp_coordinate, ref_coordinate) -> float:
-        if self.__point_pair_metric_function is None:
-            try: 
-                metric_kind = self.spatial_distance_function_kind
-                if TYPE_CHECKING:
-                     metric_kind=cast(_MetricKind, self.spatial_distance_function_kind)
 
-                return scipy_distances.pdist([hyp_coordinate, ref_coordinate],metric=metric_kind).item() 
-            except ValueError as e:
-                raise NotImplementedError(f"{self.spatial_distance_function_kind} distance function not implemented, and not in scipy: {e}")
+    # def set_mask_strategy(self, mask_strategy:MaskedKeypointPositionStrategy):
+    #     self.mask_strategy = mask_strategy
 
-        return self.__point_pair_metric_function(hyp_coordinate, ref_coordinate)
+    #     if mask_strategy == "masked_to_origin":
+    #         self.pose_preprocessers.append(SetMaskedValuesToOriginPositionProcessor())
+    #     elif mask_strategy == "ref_return_zero_hyp_to_origin":
+    #         pass # handle in distance function
+    #     elif mask_strategy == "return_zero":
+    #         pass
+
+    #     elif mask_strategy == "skip_masked":
+    #         pass # handle this in 
+
+    # def set_alignment_strategy(self, alignment_strategy:TrajectoryAlignmentStrategy):
+
+
+    def score(self, hypothesis: Pose, reference: Pose) -> float:
+        return self.score_along_keypoint_trajectories(hypothesis, reference)
+
+    def coord_pair_distance_function(self, hyp_coordinate:KeypointPositionType, ref_coordinate:KeypointPositionType) -> float:
+        # if self
+        raise NotImplementedError
+    #     if self.__point_pair_metric_function is None:
+    #         try: 
+    #             metric_kind = self.distance_calculation_kind
+    #             if TYPE_CHECKING:
+    #                  metric_kind=cast(_MetricKind, self.distance_calculation_kind)
+
+    #             return scipy_distances.pdist([hyp_coordinate, ref_coordinate],metric=metric_kind).item() 
+    #         except ValueError as e:
+    #             raise NotImplementedError(f"{self.distance_calculation_kind} distance function not implemented, and not in scipy: {e}")
+
+    #     return self.__point_pair_metric_function(hyp_coordinate, ref_coordinate)
     
-    def preprocess_poses(self, poses:List[Pose])->List[Pose]:
-        for preprocessor in self.preprocessers:
-            preprocessor = cast(PoseProcessor, preprocessor)
-            poses = preprocessor.process_poses(poses)
-        return poses
+    
+    # def align_trajectories(self, hyp_points, ref_point):
+    #     if self.alignment_strategy == "zero_pad":
+    #         raise NotImplementedError
+    #     if self.alignment_strategy == "truncate":
+    #         raise NotImplementedError
 
 
-        # return preprocess_poses(poses=poses, 
-        #                         normalize_poses=self.normalize_poses,
-        #                         conf_threshold_to_drop_points=self.conf_threshold_to_drop_points,
-        #                         reduce_poses_to_common_points=self.reduce_poses_to_common_points,
-        #                         remove_legs=self.remove_legs,
-        #                         remove_world_landmarks=self.remove_world_landmarks,
-        #                         zero_pad_shorter_pose=self.zero_pad_shorter_sequence,                                
-        #                         )
-
+    def trajectory_pair_distance_function(self, hyp_trajectory:List[KeypointPositionType], ref_trajectory:List[KeypointPositionType]) ->float:
+        distances = []
+        if self.alignment_strategy is None:
+            if len(hyp_trajectory) != len(ref_trajectory):
+                raise ValueError(f"Cannot calculate distances between trajectories with different lengths: {len(hyp_trajectory)} vs {len(ref_trajectory)}. Perhaps preprocess?")
         
-    
-
-    def trajectory_pair_distance_function(self, hyp_trajectory, ref_trajectory) ->float:
-        arrays = [hyp_trajectory, ref_trajectory]
-        hyp_trajectory = arrays[0]
-        ref_trajectory = arrays[1]
-        spatial_point_distances = []
-        if len(hyp_trajectory) != len(ref_trajectory):
-            raise ValueError(f"Cannot calculate distances between trajectories with different lengths: {len(hyp_trajectory)} vs {len(ref_trajectory)}. Perhaps preprocess?")
 
         for i, coords in enumerate(zip(hyp_trajectory, ref_trajectory)):
             hyp_coord, ref_coord = coords
-            dist = self.point_pair_distance_function(hyp_coordinate=hyp_coord, ref_coordinate=ref_coord)
-            spatial_point_distances.append(dist)
+
+            dist = self.coord_pair_distance_function(hyp_coordinate=hyp_coord, ref_coordinate=ref_coord)
+            distances.append(dist)
             assert dist >= 0, f"{i}: {dist}, {hyp_coord}, {ref_coord}"
-        return np.mean(spatial_point_distances)        
+        return self.aggregate_point_distances(distances)
+    
+    def aggregate_point_distances(self, distances: List[float])->float:
+        if self.distances_aggregator is not None:
+            return self.distances_aggregator.aggregate(distances)
+    
+        else:     
+            raise NotImplementedError(f"aggregation strategy: {self.aggregation_strategy}")
+        
         
 
     def score_along_keypoint_trajectories(self, hypothesis: Pose, reference: Pose)->float:
-        assert np.count_nonzero(np.isnan(hypothesis.body.data)) == 0
-        assert np.count_nonzero(np.isnan(reference.body.data)) == 0
         hyp_points = hypothesis.body.points_perspective() # 560, 1, 93, 3 for example. joint-points, frames, xyz
         ref_points = reference.body.points_perspective()
+
+        # hyp_points, ref_points = self.align_trajectories(hyp_points, ref_points) 
+
+
 
         if hyp_points.shape[0] != ref_points.shape[0] or hyp_points.shape[-1] != ref_points.shape[-1]:
             raise ValueError(
@@ -118,6 +158,7 @@ class DistanceMetric(PoseMetric):
                 )
         
         point_errors = []
+
         for hyp_point_data, ref_point_data in zip(hyp_points, ref_points):
             # shape is people, frames, xyz
             # NOTE: assumes only one person! # TODO: pytest test checking this.
@@ -127,36 +168,18 @@ class DistanceMetric(PoseMetric):
             ref_point_trajectory = ref_point_data[0]
             point_errors.append(self.trajectory_pair_distance_function(hyp_point_trajectory, ref_point_trajectory))
 
-        return float(np.mean(point_errors))
+        return self.aggregate_point_distances(point_errors)
     
-    # def preprocess_and_score(self, hypothesis: Pose, reference: Pose) -> float:
-    #     poses = [hypothesis, reference]
-    #     poses = self.preprocess_poses(poses)
-    #     return self.score(*poses)
+    
 
 
-    def score(self, hypothesis: Pose, reference: Pose) -> float:
-        hypothesis, reference = self.preprocess_poses([hypothesis, reference])
-        return self.score_along_keypoint_trajectories(hypothesis, reference)
+    # def signature(self)->str:
+    #     signature_elements = [f"{self.name}"]
 
 
+    #     for preprocessor in self.pose_preprocessers:
+    #         signature_elements.append(f"{preprocessor}")
 
-        # arrays = [poses[0].body.data, poses[1].body.data]
+    #     signature_elements.append(f"point_distance:{self.distance_calculation_kind}")
 
-
-        
-
-        # # Calculate the error
-        # error = arrays[0] - arrays[1]
-
-        # # for l2/euclidean, we need to calculate the error for each point
-        # if self.kind == "euclidean":
-        #     # the last dimension is the 3D coordinates
-        #     error = ma.power(error, 2)
-        #     error = error.sum(axis=-1)
-        #     error = ma.sqrt(error)
-        # else:
-        #     error = ma.abs(error)
-
-        # error = error.filled(0)
-        # return error.sum()
+    #     return "|".join(signature_elements)

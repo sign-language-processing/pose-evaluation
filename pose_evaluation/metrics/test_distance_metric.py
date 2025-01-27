@@ -10,13 +10,13 @@ from pose_format import Pose
 from pose_format.utils.generic import fake_pose, detect_known_pose_format
 from pose_format.numpy import NumPyPoseBody
 
-from pose_evaluation.metrics.distance_metric import DistanceMetric, ValidDistanceKinds
-from pose_evaluation.metrics import ndtw_mje_metric
+from pose_evaluation.metrics.distance_metric import DistanceMetric, ValidPointDistanceKinds
+from pose_evaluation.metrics import dynamic_time_warping_metric
 # from pose_evaluation.metrics import ape_metric, mse_metric, ndtw_mje_metric
 
 # pytest --cov --cov-report lcov .
 
-DISTANCE_KINDS_TO_CHECK = get_args(ValidDistanceKinds)
+DISTANCE_KINDS_TO_CHECK = get_args(ValidPointDistanceKinds)
 
 
 # def get_test_poses(frame_count1: int, frame_count2: int, people_count:int=3, point_count:int=5, fill_value=2, fps=25)-> Tuple[Pose, Pose]:
@@ -83,8 +83,8 @@ def test_data_zeros_and_ones(test_mediapipe_poses_zeros_and_ones_different_lengt
 
 
 @pytest.mark.parametrize("metric_name", DISTANCE_KINDS_TO_CHECK)
-def test_preprocessing(metric_name: ValidDistanceKinds, test_mediapipe_poses:List[Pose]):
-    metric = DistanceMetric(spatial_distance_function_kind=metric_name)
+def test_preprocessing(metric_name: ValidPointDistanceKinds, test_mediapipe_poses:List[Pose]):
+    metric = DistanceMetric(point_distance_calculation_kind=metric_name)
     for pose in test_mediapipe_poses:
         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
     poses = metric.preprocess_poses(test_mediapipe_poses)
@@ -98,8 +98,8 @@ def test_preprocessing(metric_name: ValidDistanceKinds, test_mediapipe_poses:Lis
         assert len(data) == len(poses[0].body.data)
 
 @pytest.mark.parametrize("metric_name", DISTANCE_KINDS_TO_CHECK)
-def test_preprocessing_with_zeros_and_ones_different_length(metric_name: ValidDistanceKinds, test_mediapipe_poses_zeros_and_ones_different_length:List[Pose]):
-    metric = DistanceMetric(spatial_distance_function_kind=metric_name, normalize_poses=False) # normalizing when they're all zeros gives an error
+def test_preprocessing_with_zeros_and_ones_different_length(metric_name: ValidPointDistanceKinds, test_mediapipe_poses_zeros_and_ones_different_length:List[Pose]):
+    metric = DistanceMetric(point_distance_calculation_kind=metric_name, normalize_poses=False) # normalizing when they're all zeros gives an error
     
     for pose in test_mediapipe_poses_zeros_and_ones_different_length:
         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
@@ -120,11 +120,11 @@ def test_preprocessing_with_zeros_and_ones_different_length(metric_name: ValidDi
 
 
 @pytest.mark.parametrize("metric_name", DISTANCE_KINDS_TO_CHECK)
-def test_base_distance_metric_scores_equal_length(metric_name:ValidDistanceKinds, test_mediapipe_poses_zeros_and_ones_same_length):
+def test_base_distance_metric_scores_equal_length(metric_name:ValidPointDistanceKinds, test_mediapipe_poses_zeros_and_ones_same_length):
 
     # hypothesis, reference = get_test_poses(2, 3)
     # hypothesis, reference = test_mediapipe_poses[0], test_mediapipe_poses[1]
-    metric = DistanceMetric(spatial_distance_function_kind=metric_name, normalize_poses=False) # gives me nans in this case
+    metric = DistanceMetric(point_distance_calculation_kind=metric_name, normalize_poses=False) # gives me nans in this case
     fill_value =1
 
     hyp, ref = test_mediapipe_poses_zeros_and_ones_same_length[0], test_mediapipe_poses_zeros_and_ones_same_length[1]
@@ -201,12 +201,12 @@ def test_distance_metric_invalid_kind(test_mediapipe_poses_zeros_and_ones_same_l
     
 
     with pytest.raises(NotImplementedError, match="invalid distance function"):
-        metric = DistanceMetric(spatial_distance_function_kind="invalid", normalize_poses=normalize_poses) # type: ignore
+        metric = DistanceMetric(point_distance_calculation_kind="invalid", normalize_poses=normalize_poses) # type: ignore
         metric.score(test_mediapipe_poses_zeros_and_ones_same_length[0], test_mediapipe_poses_zeros_and_ones_same_length[1])
 
 
     # what if we do one that is in scipy?
-    metric = DistanceMetric(spatial_distance_function_kind="chebyshev", normalize_poses=normalize_poses) # type: ignore 
+    metric = DistanceMetric(point_distance_calculation_kind="chebyshev", normalize_poses=normalize_poses) # type: ignore 
     metric.score(test_mediapipe_poses_zeros_and_ones_same_length[0], test_mediapipe_poses_zeros_and_ones_same_length[1])
 
 
