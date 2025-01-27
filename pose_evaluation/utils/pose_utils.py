@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Iterable
 import numpy as np
 from pose_format import Pose
 from pose_format.utils.openpose import OpenPose_Components
@@ -7,41 +7,12 @@ from pose_format.utils.openpose_135 import OpenPose_Components as OpenPose135_Co
 # from pose_format.utils.holistic import holistic_components # creates an error: ImportError: Please install mediapipe with: pip install mediapipe
 from collections import defaultdict
 from pose_format.utils.generic import pose_normalization_info, pose_hide_legs, fake_pose
-
-
-class PoseProcessor():
-    def __init__(self, name="PoseProcessor") -> None:
-        self.name = name
-
-    def __str__(self) -> str:
-        return self.name
-    
-    def process_pose(self, pose : Pose) -> Pose:
-        return pose
-    
-    def process_poses(self, poses: List[Pose])-> List[Pose]:
-        return [self.process_pose(pose) for pose in poses]
     
 
 def pose_remove_world_landmarks(pose: Pose)->Pose:
     return remove_components(pose, ["POSE_WORLD_LANDMARKS"])
 
-class RemoveComponentsProcessor(PoseProcessor):
-    def __init__(self, landmarks:List[str]) -> None:
-        super().__init__(f"remove_landmarks[{landmarks}]")
-        self.landmarks = landmarks
-    
-    
-    def process_pose(self, pose: Pose) -> Pose:
-        return remove_components(pose, self.landmarks)
-
-
-class RemoveWorldLandmarksProcessor(RemoveComponentsProcessor):
-    def __init__(self) -> None:
-        landmarks =  ["POSE_WORLD_LANDMARKS"]
-        super().__init__(landmarks)
-    
-
+# TODO: remove, and use the one implemented in the latest pose_format
 def detect_format(pose: Pose) -> str:
     component_names = [c.name for c in pose.header.components]
     mediapipe_components = [
@@ -120,12 +91,7 @@ def pose_remove_legs(pose: Pose) -> Pose:
     pose = remove_components(pose, [], point_names_to_remove)
     return pose
 
-class RemoveLegsPosesProcessor(PoseProcessor):
-    def __init__(self, name="remove_legs") -> None:
-        super().__init__(name)
-    
-    def process_pose(self, pose: Pose) -> Pose:
-        return pose_remove_legs(pose)
+
 
 def copy_pose(pose: Pose) -> Pose:
     return pose.get_components([component.name for component in pose.header.components])
@@ -141,13 +107,6 @@ def get_face_and_hands_from_pose(pose: Pose) -> Pose:
     ]
     return pose.get_components(components_to_keep)
 
-class GetFaceAndHandsProcessor(PoseProcessor):
-    def __init__(self, name="face_and_hands") -> None:
-        super().__init__(name)
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return get_face_and_hands_from_pose(pose)
-
 def load_pose_file(pose_path: Path) -> Pose:
     pose_path = Path(pose_path).resolve()
     with pose_path.open("rb") as f:
@@ -155,7 +114,7 @@ def load_pose_file(pose_path: Path) -> Pose:
     return pose
 
 
-def reduce_pose_components_and_points_to_intersection(poses: List[Pose]) -> List[Pose]:
+def reduce_pose_components_and_points_to_intersection(poses: Iterable[Pose]) -> List[Pose]:
     poses = [copy_pose(pose) for pose in poses]
     component_names_for_each_pose = []
     point_dict_for_each_pose = []
@@ -188,17 +147,7 @@ def reduce_pose_components_and_points_to_intersection(poses: List[Pose]) -> List
     poses = [pose.get_components(set_of_common_components, common_points) for pose in poses]
     return poses
 
-class ReducePosesToCommonComponentsProcessor(PoseProcessor):
-    def __init__(self, name="reduce_pose_components") -> None:
-        super().__init__(name)
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return self.process_poses([pose])[0]
-    
-    def process_poses(self, poses: List[Pose]) -> List[Pose]:
-        return reduce_pose_components_and_points_to_intersection(poses)
-
-def zero_pad_shorter_poses(poses:List[Pose]) -> List[Pose]:
+def zero_pad_shorter_poses(poses:Iterable[Pose]) -> List[Pose]:
     poses = [copy_pose(pose) for pose in poses]
     # arrays = [pose.body.data for pose in poses]
 
@@ -216,92 +165,83 @@ def zero_pad_shorter_poses(poses:List[Pose]) -> List[Pose]:
             pose.body.confidence = np.concatenate([pose.body.confidence, padding_tensor_conf])
     return poses    
 
-class ZeroPadShorterPosesProcessor(PoseProcessor):
-    def __init__(self, name="zero_pad") -> None:
-        super().__init__(name)
-
-    def process_poses(self, poses: List[Pose]) -> List[Pose]:
-        return zero_pad_shorter_poses(poses)
 
 
-def preprocess_poses(
-    poses: List[Pose],
-    normalize_poses: bool = True,
-    reduce_poses_to_common_points: bool = False,
-    remove_legs: bool = True,
-    remove_world_landmarks: bool = False,
-    conf_threshold_to_drop_points: None | float = None,
-    zero_pad_shorter_pose = True, 
-) -> List[Pose]:
-    for pose in poses:
-        assert np.count_nonzero(np.isnan(pose.body.data)) == 0
-    # NOTE: this is a lot of arguments. Perhaps a list may be better?
-    if reduce_poses_to_common_points:
+# def preprocess_poses(
+#     poses: List[Pose],
+#     normalize_poses: bool = True,
+#     reduce_poses_to_common_points: bool = False,
+#     remove_legs: bool = True,
+#     remove_world_landmarks: bool = False,
+#     conf_threshold_to_drop_points: None | float = None,
+#     zero_pad_shorter_pose = True, 
+# ) -> List[Pose]:
+#     for pose in poses:
+#         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+#     # NOTE: this is a lot of arguments. Perhaps a list may be better?
+#     if reduce_poses_to_common_points:
         
-        poses = reduce_pose_components_and_points_to_intersection(poses)
+#         poses = reduce_pose_components_and_points_to_intersection(poses)
 
-    poses = [
-        preprocess_pose(
-            pose,
-            normalize_poses=normalize_poses,
-            remove_legs=remove_legs,
-            remove_world_landmarks=remove_world_landmarks,
-            conf_threshold_to_drop_points=conf_threshold_to_drop_points,
-        )
-        for pose in poses
-    ]
-    for pose in poses:
-        assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+#     poses = [
+#         preprocess_pose(
+#             pose,
+#             normalize_poses=normalize_poses,
+#             remove_legs=remove_legs,
+#             remove_world_landmarks=remove_world_landmarks,
+#             conf_threshold_to_drop_points=conf_threshold_to_drop_points,
+#         )
+#         for pose in poses
+#     ]
+#     for pose in poses:
+#         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
 
-    if zero_pad_shorter_pose:
-        poses = zero_pad_shorter_poses(poses)
-    return poses
-
-
-class NormalizePosesProcessor(PoseProcessor):
-    def __init__(self, info=None, scale_factor=1) -> None:
-        super().__init__(f"normalize_poses[{info},{scale_factor}]")
-        self.info = info
-        self.scale_factor = scale_factor
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return pose.normalize(self.info, self.scale_factor)
+#     if zero_pad_shorter_pose:
+#         poses = zero_pad_shorter_poses(poses)
+#     return poses
 
 
 
-def preprocess_pose(
-    pose: Pose,
-    normalize_poses: bool = True,
-    remove_legs: bool = True,
-    remove_world_landmarks: bool = False,
-    conf_threshold_to_drop_points: None | float = None,
-) -> Pose:
-    assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+def set_masked_to_origin_position(pose:Pose)->Pose:
     pose = copy_pose(pose)
-    if normalize_poses:
-        # note: latest version (not yet released) does it automatically
-        pose = pose.normalize(pose_normalization_info(pose.header))
-        # TODO: https://github.com/sign-language-processing/pose/issues/146
-
-    # Drop legs
-    if remove_legs:
-        try: 
-            pose = pose_remove_legs(pose)
-        except NotImplementedError as e:
-            print(f"Could not remove legs: {e}")
-            # raise Warning(f"Could not remove legs: {e}")
-
-    # not used, typically.
-    if remove_world_landmarks:
-        pose = pose_remove_world_landmarks(pose)
-        assert np.count_nonzero(np.isnan(pose.body.data)) == 0
-
-    # hide low conf
-    if conf_threshold_to_drop_points is not None:
-        pose_hide_low_conf(pose, confidence_threshold=conf_threshold_to_drop_points)
-        assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+    # frames, person, keypoint, xyz
+    
+    pose.body.data = np.ma.array(pose.body.data.filled(0), mask=False)
 
     return pose
+# def preprocess_pose(
+#     pose: Pose,
+#     normalize_poses: bool = True,
+#     remove_legs: bool = True,
+#     remove_world_landmarks: bool = False,
+#     conf_threshold_to_drop_points: None | float = None,
+# ) -> Pose:
+#     assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+#     pose = copy_pose(pose)
+#     if normalize_poses:
+#         # note: latest version (not yet released) does it automatically
+#         pose = pose.normalize(pose_normalization_info(pose.header))
+#         # TODO: https://github.com/sign-language-processing/pose/issues/146
+
+#     # Drop legs
+#     if remove_legs:
+#         try: 
+#             pose = pose_remove_legs(pose)
+#         except NotImplementedError as e:
+#             print(f"Could not remove legs: {e}")
+#             # raise Warning(f"Could not remove legs: {e}")
+
+#     # not used, typically.
+#     if remove_world_landmarks:
+#         pose = pose_remove_world_landmarks(pose)
+#         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+
+#     # hide low conf
+#     if conf_threshold_to_drop_points is not None:
+#         pose_hide_low_conf(pose, confidence_threshold=conf_threshold_to_drop_points)
+#         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
+
+#     return pose
 
 
 def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
@@ -310,17 +250,3 @@ def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     stacked_confidence = np.stack([mask, mask, mask], axis=3)
     masked_data = np.ma.masked_array(pose.body.data, mask=stacked_confidence)
     pose.body.data = masked_data
-
-class HideLowConfProcessor(PoseProcessor):
-    def __init__(self, conf_threshold:float = 0.2) -> None:
-
-        super().__init__(f"hide_low_conf[{conf_threshold}]")
-        self.conf_threshold = conf_threshold
-
-    def process_pose(self, pose: Pose) -> Pose:
-        pose = copy_pose(pose)
-        pose_hide_low_conf(pose, self.conf_threshold)
-        return pose
-        
-    
-
