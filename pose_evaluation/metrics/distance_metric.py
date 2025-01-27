@@ -9,15 +9,15 @@ from pose_format import Pose, PoseBody
 from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
 from pose_evaluation.metrics.base import SignatureMixin
 from pose_evaluation.metrics.base_pose_metric import PoseMetric, PoseMetricSignature
-from pose_evaluation.metrics.aggregate_distances_strategy import DistancesAggregator
+from pose_evaluation.metrics.distance_measure import Distance, PowerDistance
 from pose_evaluation.metrics.pose_processors import PoseProcessor, ZeroPadShorterPosesProcessor, SetMaskedValuesToOriginPositionProcessor
 
-# 
-TrajectoryAlignmentStrategy = Literal["zero_pad_shorter", "truncate", "dynamic_time_warping"]
+BuildTrajectoryStrategy = Literal['keypoint', 'frame']
+TrajectoryAlignmentStrategy = Literal["zero_pad_shorter", "truncate_longer", "by_reference"]
 MaskedKeypointPositionStrategy = Literal["skip_masked", "return_zero", "masked_to_origin", "ref_return_zero_hyp_to_origin", "undefined"]
 
 KeypointPositionType = Union[Tuple[float, float, float], Tuple[float, float]] # XYZ or XY
-ValidPointDistanceKinds = Literal["euclidean", "manhattan"]
+ValidPointDistanceKinds = Literal["euclidean", "manhattan"] 
 
 
 
@@ -28,8 +28,6 @@ class DistanceMetricSignature(PoseMetricSignature):
         self._abbreviated.update({
             "distance_measure": "dist",
             "alignment_strategy":"align",
-            "distances_aggregator": "agg",
-            "mask_strategy":"mask",
             }
         )
 
@@ -37,8 +35,6 @@ class DistanceMetricSignature(PoseMetricSignature):
             {
                 "distance_measure": args.get("distance_measure", None),
                 "alignment_strategy":args.get("alignment_strategy", None),
-                "distances_aggregator": args.get("distances_aggregator", None),
-                "mask_strategy":args.get("mask_strategy", None),
             }
         )
 
@@ -47,59 +43,45 @@ class DistanceMetric(PoseMetric):
     """Metrics that compute some sort of distance"""
     _SIGNATURE_TYPE = DistanceMetricSignature
 
-    def __init__(self, name: str = "DistanceMetric", 
-                 higher_is_better: bool = False, 
+    def __init__(self, 
+                 distance_measure: Optional[Distance] = None,
                  pose_preprocessors: None | List[PoseProcessor] = None, 
-                 normalize_poses=True, 
-                 reduce_poses_to_common_points=True, 
-                 remove_legs=True, 
-                 remove_world_landmarks=True, 
-                 distance_measure:ValidPointDistanceKinds = 'euclidean',
-                 mask_strategy: Optional[MaskedKeypointPositionStrategy] = None,
+                 trajectory:BuildTrajectoryStrategy="keypoint",
                  alignment_strategy: Optional[TrajectoryAlignmentStrategy] = None,
-                 distances_aggregator: Optional[DistancesAggregator] = None
                  ):
-        super().__init__(name, higher_is_better, pose_preprocessors, normalize_poses, reduce_poses_to_common_points, remove_legs, remove_world_landmarks)
+        super().__init__(name="DistanceMetric", higher_is_better=False, pose_preprocessors=pose_preprocessors)
 
-        self.distance_measure = distance_measure
-        
-        self.alignment_strategy = alignment_strategy
-        
+        if distance_measure is None:
+            self.distance_measure = PowerDistance()
 
-        if distances_aggregator is None:
-            distances_aggregator = DistancesAggregator('mean')
         else:
-            self.distances_aggregator = distances_aggregator
+            self.distance_measure = distance_measure
+        
+        self.alignment_strategy = alignment_strategy # TODO: What to do here?
 
-        # self.set_mask_strategy(mask_strategy)
-
-        if self.alignment_strategy == "zero_pad":
-            self.pose_preprocessers.append(ZeroPadShorterPosesProcessor())
+        self.trajectory = trajectory
+        
 
 
-
-    # def set_mask_strategy(self, mask_strategy:MaskedKeypointPositionStrategy):
-    #     self.mask_strategy = mask_strategy
-
-    #     if mask_strategy == "masked_to_origin":
-    #         self.pose_preprocessers.append(SetMaskedValuesToOriginPositionProcessor())
-    #     elif mask_strategy == "ref_return_zero_hyp_to_origin":
-    #         pass # handle in distance function
-    #     elif mask_strategy == "return_zero":
-    #         pass
-
-    #     elif mask_strategy == "skip_masked":
-    #         pass # handle this in 
-
-    # def set_alignment_strategy(self, alignment_strategy:TrajectoryAlignmentStrategy):
-
+    def align(self, hypothesis, reference)->Tuple[np.ma.MaskedArray, np.ma.MaskedArray]:
+        if self.alignment_strategy == "zero_pad_shorter":
+            raise NotImplementedError
+        if self.alignment_strategy == "truncate_longer": 
+            raise NotImplementedError
+        if self.alignment_strategy == "by_reference":
+            raise NotImplementedError
+        raise NotImplementedError
 
     def score(self, hypothesis: Pose, reference: Pose) -> float:
-        return self.score_along_keypoint_trajectories(hypothesis, reference)
+        self.process_poses([hypothesis, reference])
+        hyp_data, ref_data = self.align(hypothesis, reference)
+        if self.trajectory == "keypoint":
+            raise NotImplementedError
+        return self.distance_measure(hyp_data, ref_data)
 
-    def coord_pair_distance_function(self, hyp_coordinate:KeypointPositionType, ref_coordinate:KeypointPositionType) -> float:
-        # if self
-        raise NotImplementedError
+    # def coord_pair_distance_function(self, hyp_coordinate:KeypointPositionType, ref_coordinate:KeypointPositionType) -> float:
+    #     # if self
+    #     raise NotImplementedError
     #     if self.__point_pair_metric_function is None:
     #         try: 
     #             metric_kind = self.distance_calculation_kind
@@ -120,55 +102,51 @@ class DistanceMetric(PoseMetric):
     #         raise NotImplementedError
 
 
-    def trajectory_pair_distance_function(self, hyp_trajectory:List[KeypointPositionType], ref_trajectory:List[KeypointPositionType]) ->float:
-        distances = []
-        if self.alignment_strategy is None:
-            if len(hyp_trajectory) != len(ref_trajectory):
-                raise ValueError(f"Cannot calculate distances between trajectories with different lengths: {len(hyp_trajectory)} vs {len(ref_trajectory)}. Perhaps preprocess?")
+    # def trajectory_pair_distance_function(self, hyp_trajectory:List[KeypointPositionType], ref_trajectory:List[KeypointPositionType]) ->float:
+    #     distances = []
+    #     if self.alignment_strategy is None:
+    #         if len(hyp_trajectory) != len(ref_trajectory):
+    #             raise ValueError(f"Cannot calculate distances between trajectories with different lengths: {len(hyp_trajectory)} vs {len(ref_trajectory)}. Perhaps preprocess?")
         
 
-        for i, coords in enumerate(zip(hyp_trajectory, ref_trajectory)):
-            hyp_coord, ref_coord = coords
+    #     for i, coords in enumerate(zip(hyp_trajectory, ref_trajectory)):
+    #         hyp_coord, ref_coord = coords
 
-            dist = self.coord_pair_distance_function(hyp_coordinate=hyp_coord, ref_coordinate=ref_coord)
-            distances.append(dist)
-            assert dist >= 0, f"{i}: {dist}, {hyp_coord}, {ref_coord}"
-        return self.aggregate_point_distances(distances)
+    #         dist = self.coord_pair_distance_function(hyp_coordinate=hyp_coord, ref_coordinate=ref_coord)
+    #         distances.append(dist)
+    #         # assert dist >= 0, f"{i}: {dist}, {hyp_coord}, {ref_coord}"
+    #     return self.aggregate_point_distances(distances)
     
-    def aggregate_point_distances(self, distances: List[float])->float:
-        if self.distances_aggregator is not None:
-            return self.distances_aggregator.aggregate(distances)
-    
-        else:     
-            raise NotImplementedError(f"aggregation strategy: {self.aggregation_strategy}")
-        
         
 
-    def score_along_keypoint_trajectories(self, hypothesis: Pose, reference: Pose)->float:
-        hyp_points = hypothesis.body.points_perspective() # 560, 1, 93, 3 for example. joint-points, frames, xyz
-        ref_points = reference.body.points_perspective()
-
-        # hyp_points, ref_points = self.align_trajectories(hyp_points, ref_points) 
+    # def score_along_keypoint_trajectories(self, hypothesis: Pose, reference: Pose)->float:
+    #     hyp_points = hypothesis.body.points_perspective() # 560, 1, 93, 3 for example. joint-points, frames, xyz
+    #     ref_points = reference.body.points_perspective()
 
 
 
-        if hyp_points.shape[0] != ref_points.shape[0] or hyp_points.shape[-1] != ref_points.shape[-1]:
-            raise ValueError(
-                f"Shapes of hyp ({hyp_points.shape}) and ref ({ref_points.shape}) unequal. Not supported by {self.name}"
-                )
+    #     # hyp_points, ref_points = self.align_trajectories(hyp_points, ref_points) 
+
+
+
+    #     if hyp_points.shape[0] != ref_points.shape[0] or hyp_points.shape[-1] != ref_points.shape[-1]:
+    #         raise ValueError(
+    #             f"Shapes of hyp ({hyp_points.shape}) and ref ({ref_points.shape}) unequal. Not supported by {self.name}"
+    #             )
         
-        point_errors = []
+    #     point_errors = []
 
-        for hyp_point_data, ref_point_data in zip(hyp_points, ref_points):
-            # shape is people, frames, xyz
-            # NOTE: assumes only one person! # TODO: pytest test checking this.
-            assert hyp_point_data.shape[0] == 1, f"{self} metric expects only one person. Hyp shape given: {hyp_point_data.shape}"
-            assert ref_point_data.shape[0] == 1, f"{self} metric expects only one person. Reference shape given: {ref_point_data.shape}"
-            hyp_point_trajectory = hyp_point_data[0]
-            ref_point_trajectory = ref_point_data[0]
-            point_errors.append(self.trajectory_pair_distance_function(hyp_point_trajectory, ref_point_trajectory))
+    #     for hyp_point_data, ref_point_data in zip(hyp_points, ref_points):
+    #         # shape is people, frames, xyz
+    #         # NOTE: assumes only one person! # TODO: pytest test checking this.
+    #         assert hyp_point_data.shape[0] == 1, f"{self} metric expects only one person. Hyp shape given: {hyp_point_data.shape}"
+    #         assert ref_point_data.shape[0] == 1, f"{self} metric expects only one person. Reference shape given: {ref_point_data.shape}"
+    #         hyp_point_trajectory = hyp_point_data[0]
+    #         ref_point_trajectory = ref_point_data[0]
+    #         # point_errors.append(self.trajectory_pair_distance_function(hyp_point_trajectory, ref_point_trajectory))
+    #         point_errors.append(self.distance_measure(hyp_point_trajectory, ref_point_trajectory))
 
-        return self.aggregate_point_distances(point_errors)
+    #     return self.aggregate_point_distances(point_errors)
     
     
 

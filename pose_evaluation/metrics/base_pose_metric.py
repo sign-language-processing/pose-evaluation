@@ -36,12 +36,8 @@ class PoseMetric(BaseMetric[Pose]):
 
     _SIGNATURE_TYPE = PoseMetricSignature
 
-    def __init__(self, name: str="PoseMetric", higher_is_better: bool = True,
+    def __init__(self, name: str="PoseMetric", higher_is_better: bool = False,
                  pose_preprocessors: Union[None, List[PoseProcessor]] = None,
-                 normalize_poses = True,
-                 reduce_poses_to_common_points = True,
-                 remove_legs = True,
-                 remove_world_landmarks = True,
                  ):
                  
             super().__init__(name, higher_is_better)
@@ -50,25 +46,13 @@ class PoseMetric(BaseMetric[Pose]):
                 ]
             else:
                 self.pose_preprocessers = pose_preprocessors
-            
-
-            
-            if normalize_poses:
-                self.pose_preprocessers.append(NormalizePosesProcessor())
-            if reduce_poses_to_common_points:
-                self.pose_preprocessers.append(ReducePosesToCommonComponentsProcessor())
-            if remove_legs:
-                self.pose_preprocessers.append(RemoveLegsPosesProcessor())
-            if remove_world_landmarks:
-                self.pose_preprocessers.append(RemoveWorldLandmarksProcessor())
-            
-
 
     def score(self, hypothesis: Pose, reference: Pose) -> float:
-        hypothesis, reference = self.preprocess_poses([hypothesis, reference])
+        hypothesis, reference = self.process_poses([hypothesis, reference])
         return self.score(hypothesis, reference)
 
-    def preprocess_poses(self, poses:List[Pose])->List[Pose]:
+    def process_poses(self, poses:Iterable[Pose])->List[Pose]:
+        poses = list(poses)
         for preprocessor in self.pose_preprocessers:
             preprocessor = cast(PoseProcessor, preprocessor)
             poses = preprocessor.process_poses(poses)

@@ -55,7 +55,7 @@ class BaseMetric[T]:
     # Each metric should define its Signature class' name here
     _SIGNATURE_TYPE = MetricSignature
 
-    def __init__(self, name: str, higher_is_better: bool = True):
+    def __init__(self, name: str, higher_is_better: bool = False):
         self.name = name
         self.higher_is_better = higher_is_better
 

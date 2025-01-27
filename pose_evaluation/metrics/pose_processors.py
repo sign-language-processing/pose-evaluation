@@ -29,6 +29,7 @@ class PoseProcessor(SignatureMixin):
     def get_signature(self) -> str:
         return f"{self}"
     
+    
 class RemoveComponentsProcessor(PoseProcessor):
     def __init__(self, landmarks:List[str]) -> None:
         super().__init__(f"remove_landmarks[landmarks{landmarks}]")
@@ -103,3 +104,12 @@ class SetMaskedValuesToOriginPositionProcessor(PoseProcessor):
 
     def process_pose(self, pose: Pose) -> Pose:
         return set_masked_to_origin_position(pose)
+    
+def get_standard_pose_processors()-> List[PoseProcessor]:
+    return [
+        NormalizePosesProcessor(),
+        ReducePosesToCommonComponentsProcessor(),
+        RemoveWorldLandmarksProcessor(),
+        RemoveLegsPosesProcessor(),
+        ZeroPadShorterPosesProcessor()
+        ]

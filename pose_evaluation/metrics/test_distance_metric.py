@@ -87,7 +87,7 @@ def test_preprocessing(metric_name: ValidPointDistanceKinds, test_mediapipe_pose
     metric = DistanceMetric(point_distance_calculation_kind=metric_name)
     for pose in test_mediapipe_poses:
         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
-    poses = metric.preprocess_poses(test_mediapipe_poses)
+    poses = metric.process_poses(test_mediapipe_poses)
 
     
     for pose in poses:
@@ -103,7 +103,7 @@ def test_preprocessing_with_zeros_and_ones_different_length(metric_name: ValidPo
     
     for pose in test_mediapipe_poses_zeros_and_ones_different_length:
         assert np.count_nonzero(np.isnan(pose.body.data)) == 0
-    poses = metric.preprocess_poses(test_mediapipe_poses_zeros_and_ones_different_length)
+    poses = metric.process_poses(test_mediapipe_poses_zeros_and_ones_different_length)
 
     
     for pose in poses:

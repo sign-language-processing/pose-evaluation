@@ -5,3 +5,6 @@ pose_evaluation.egg-info/
 .coverage
 .vscode/
 coverage.lcov
+**/test_data/
+*.npz
+*.code-workspace
