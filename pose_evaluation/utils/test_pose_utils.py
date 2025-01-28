@@ -25,11 +25,11 @@ from pose_evaluation.utils.pose_utils import (
 
 
 def test_load_poses_mediapipe(
-    test_mediapipe_poses_paths: List[Path],
+    mediapipe_poses_test_data_paths: List[Path],
     standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
 
-    poses = [load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths]
+    poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
 
     assert len(poses) == 3
 
@@ -56,10 +56,10 @@ def test_load_poses_mediapipe(
 
 
 def test_remove_specific_landmarks_mediapipe(
-    test_mediapipe_poses: List[Pose],
+    mediapipe_poses_test_data: List[Pose],
     standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
-    for pose in test_mediapipe_poses:
+    for pose in mediapipe_poses_test_data:
         component_count = len(pose.header.components)
         assert component_count == len(standard_mediapipe_components_dict.keys())
         for component_name in standard_mediapipe_components_dict.keys():
@@ -71,8 +71,8 @@ def test_remove_specific_landmarks_mediapipe(
             )
 
 
-def test_pose_copy(test_mediapipe_poses: List[Pose]):
-    for pose in test_mediapipe_poses:
+def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
+    for pose in mediapipe_poses_test_data:
         copy = copy_pose(pose)
 
         assert copy != pose  # Not the same object
@@ -92,9 +92,9 @@ def test_pose_copy(test_mediapipe_poses: List[Pose]):
         )  # same number of points
 
 
-def test_pose_remove_legs(test_mediapipe_poses: List[Pose]):
+def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
     points_that_should_be_hidden = ["KNEE", "HEEL", "FOOT", "TOE"]
-    for pose in test_mediapipe_poses:
+    for pose in mediapipe_poses_test_data:
         # pose_hide_legs(pose)
         pose = pose_remove_legs(pose)
 
@@ -112,11 +112,11 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
 
 
 def test_reduce_pose_components_to_intersection(
-    test_mediapipe_poses: List[Pose],
+    mediapipe_poses_test_data: List[Pose],
     standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
 
-    test_poses_with_one_reduced = [copy_pose(pose) for pose in test_mediapipe_poses]
+    test_poses_with_one_reduced = [copy_pose(pose) for pose in mediapipe_poses_test_data]
 
     pose_with_only_face_and_hands_and_no_wrist = get_face_and_hands_from_pose(
         test_poses_with_one_reduced.pop()
@@ -137,7 +137,7 @@ def test_reduce_pose_components_to_intersection(
     )
 
     test_poses_with_one_reduced.append(pose_with_only_face_and_hands_and_no_wrist)
-    assert len(test_mediapipe_poses) == len(test_poses_with_one_reduced)
+    assert len(mediapipe_poses_test_data) == len(test_poses_with_one_reduced)
 
     original_component_count = len(
         standard_mediapipe_components_dict.keys()
@@ -163,12 +163,12 @@ def test_reduce_pose_components_to_intersection(
     # check if the originals are unaffected
     assert all(
         len(pose.header.components) == original_component_count
-        for pose in test_mediapipe_poses
+        for pose in mediapipe_poses_test_data
     )
 
 
-def test_remove_world_landmarks(test_mediapipe_poses: List[Pose]):
-    for pose in test_mediapipe_poses:
+def test_remove_world_landmarks(mediapipe_poses_test_data: List[Pose]):
+    for pose in mediapipe_poses_test_data:
         component_names = [c.name for c in pose.header.components]
         starting_component_count = len(pose.header.components)
         assert "POSE_WORLD_LANDMARKS" in component_names
@@ -181,10 +181,10 @@ def test_remove_world_landmarks(test_mediapipe_poses: List[Pose]):
         assert ending_component_count == starting_component_count - 1
 
 
-def test_remove_one_point_and_one_component(test_mediapipe_poses: List[Pose]):
+def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose]):
     component_to_drop = "POSE_WORLD_LANDMARKS"
     point_to_drop = "LEFT_KNEE"
-    for pose in test_mediapipe_poses:
+    for pose in mediapipe_poses_test_data:
         original_component_names, original_points_dict = (
             get_component_names_and_points_dict(pose)
         )
@@ -200,7 +200,7 @@ def test_remove_one_point_and_one_component(test_mediapipe_poses: List[Pose]):
 
 
 def test_detect_format(
-    fake_openpose_poses, fake_openpose_135_poses, test_mediapipe_poses
+    fake_openpose_poses, fake_openpose_135_poses, mediapipe_poses_test_data
 ):
     for pose in fake_openpose_poses:
         assert detect_format(pose) == "openpose"
@@ -208,10 +208,10 @@ def test_detect_format(
     for pose in fake_openpose_135_poses:
         assert detect_format(pose) == "openpose_135"
 
-    for pose in test_mediapipe_poses:
+    for pose in mediapipe_poses_test_data:
         assert detect_format(pose) == "mediapipe"
 
-    for pose in test_mediapipe_poses:
+    for pose in mediapipe_poses_test_data:
         unsupported_component_name = "UNSUPPORTED"
         pose.header.components[0].name = unsupported_component_name
         pose = pose.get_components(["UNSUPPORTED"])
@@ -223,55 +223,12 @@ def test_detect_format(
             detect_format(pose)
 
 
-# def test_preprocess_pose(test_mediapipe_poses_paths: List[Path]):
-#     poses = [load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths]
-#     preprocessed_poses = []
-
-#     data_arrays = [pose.body.data for pose in poses]
-
-#     for pose in poses:
-#         processed_pose = preprocess_pose(pose,
-#                         normalize_poses=True,
-#                         remove_legs=True,
-#                         remove_world_landmarks=True,
-#                         conf_threshold_to_drop_points=0.2)
-#         #TODO: check expected result
-
-
-# def test_preprocess_poses(test_mediapipe_poses: List[Pose]):
-
-#     nan_counts = [np.count_nonzero(np.isnan(pose.body.data)) for pose in test_mediapipe_poses]
-
-#     preprocessed_poses = preprocess_poses(
-#         test_mediapipe_poses,
-#         normalize_poses=True,
-#         reduce_poses_to_common_points=True,
-#         remove_world_landmarks=True,
-#         remove_legs=True,
-#         zero_pad_shorter_pose=True,
-#         conf_threshold_to_drop_points=0.2,
-#     )
-
-#     for i, pose in enumerate(preprocessed_poses):
-#         component_names, points_dict = get_component_names_and_points_dict(pose)
-#         assert "LEFT_KNEE" not in points_dict["POSE_LANDMARKS"]
-#         assert "POSE_WORLD_LANDMARKS" not in component_names
-
-#         # zero-padded properly? Should all be the same number of frames
-#         assert pose.body.data.shape[0] == preprocessed_poses[0].body.data.shape[0]
-
-#         # do we have nan values?
-#         nan_count = np.count_nonzero(np.isnan(pose.body.data))
-#         assert np.count_nonzero(np.isnan(pose.body.data)) == nan_counts[i]
-#         assert nan_count == 0
-
-
-def test_set_masked_to_origin_pos(test_mediapipe_poses: List[Pose]):
+def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
     # Create a copy of the original poses for comparison
-    originals = [copy_pose(pose) for pose in test_mediapipe_poses]
+    originals = [copy_pose(pose) for pose in mediapipe_poses_test_data]
 
     # Apply the transformation
-    poses = [set_masked_to_origin_position(pose) for pose in test_mediapipe_poses]
+    poses = [set_masked_to_origin_position(pose) for pose in mediapipe_poses_test_data]
 
     for original, transformed in zip(originals, poses):
         # 1. Ensure the transformed data is still a MaskedArray
@@ -293,23 +250,23 @@ def test_set_masked_to_origin_pos(test_mediapipe_poses: List[Pose]):
         )
 
 
-def test_hide_low_conf(test_mediapipe_poses: List[Pose]):
-    copies = [copy_pose(pose) for pose in test_mediapipe_poses]
-    for pose, copy in zip(test_mediapipe_poses, copies):
+def test_hide_low_conf(mediapipe_poses_test_data: List[Pose]):
+    copies = [copy_pose(pose) for pose in mediapipe_poses_test_data]
+    for pose, copy in zip(mediapipe_poses_test_data, copies):
         pose_hide_low_conf(pose, 1.0)
 
         assert np.array_equal(pose.body.confidence, copy.body.confidence) is False
 
 
-def test_zero_pad_shorter_poses(test_mediapipe_poses: List[Pose]):
-    copies = [copy_pose(pose) for pose in test_mediapipe_poses]
+def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
+    copies = [copy_pose(pose) for pose in mediapipe_poses_test_data]
 
-    max_len = max(len(pose.body.data) for pose in test_mediapipe_poses)
-    padded_poses = zero_pad_shorter_poses(test_mediapipe_poses)
+    max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
+    padded_poses = zero_pad_shorter_poses(mediapipe_poses_test_data)
 
     for i, padded_pose in enumerate(padded_poses):
         assert (
-            test_mediapipe_poses[i] != padded_poses[i]
+            mediapipe_poses_test_data[i] != padded_poses[i]
         )  # shouldn't be the same object
         old_length = len(copies[i].body.data)
         new_length = len(padded_pose.body.data)

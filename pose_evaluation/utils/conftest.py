@@ -18,15 +18,15 @@ utils_test_data_dir = Path(__file__).parent / "test" / "test_data"
 
 
 @pytest.fixture(scope="function")
-def test_mediapipe_poses_paths() -> List[Path]:
+def mediapipe_poses_test_data_paths() -> List[Path]:
     pose_file_paths = list(utils_test_data_dir.glob("*.pose"))
     return pose_file_paths
 
 
 @pytest.fixture(scope="function")
-def test_mediapipe_poses(test_mediapipe_poses_paths) -> List[Pose]:
+def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:
     original_poses = [
-        load_pose_file(pose_path) for pose_path in test_mediapipe_poses_paths
+        load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths
     ]
     # I ran into issues where if one test would modify a Pose, it would affect other tests.
     # specifically, pose.header.components[0].name = unsupported_component_name in test_detect_format
