@@ -1,11 +1,10 @@
 from pose_format import Pose
-from typing import Literal, Iterable, Tuple, List, cast, get_args, Callable, Union, TYPE_CHECKING
-from pose_evaluation.metrics.pose_processors import PoseProcessor, NormalizePosesProcessor, RemoveLegsPosesProcessor, HideLowConfProcessor, ZeroPadShorterPosesProcessor, ReducePosesToCommonComponentsProcessor, RemoveWorldLandmarksProcessor, RemoveComponentsProcessor
+from typing import Iterable, List, cast, Union
+from pose_evaluation.metrics.pose_processors import PoseProcessor
 
-from pose_evaluation.metrics.base import BaseMetric, MetricSignature
+from pose_evaluation.metrics.base import BaseMetric, Signature
 
-MismatchedComponentsStrategy = Literal["reduce"]
-class PoseMetricSignature(MetricSignature):
+class PoseMetricSignature(Signature):
 
      def __init__(self, args: dict):
         super().__init__(args)
@@ -16,12 +15,10 @@ class PoseMetricSignature(MetricSignature):
             }
         )
 
-
         pose_preprocessors = args.get('pose_preprocessers', None)
         prep_string = ""
         if pose_preprocessors is not None:
             prep_string = "{" + "|".join([f"{prep}" for prep in pose_preprocessors]) + "}"
-
 
         self.signature_info.update(
             {
@@ -30,13 +27,11 @@ class PoseMetricSignature(MetricSignature):
         )
 
 
-
-
 class PoseMetric(BaseMetric[Pose]):
-
     _SIGNATURE_TYPE = PoseMetricSignature
 
-    def __init__(self, name: str="PoseMetric", higher_is_better: bool = False,
+    def __init__(self, name: str="PoseMetric", 
+                 higher_is_better: bool = False,
                  pose_preprocessors: Union[None, List[PoseProcessor]] = None,
                  ):
                  
@@ -57,6 +52,9 @@ class PoseMetric(BaseMetric[Pose]):
             preprocessor = cast(PoseProcessor, preprocessor)
             poses = preprocessor.process_poses(poses)
         return poses
-        # self.set_coordinate_point_distance_function(coordinate_point_distance_kind)
+    
+    def add_preprocessor(self, processor:PoseProcessor):
+        self.pose_preprocessers.append(processor)
+
 
 

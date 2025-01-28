@@ -4,6 +4,8 @@ from pose_format import Pose
 from pose_evaluation.metrics.base import SignatureMixin
 from pose_evaluation.utils.pose_utils import remove_components, pose_remove_legs, get_face_and_hands_from_pose, reduce_pose_components_and_points_to_intersection, zero_pad_shorter_poses, copy_pose, pose_hide_legs, pose_hide_low_conf, set_masked_to_origin_position
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
+
+
 class PoseProcessor(SignatureMixin):
     def __init__(self, name="PoseProcessor") -> None:
         self.name = name
@@ -26,8 +28,6 @@ class PoseProcessor(SignatureMixin):
     def process_poses(self, poses: Iterable[Pose])-> List[Pose]:
         return [self.process_pose(pose) for pose in poses]
     
-    def get_signature(self) -> str:
-        return f"{self}"
     
     
 class RemoveComponentsProcessor(PoseProcessor):
@@ -75,6 +75,14 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
         return zero_pad_shorter_poses(poses)
 
 
+class PadOrTruncateByReferencePosesProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="by_reference")
+
+    def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
+        raise NotImplementedError # TODO
+        
+
 class NormalizePosesProcessor(PoseProcessor):
     def __init__(self, info=None, scale_factor=1) -> None:
         super().__init__(f"normalize_poses[info:{info},scale_factor:{scale_factor}]")
@@ -105,11 +113,33 @@ class SetMaskedValuesToOriginPositionProcessor(PoseProcessor):
     def process_pose(self, pose: Pose) -> Pose:
         return set_masked_to_origin_position(pose)
     
-def get_standard_pose_processors()-> List[PoseProcessor]:
-    return [
-        NormalizePosesProcessor(),
-        ReducePosesToCommonComponentsProcessor(),
-        RemoveWorldLandmarksProcessor(),
-        RemoveLegsPosesProcessor(),
-        ZeroPadShorterPosesProcessor()
-        ]
+
+    
+def get_standard_pose_processors(normalize_poses:bool=True, 
+                                 reduce_poses_to_common_components:bool=True,
+                                 remove_world_landmarks=True,
+                                 remove_legs=True,
+                                 zero_pad_shorter_poses=True,
+                                 set_masked_values_to_origin=False,
+                                 )-> List[PoseProcessor]:
+    pose_processors = []
+
+    if normalize_poses:
+        pose_processors.append(NormalizePosesProcessor())
+
+    if reduce_poses_to_common_components:
+        pose_processors.append(ReducePosesToCommonComponentsProcessor())
+
+    if remove_world_landmarks:
+        pose_processors.append(RemoveWorldLandmarksProcessor())
+    
+    if remove_legs:
+        pose_processors.append(RemoveLegsPosesProcessor())
+
+    if zero_pad_shorter_poses:
+        pose_processors.append(ZeroPadShorterPosesProcessor())
+
+    if set_masked_values_to_origin:
+        pose_processors.append(SetMaskedValuesToOriginPositionProcessor())
+
+    return pose_processors

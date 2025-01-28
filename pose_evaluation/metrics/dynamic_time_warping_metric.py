@@ -6,10 +6,11 @@ from fastdtw import fastdtw
 
 from pose_format import Pose
 
-from pose_evaluation.metrics.distance_measure import Distance, PowerDistance
+from pose_evaluation.metrics.distance_measure import DistanceMeasure, PowerDistance
 from pose_evaluation.metrics.base_pose_metric import PoseMetric, PoseMetricSignature
 from pose_evaluation.metrics.distance_metric import DistanceMetric, ValidPointDistanceKinds
 from pose_evaluation.metrics.pose_processors import PoseProcessor
+from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
 
 
 
@@ -37,9 +38,10 @@ class DTWMetric(PoseMetric):
   def __init__(self, 
                name: str = "DTWMetric", 
                radius:int = 1,
-               distance_measure: Optional[Distance] = None,
+               distance_measure: Optional[DistanceMeasure] = None,
                trajectory:Literal['keypoints', "frames"] = 'keypoints',
-               higher_is_better: bool = False, pose_preprocessors: None | List[PoseProcessor] = None):
+               higher_is_better: bool = False, 
+               pose_preprocessors: None | List[PoseProcessor] = None):
      super().__init__(name, higher_is_better, pose_preprocessors)
 
      self.radius = radius

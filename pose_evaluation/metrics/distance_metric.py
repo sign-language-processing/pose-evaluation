@@ -9,7 +9,7 @@ from pose_format import Pose, PoseBody
 from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
 from pose_evaluation.metrics.base import SignatureMixin
 from pose_evaluation.metrics.base_pose_metric import PoseMetric, PoseMetricSignature
-from pose_evaluation.metrics.distance_measure import Distance, PowerDistance
+from pose_evaluation.metrics.distance_measure import DistanceMeasure, PowerDistance
 from pose_evaluation.metrics.pose_processors import PoseProcessor, ZeroPadShorterPosesProcessor, SetMaskedValuesToOriginPositionProcessor
 
 BuildTrajectoryStrategy = Literal['keypoint', 'frame']
@@ -21,22 +21,12 @@ ValidPointDistanceKinds = Literal["euclidean", "manhattan"]
 
 
 
+
 class DistanceMetricSignature(PoseMetricSignature):
     def __init__(self, args: dict):
         super().__init__(args)
-
-        self._abbreviated.update({
-            "distance_measure": "dist",
-            "alignment_strategy":"align",
-            }
-        )
-
-        self.signature_info.update(
-            {
-                "distance_measure": args.get("distance_measure", None),
-                "alignment_strategy":args.get("alignment_strategy", None),
-            }
-        )
+        self.update_signature_and_abbr("distance_measure", "dist", args)
+        self.update_signature_and_abbr("trajectory", "trj", args)
 
 
 class DistanceMetric(PoseMetric):
@@ -44,12 +34,12 @@ class DistanceMetric(PoseMetric):
     _SIGNATURE_TYPE = DistanceMetricSignature
 
     def __init__(self, 
-                 distance_measure: Optional[Distance] = None,
+                 name = "DistanceMetric",
+                 distance_measure: Optional[DistanceMeasure] = None,
                  pose_preprocessors: None | List[PoseProcessor] = None, 
                  trajectory:BuildTrajectoryStrategy="keypoint",
-                 alignment_strategy: Optional[TrajectoryAlignmentStrategy] = None,
                  ):
-        super().__init__(name="DistanceMetric", higher_is_better=False, pose_preprocessors=pose_preprocessors)
+        super().__init__(name=name, higher_is_better=False, pose_preprocessors=pose_preprocessors)
 
         if distance_measure is None:
             self.distance_measure = PowerDistance()
@@ -57,27 +47,17 @@ class DistanceMetric(PoseMetric):
         else:
             self.distance_measure = distance_measure
         
-        self.alignment_strategy = alignment_strategy # TODO: What to do here?
 
         self.trajectory = trajectory
         
-
-
-    def align(self, hypothesis, reference)->Tuple[np.ma.MaskedArray, np.ma.MaskedArray]:
-        if self.alignment_strategy == "zero_pad_shorter":
-            raise NotImplementedError
-        if self.alignment_strategy == "truncate_longer": 
-            raise NotImplementedError
-        if self.alignment_strategy == "by_reference":
-            raise NotImplementedError
-        raise NotImplementedError
+    
 
     def score(self, hypothesis: Pose, reference: Pose) -> float:
-        self.process_poses([hypothesis, reference])
-        hyp_data, ref_data = self.align(hypothesis, reference)
+        hypothesis, reference = self.process_poses([hypothesis, reference])
         if self.trajectory == "keypoint":
-            raise NotImplementedError
-        return self.distance_measure(hyp_data, ref_data)
+            return self.distance_measure(hypothesis.body.points_perspective(), reference.body.points_perspective())
+        
+        return self.distance_measure(hypothesis.body.data, reference.body.data)
 
     # def coord_pair_distance_function(self, hyp_coordinate:KeypointPositionType, ref_coordinate:KeypointPositionType) -> float:
     #     # if self
@@ -150,14 +130,3 @@ class DistanceMetric(PoseMetric):
     
     
 
-
-    # def signature(self)->str:
-    #     signature_elements = [f"{self.name}"]
-
-
-    #     for preprocessor in self.pose_preprocessers:
-    #         signature_elements.append(f"{preprocessor}")
-
-    #     signature_elements.append(f"point_distance:{self.distance_calculation_kind}")
-
-    #     return "|".join(signature_elements)
