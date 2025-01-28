@@ -1,14 +1,11 @@
 from pathlib import Path
-from typing import List, Tuple, Dict, Union, Iterable
+from typing import List, Tuple, Dict, Iterable
+from collections import defaultdict
 import numpy as np
-import numpy.ma as ma
+from numpy import ma
 from pose_format import Pose
 from pose_format.utils.openpose import OpenPose_Components
 from pose_format.utils.openpose_135 import OpenPose_Components as OpenPose135_Components
-
-# from pose_format.utils.holistic import holistic_components # creates an error: ImportError: Please install mediapipe with: pip install mediapipe
-from collections import defaultdict
-from pose_format.utils.generic import pose_normalization_info, pose_hide_legs, fake_pose
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
@@ -147,7 +144,7 @@ def reduce_pose_components_and_points_to_intersection(
             points_for_each_pose.append(set(points_list))
         set_of_common_points = list(set.intersection(*points_for_each_pose))
 
-        if min_length < max_length and min_length > 0:
+        if 0 < min_length < max_length:
             common_points[component_name] = set_of_common_points
 
     poses = [

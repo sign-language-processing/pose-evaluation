@@ -1,14 +1,17 @@
-import os
 import json
 import copy
-import itertools
 from pathlib import Path
-from typing import List, Dict, Tuple
-from pose_format import Pose
+from typing import List, Dict
+
 import pytest
-from pose_evaluation.utils.pose_utils import load_pose_file
+from pose_format import Pose
 from pose_format.utils.generic import fake_pose
-from pose_format.utils.openpose_135 import OpenPose_Components as openpose_135_components
+from pose_format.utils.openpose_135 import (
+    OpenPose_Components as openpose_135_components,
+)
+
+from pose_evaluation.utils.pose_utils import load_pose_file
+
 
 
 utils_test_data_dir = Path(__file__).parent / "test" / "test_data"
@@ -34,7 +37,7 @@ def test_mediapipe_poses(test_mediapipe_poses_paths) -> List[Pose]:
 @pytest.fixture
 def standard_mediapipe_components_dict() -> Dict[str, List[str]]:
     format_json = utils_test_data_dir / "mediapipe_components_and_points.json"
-    with open(format_json, "r") as f:
+    with open(format_json, "r", encoding="utf-8") as f:
         return json.load(f)
 
 

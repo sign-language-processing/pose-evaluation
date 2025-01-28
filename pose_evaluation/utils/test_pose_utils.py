@@ -1,10 +1,11 @@
-import copy
-import numpy as np
-from typing import List, Dict, Tuple
-import pytest
+from typing import List, Dict
+
 from pathlib import Path
+
+import pytest
+import numpy as np
+
 from pose_format import Pose
-from pose_format.utils.generic import pose_hide_legs
 from pose_evaluation.utils.pose_utils import (
     load_pose_file,
     pose_remove_world_landmarks,
@@ -19,7 +20,7 @@ from pose_evaluation.utils.pose_utils import (
     # preprocess_poses,
     detect_format,
     zero_pad_shorter_poses,
-    set_masked_to_origin_position
+    set_masked_to_origin_position,
 )
 
 
@@ -116,20 +117,24 @@ def test_reduce_pose_components_to_intersection(
 ):
 
     test_poses_with_one_reduced = [copy_pose(pose) for pose in test_mediapipe_poses]
-    
-    
+
     pose_with_only_face_and_hands_and_no_wrist = get_face_and_hands_from_pose(
         test_poses_with_one_reduced.pop()
     )
 
-    c_names, p_dict = get_component_names_and_points_dict(pose_with_only_face_and_hands_and_no_wrist)
+    c_names, p_dict = get_component_names_and_points_dict(
+        pose_with_only_face_and_hands_and_no_wrist
+    )
 
     new_p_dict = {}
     for c_name, p_list in p_dict.items():
-        new_p_dict[c_name] = [point_name for point_name in p_list if "WRIST" not in point_name]
+        new_p_dict[c_name] = [
+            point_name for point_name in p_list if "WRIST" not in point_name
+        ]
 
-
-    pose_with_only_face_and_hands_and_no_wrist = pose_with_only_face_and_hands_and_no_wrist.get_components(c_names, new_p_dict)
+    pose_with_only_face_and_hands_and_no_wrist = (
+        pose_with_only_face_and_hands_and_no_wrist.get_components(c_names, new_p_dict)
+    )
 
     test_poses_with_one_reduced.append(pose_with_only_face_and_hands_and_no_wrist)
     assert len(test_mediapipe_poses) == len(test_poses_with_one_reduced)
@@ -140,26 +145,26 @@ def test_reduce_pose_components_to_intersection(
 
     target_component_count = 3  # face, left hand, right hand
     assert (
-        len(pose_with_only_face_and_hands_and_no_wrist.header.components) == target_component_count
+        len(pose_with_only_face_and_hands_and_no_wrist.header.components)
+        == target_component_count
     )
 
-    target_point_count = pose_with_only_face_and_hands_and_no_wrist.header.total_points()
+    target_point_count = (
+        pose_with_only_face_and_hands_and_no_wrist.header.total_points()
+    )
 
-
-
-    reduced_poses = reduce_pose_components_and_points_to_intersection(test_poses_with_one_reduced)
+    reduced_poses = reduce_pose_components_and_points_to_intersection(
+        test_poses_with_one_reduced
+    )
     for reduced_pose in reduced_poses:
         assert len(reduced_pose.header.components) == target_component_count
         assert reduced_pose.header.total_points() == target_point_count
 
     # check if the originals are unaffected
     assert all(
-        [
-            len(pose.header.components) == original_component_count
-            for pose in test_mediapipe_poses
-        ]
+        len(pose.header.components) == original_component_count
+        for pose in test_mediapipe_poses
     )
-    
 
 
 def test_remove_world_landmarks(test_mediapipe_poses: List[Pose]):
@@ -210,11 +215,8 @@ def test_detect_format(
         unsupported_component_name = "UNSUPPORTED"
         pose.header.components[0].name = unsupported_component_name
         pose = pose.get_components(["UNSUPPORTED"])
-        component_names, _ = get_component_names_and_points_dict(pose)
         assert len(pose.header.components) == 1
 
-        # pose.header.components[0]
-        # assert pose.header.components[0] == changing_component
         with pytest.raises(
             ValueError, match="Unknown pose header schema with component names"
         ):
@@ -229,7 +231,7 @@ def test_detect_format(
 
 #     for pose in poses:
 #         processed_pose = preprocess_pose(pose,
-#                         normalize_poses=True,                        
+#                         normalize_poses=True,
 #                         remove_legs=True,
 #                         remove_world_landmarks=True,
 #                         conf_threshold_to_drop_points=0.2)
@@ -262,7 +264,7 @@ def test_detect_format(
 #         nan_count = np.count_nonzero(np.isnan(pose.body.data))
 #         assert np.count_nonzero(np.isnan(pose.body.data)) == nan_counts[i]
 #         assert nan_count == 0
-        
+
 
 def test_set_masked_to_origin_pos(test_mediapipe_poses: List[Pose]):
     # Create a copy of the original poses for comparison
@@ -276,15 +278,13 @@ def test_set_masked_to_origin_pos(test_mediapipe_poses: List[Pose]):
         assert isinstance(transformed.body.data, np.ma.MaskedArray)
 
         # 2. Ensure the mask is now all False
-        assert np.all(transformed.body.data.mask == False)
+        assert np.all(transformed.body.data.mask is False)
 
         # 3. Check the shape matches the original
         assert transformed.body.data.shape == original.body.data.shape
 
         # 4. Validate masked positions in the original are now zeros
-        assert np.all(
-            transformed.body.data.data[original.body.data.mask] == 0
-        )
+        assert np.all(transformed.body.data.data[original.body.data.mask] == 0)
 
         # 5. Validate unmasked positions in the original remain unchanged
         assert np.all(
@@ -293,19 +293,18 @@ def test_set_masked_to_origin_pos(test_mediapipe_poses: List[Pose]):
         )
 
 
-
 def test_hide_low_conf(test_mediapipe_poses: List[Pose]):
     copies = [copy_pose(pose) for pose in test_mediapipe_poses]
     for pose, copy in zip(test_mediapipe_poses, copies):
         pose_hide_low_conf(pose, 1.0)
 
-        assert np.array_equal(pose.body.confidence, copy.body.confidence) == False
+        assert np.array_equal(pose.body.confidence, copy.body.confidence) is False
 
 
 def test_zero_pad_shorter_poses(test_mediapipe_poses: List[Pose]):
     copies = [copy_pose(pose) for pose in test_mediapipe_poses]
 
-    max_len = max([len(pose.body.data) for pose in test_mediapipe_poses])
+    max_len = max(len(pose.body.data) for pose in test_mediapipe_poses)
     padded_poses = zero_pad_shorter_poses(test_mediapipe_poses)
 
     for i, padded_pose in enumerate(padded_poses):
@@ -320,5 +319,3 @@ def test_zero_pad_shorter_poses(test_mediapipe_poses: List[Pose]):
 
         # does the confidence match?
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
-        
-        
