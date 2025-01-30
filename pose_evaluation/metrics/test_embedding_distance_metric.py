@@ -67,7 +67,7 @@ def call_with_both_input_orders_and_do_standard_checks(
     scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     distance_range_checker,
     distance_matrix_shape_checker,
-    expected_shape: Tuple = None,
+    expected_shape: Tuple|None = None,
 ):
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
@@ -87,7 +87,7 @@ def save_and_plot_distances(distances, matrix_name, num_points, dim):
     """Helper function to save distance matrix and plot distances."""
 
     distances = distances.cpu()
-    test_artifacts_dir = Path(__file__).parent / "temp"
+    test_artifacts_dir = Path(__file__).parent / "tests" # TODO: use a proper temp dir
     output_path = test_artifacts_dir / f"distance_matrix_{matrix_name}_{num_points}_{dim}D.csv"
     np.savetxt(output_path, distances.numpy(), delimiter=",", fmt="%.4f")
     print(f"Distance matrix saved to {output_path}")
