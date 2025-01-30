@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 import numpy as np
+from numpy import ma
 
 from pose_format import Pose
+from pose_format.utils.generic import detect_known_pose_format
 from pose_evaluation.utils.pose_utils import (
     load_pose_file,
     pose_remove_world_landmarks,
@@ -18,7 +20,6 @@ from pose_evaluation.utils.pose_utils import (
     # preprocess_pose,
     get_component_names_and_points_dict,
     # preprocess_poses,
-    detect_format,
     zero_pad_shorter_poses,
     set_masked_to_origin_position,
 )
@@ -203,13 +204,13 @@ def test_detect_format(
     fake_openpose_poses, fake_openpose_135_poses, mediapipe_poses_test_data
 ):
     for pose in fake_openpose_poses:
-        assert detect_format(pose) == "openpose"
+        assert detect_known_pose_format(pose) == "openpose"
 
     for pose in fake_openpose_135_poses:
-        assert detect_format(pose) == "openpose_135"
+        assert detect_known_pose_format(pose) == "openpose_135"
 
     for pose in mediapipe_poses_test_data:
-        assert detect_format(pose) == "mediapipe"
+        assert detect_known_pose_format(pose) == "holistic"
 
     for pose in mediapipe_poses_test_data:
         unsupported_component_name = "UNSUPPORTED"
@@ -218,9 +219,9 @@ def test_detect_format(
         assert len(pose.header.components) == 1
 
         with pytest.raises(
-            ValueError, match="Unknown pose header schema with component names"
+            ValueError, match="Could not detect pose format, unknown pose header schema with component names"
         ):
-            detect_format(pose)
+            detect_known_pose_format(pose)
 
 
 def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
@@ -235,16 +236,16 @@ def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
         assert isinstance(transformed.body.data, np.ma.MaskedArray)
 
         # 2. Ensure the mask is now all False
-        assert np.all(transformed.body.data.mask is False)
+        assert np.ma.all(~transformed.body.data.mask)
 
         # 3. Check the shape matches the original
         assert transformed.body.data.shape == original.body.data.shape
 
         # 4. Validate masked positions in the original are now zeros
-        assert np.all(transformed.body.data.data[original.body.data.mask] == 0)
+        assert ma.all(transformed.body.data.data[original.body.data.mask] == 0)
 
         # 5. Validate unmasked positions in the original remain unchanged
-        assert np.all(
+        assert ma.all(
             transformed.body.data.data[~original.body.data.mask]
             == original.body.data.data[~original.body.data.mask]
         )

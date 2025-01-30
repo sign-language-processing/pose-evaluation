@@ -6,36 +6,11 @@ from numpy import ma
 from pose_format import Pose
 from pose_format.utils.openpose import OpenPose_Components
 from pose_format.utils.openpose_135 import OpenPose_Components as OpenPose135_Components
+from pose_format.utils.generic import detect_known_pose_format
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
     return remove_components(pose, ["POSE_WORLD_LANDMARKS"])
-
-
-# TODO: remove, and use the one implemented in the latest pose_format
-def detect_format(pose: Pose) -> str:
-    component_names = [c.name for c in pose.header.components]
-    mediapipe_components = [
-        "POSE_LANDMARKS",
-        "FACE_LANDMARKS",
-        "LEFT_HAND_LANDMARKS",
-        "RIGHT_HAND_LANDMARKS",
-        "POSE_WORLD_LANDMARKS",
-    ]
-
-    openpose_components = [c.name for c in OpenPose_Components]
-    openpose_135_components = [c.name for c in OpenPose135_Components]
-    for component_name in component_names:
-        if component_name in mediapipe_components:
-            return "mediapipe"
-        if component_name in openpose_components:
-            return "openpose"
-        if component_name in openpose_135_components:
-            return "openpose_135"
-
-    raise ValueError(
-        f"Unknown pose header schema with component names: {component_names}"
-    )
 
 
 def get_component_names_and_points_dict(
@@ -51,7 +26,7 @@ def get_component_names_and_points_dict(
 
     return component_names, points_dict
 
-
+# TODO: remove this once https://github.com/sign-language-processing/pose/pull/148 is merged and released to pip
 def remove_components(
     pose: Pose,
     components_to_remove: List[str] | str,
@@ -78,8 +53,8 @@ def remove_components(
 
 
 def pose_remove_legs(pose: Pose) -> Pose:
-    detected_format = detect_format(pose)
-    if detected_format == "mediapipe":
+    detected_format = detect_known_pose_format(pose)
+    if detected_format == "holistic":
         mediapipe_point_names = ["KNEE", "ANKLE", "HEEL", "FOOT_INDEX"]
         mediapipe_sides = ["LEFT", "RIGHT"]
         point_names_to_remove = [
@@ -96,6 +71,7 @@ def pose_remove_legs(pose: Pose) -> Pose:
     return pose
 
 
+# TODO: remove, once https://github.com/sign-language-processing/pose/pull/148 is added to pip version
 def copy_pose(pose: Pose) -> Pose:
     return pose.get_components([component.name for component in pose.header.components])
 
@@ -176,8 +152,9 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
 def set_masked_to_origin_position(pose: Pose) -> Pose:
     pose = copy_pose(pose)
     # frames, person, keypoint, xyz
-
-    pose.body.data = ma.array(pose.body.data.filled(0), mask=False)
+    data_copy  = ma.copy(pose.body.data)
+    data_copy[data_copy.mask]=0
+    pose.body.data = data_copy
 
     return pose
 
