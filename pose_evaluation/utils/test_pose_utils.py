@@ -74,7 +74,7 @@ def test_remove_specific_landmarks_mediapipe(
 
 def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
     for pose in mediapipe_poses_test_data:
-        copy = copy_pose(pose)
+        copy = pose.copy()
 
         assert copy != pose  # Not the same object
         assert (
@@ -117,7 +117,7 @@ def test_reduce_pose_components_to_intersection(
     standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
 
-    test_poses_with_one_reduced = [copy_pose(pose) for pose in mediapipe_poses_test_data]
+    test_poses_with_one_reduced = [pose.copy() for pose in mediapipe_poses_test_data]
 
     pose_with_only_face_and_hands_and_no_wrist = get_face_and_hands_from_pose(
         test_poses_with_one_reduced.pop()
@@ -226,7 +226,7 @@ def test_detect_format(
 
 def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
     # Create a copy of the original poses for comparison
-    originals = [copy_pose(pose) for pose in mediapipe_poses_test_data]
+    originals = [pose.copy() for pose in mediapipe_poses_test_data]
 
     # Apply the transformation
     poses = [set_masked_to_origin_position(pose) for pose in mediapipe_poses_test_data]
@@ -252,7 +252,7 @@ def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
 
 
 def test_hide_low_conf(mediapipe_poses_test_data: List[Pose]):
-    copies = [copy_pose(pose) for pose in mediapipe_poses_test_data]
+    copies = [pose.copy() for pose in mediapipe_poses_test_data]
     for pose, copy in zip(mediapipe_poses_test_data, copies):
         pose_hide_low_conf(pose, 1.0)
 
@@ -260,7 +260,7 @@ def test_hide_low_conf(mediapipe_poses_test_data: List[Pose]):
 
 
 def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
-    copies = [copy_pose(pose) for pose in mediapipe_poses_test_data]
+    copies = [pose.copy() for pose in mediapipe_poses_test_data]
 
     max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
     padded_poses = zero_pad_shorter_poses(mediapipe_poses_test_data)

@@ -71,11 +71,6 @@ def pose_remove_legs(pose: Pose) -> Pose:
     return pose
 
 
-# TODO: remove, once https://github.com/sign-language-processing/pose/pull/148 is added to pip version
-def copy_pose(pose: Pose) -> Pose:
-    return pose.get_components([component.name for component in pose.header.components])
-
-
 def get_face_and_hands_from_pose(pose: Pose) -> Pose:
     # based on MediaPipe Holistic format.
     components_to_keep = [
@@ -96,7 +91,7 @@ def load_pose_file(pose_path: Path) -> Pose:
 def reduce_pose_components_and_points_to_intersection(
     poses: Iterable[Pose],
 ) -> List[Pose]:
-    poses = [copy_pose(pose) for pose in poses]
+    poses = [pose.copy() for pose in poses]
     component_names_for_each_pose = []
     point_dict_for_each_pose = []
     for pose in poses:
@@ -130,7 +125,7 @@ def reduce_pose_components_and_points_to_intersection(
 
 
 def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
-    poses = [copy_pose(pose) for pose in poses]
+    poses = [pose.copy() for pose in poses]
     # arrays = [pose.body.data for pose in poses]
 
     # first dimension is frames. Then People, joint-points, XYZ or XY
@@ -150,7 +145,7 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
 
 
 def set_masked_to_origin_position(pose: Pose) -> Pose:
-    pose = copy_pose(pose)
+    pose = pose.copy()
     # frames, person, keypoint, xyz
     data_copy  = ma.copy(pose.body.data)
     data_copy[data_copy.mask]=0
