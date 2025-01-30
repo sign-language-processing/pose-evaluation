@@ -10,7 +10,7 @@ from pose_format.utils.generic import detect_known_pose_format
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
-    return remove_components(pose, ["POSE_WORLD_LANDMARKS"])
+    return pose.remove_components(["POSE_WORLD_LANDMARKS"])
 
 
 def get_component_names_and_points_dict(
@@ -25,31 +25,6 @@ def get_component_names_and_points_dict(
             points_dict[component.name].append(point)
 
     return component_names, points_dict
-
-# TODO: remove this once https://github.com/sign-language-processing/pose/pull/148 is merged and released to pip
-def remove_components(
-    pose: Pose,
-    components_to_remove: List[str] | str,
-    points_to_remove: List[str] | str | None = None,
-):
-    if points_to_remove is None:
-        points_to_remove = []
-    if isinstance(components_to_remove, str):
-        components_to_remove = [components_to_remove]
-    if isinstance(points_to_remove, str):
-        points_to_remove = [points_to_remove]
-    components_to_keep = []
-    points_dict = {}
-
-    for component in pose.header.components:
-        if component.name not in components_to_remove:
-            components_to_keep.append(component.name)
-            points_dict[component.name] = []
-            for point in component.points:
-                if point not in points_to_remove:
-                    points_dict[component.name].append(point)
-
-    return pose.get_components(components_to_keep, points_dict)
 
 
 def pose_remove_legs(pose: Pose) -> Pose:
@@ -67,7 +42,7 @@ def pose_remove_legs(pose: Pose) -> Pose:
             f"Remove legs not implemented yet for pose header schema {detected_format}"
         )
 
-    pose = remove_components(pose, [], point_names_to_remove)
+    pose = pose.remove_components([], point_names_to_remove)
     return pose
 
 

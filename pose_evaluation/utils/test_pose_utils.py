@@ -11,15 +11,11 @@ from pose_format.utils.generic import detect_known_pose_format
 from pose_evaluation.utils.pose_utils import (
     load_pose_file,
     pose_remove_world_landmarks,
-    remove_components,
     pose_remove_legs,
     pose_hide_low_conf,
-    copy_pose,
     get_face_and_hands_from_pose,
     reduce_pose_components_and_points_to_intersection,
-    # preprocess_pose,
     get_component_names_and_points_dict,
-    # preprocess_poses,
     zero_pad_shorter_poses,
     set_masked_to_origin_position,
 )
@@ -64,7 +60,7 @@ def test_remove_specific_landmarks_mediapipe(
         component_count = len(pose.header.components)
         assert component_count == len(standard_mediapipe_components_dict.keys())
         for component_name in standard_mediapipe_components_dict.keys():
-            pose_with_component_removed = remove_components(pose, [str(component_name)])
+            pose_with_component_removed =pose.remove_components([str(component_name)])
             assert component_name not in pose_with_component_removed.header.components
             assert (
                 len(pose_with_component_removed.header.components)
@@ -192,7 +188,7 @@ def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose
 
         assert component_to_drop in original_component_names
         assert point_to_drop in original_points_dict["POSE_LANDMARKS"]
-        reduced_pose = remove_components(pose, component_to_drop, point_to_drop)
+        reduced_pose = pose.remove_components(component_to_drop, point_to_drop)
         new_component_names, new_points_dict = get_component_names_and_points_dict(
             reduced_pose
         )
