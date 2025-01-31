@@ -5,7 +5,7 @@ from typing import Any, Callable
 class Signature:
     """Represents reproducibility signatures for metrics. Inspired by sacreBLEU
     """
-    def __init__(self, args: dict):
+    def __init__(self, name:str, args: dict):
 
         self._abbreviated = {
             "name":"n",
@@ -13,7 +13,7 @@ class Signature:
         }
 
         self.signature_info = {
-            "name": args.get("name", None),
+            "name": name,
             "higher_is_better": args.get("higher_is_better", None)
         }
 
@@ -58,12 +58,6 @@ class Signature:
 
     def __repr__(self):
         return self.format()
-
-
-class SignatureMixin:
-    _SIGNATURE_TYPE = Signature
-    def get_signature(self) -> Signature:
-        return self._SIGNATURE_TYPE(self.__dict__)
 
 class BaseMetric[T]:
     """Base class for all metrics."""
