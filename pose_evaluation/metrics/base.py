@@ -1,6 +1,7 @@
 # pylint: disable=undefined-variable
-from tqdm import tqdm
 from typing import Any, Callable
+from tqdm import tqdm
+
 
 class Signature:
     """Represents reproducibility signatures for metrics. Inspired by sacreBLEU
@@ -12,10 +13,7 @@ class Signature:
             "higher_is_better":"hb"
         }
 
-        self.signature_info = {
-            "name": name,
-            "higher_is_better": args.get("higher_is_better", None)
-        }
+        self.signature_info = {"name": name, **args}
 
     def update(self, key: str, value: Any):
         self.signature_info[key] = value
@@ -37,7 +35,6 @@ class Signature:
             if value is not None:
                 # Check for nested signature objects
                 if hasattr(value, "get_signature"):
-                    
                     # Wrap nested signatures in brackets
                     nested_signature = value.get_signature()
                     if isinstance(nested_signature, Signature):
@@ -48,7 +45,10 @@ class Signature:
                     value = "yes" if value else "no"
                 if isinstance(value, Callable):
                     value = value.__name__
-                final_name = self._abbreviated[name] if short else name
+
+                # if the abbreviation is not defined, use the full name as a fallback.
+                abbreviated_name = self._abbreviated.get(name, name)
+                final_name = abbreviated_name if short else name
                 pairs.append(f"{final_name}:{value}")
 
         return "|".join(pairs)
@@ -97,7 +97,6 @@ class BaseMetric[T]:
 
     def __str__(self):
         return self.name
-    
-    def get_signature(self) -> Signature:
-        return self._SIGNATURE_TYPE(self.__dict__)
 
+    def get_signature(self) -> Signature:
+        return self._SIGNATURE_TYPE(self.name, self.__dict__)
