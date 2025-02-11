@@ -99,24 +99,32 @@ def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
         assert "LEFT_KNEE" in pose.header.components[pose_landmarks_index].points
         
 
-        new_pose = pose_remove_legs(pose)
-        assert new_pose != pose
-        assert new_pose.header != pose.header
-        assert new_pose.header.components != pose.header.components
-        new_c_names = [c.name for c in new_pose.header.components]
+        pose_with_legs_removed = pose_remove_legs(pose)
+        assert pose_with_legs_removed != pose
+        assert pose_with_legs_removed.header != pose.header
+        assert pose_with_legs_removed.header.components != pose.header.components
+        new_c_names = [c.name for c in pose_with_legs_removed.header.components]
         assert "POSE_LANDMARKS" in new_c_names
 
-        for component in new_pose.header.components:
+        for component in pose_with_legs_removed.header.components:
             point_names = [point.upper() for point in component.points]
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
-                    assert point_that_should_be_hidden not in point_name, f"{component.name}:{[pname for pname in point_names if 'LEFT' in pname]}"
+                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
 def test_pose_remove_legs_openpose(fake_openpose_poses):
+    points_that_should_be_removed = ["Hip", "Knee", "Ankle", "BigToe", "SmallToe", "Heel"]
     for pose in fake_openpose_poses:
-        with pytest.raises(NotImplementedError):
-            pose_remove_legs(pose)
+        pose_with_legs_removed = pose_remove_legs(pose)
+        for c in pose_with_legs_removed.header.components:
+            for component in pose_with_legs_removed.header.components:
+                point_names = [point for point in component.points]
+                for point_name in point_names:
+                    for point_that_should_be_hidden in points_that_should_be_removed:
+                        assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
+                        
+
 
 
 def test_reduce_pose_components_to_intersection(

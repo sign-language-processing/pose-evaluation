@@ -37,19 +37,29 @@ def pose_remove_legs(pose: Pose) -> Pose:
             for name in mediapipe_point_names
             for side in mediapipe_sides
         ]
-        point_dict ={
+        points_to_remove_dict ={
             "POSE_LANDMARKS": point_names_to_remove,
             "POSE_WORLD_LANDMARKS": point_names_to_remove,
         }
+    elif detected_format == 'openpose':
+        openpose_point_names = ["Hip", "Knee", "Ankle", "BigToe", "SmallToe", "Heel"]
+        openpose_sides  = ["L", "R", "Mid"] 
+        point_names_to_remove = [
+            side + name 
+            for name in openpose_point_names
+            for side in openpose_sides
+        ]
+        points_to_remove_dict = {
+            "pose_keypoints_2d": point_names_to_remove
+        }
+
+
     else:
         raise NotImplementedError(
             f"Remove legs not implemented yet for pose header schema {detected_format}"
         )
 
-    assert "LEFT_KNEE" in point_dict['POSE_LANDMARKS']
-    assert "LEFT_HEEL" in point_dict['POSE_LANDMARKS']
-    pose = pose.remove_components([], point_dict)
-    # assert "LEFT_KNEE" not in point_dict['POSE_LANDMARKS']
+    pose = pose.remove_components([], points_to_remove_dict)
     return pose
 
 
