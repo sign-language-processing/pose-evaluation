@@ -18,10 +18,14 @@ class Signature:
     def update(self, key: str, value: Any):
         self.signature_info[key] = value
 
-    def update_signature_and_abbr(self, key:str, abbr:str, args:dict):
+    def update_abbr(self, key, abbr):
         self._abbreviated.update({
             key: abbr
         })
+
+
+    def update_signature_and_abbr(self, key:str, abbr:str, args:dict):
+        self.update_abbr(key, abbr)
 
         self.signature_info.update({
             key: args.get(key, None)
