@@ -90,16 +90,27 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
 
 
 def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
-    points_that_should_be_hidden = ["KNEE", "HEEL", "FOOT", "TOE"]
+    points_that_should_be_removed = ["LEFT_KNEE", "LEFT_HEEL", "LEFT_FOOT", "LEFT_TOE", "LEFT_FOOT_INDEX", 
+                                    "RIGHT_KNEE", "RIGHT_HEEL", "RIGHT_FOOT", "RIGHT_TOE", "RIGHT_FOOT_INDEX",]
     for pose in mediapipe_poses_test_data:
-        # pose_hide_legs(pose)
-        pose = pose_remove_legs(pose)
+        c_names = [c.name for c in pose.header.components]
+        assert "POSE_LANDMARKS" in c_names
+        pose_landmarks_index = c_names.index("POSE_LANDMARKS")
+        assert "LEFT_KNEE" in pose.header.components[pose_landmarks_index].points
+        
 
-        for component in pose.header.components:
+        new_pose = pose_remove_legs(pose)
+        assert new_pose != pose
+        assert new_pose.header != pose.header
+        assert new_pose.header.components != pose.header.components
+        new_c_names = [c.name for c in new_pose.header.components]
+        assert "POSE_LANDMARKS" in new_c_names
+
+        for component in new_pose.header.components:
             point_names = [point.upper() for point in component.points]
             for point_name in point_names:
-                for point_that_should_be_hidden in points_that_should_be_hidden:
-                    assert point_that_should_be_hidden not in point_name
+                for point_that_should_be_hidden in points_that_should_be_removed:
+                    assert point_that_should_be_hidden not in point_name, f"{component.name}:{[pname for pname in point_names if 'LEFT' in pname]}"
 
 
 def test_pose_remove_legs_openpose(fake_openpose_poses):
@@ -188,7 +199,7 @@ def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose
 
         assert component_to_drop in original_component_names
         assert point_to_drop in original_points_dict["POSE_LANDMARKS"]
-        reduced_pose = pose.remove_components(component_to_drop, point_to_drop)
+        reduced_pose = pose.remove_components(component_to_drop, {"POSE_LANDMARKS": [point_to_drop]})
         new_component_names, new_points_dict = get_component_names_and_points_dict(
             reduced_pose
         )

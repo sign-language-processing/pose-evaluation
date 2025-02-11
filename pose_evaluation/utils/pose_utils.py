@@ -30,19 +30,26 @@ def get_component_names_and_points_dict(
 def pose_remove_legs(pose: Pose) -> Pose:
     detected_format = detect_known_pose_format(pose)
     if detected_format == "holistic":
-        mediapipe_point_names = ["KNEE", "ANKLE", "HEEL", "FOOT_INDEX"]
+        mediapipe_point_names = ["KNEE", "ANKLE", "HEEL", "HIP", "FOOT_INDEX"]
         mediapipe_sides = ["LEFT", "RIGHT"]
         point_names_to_remove = [
             side + "_" + name
             for name in mediapipe_point_names
             for side in mediapipe_sides
         ]
+        point_dict ={
+            "POSE_LANDMARKS": point_names_to_remove,
+            "POSE_WORLD_LANDMARKS": point_names_to_remove,
+        }
     else:
         raise NotImplementedError(
             f"Remove legs not implemented yet for pose header schema {detected_format}"
         )
 
-    pose = pose.remove_components([], point_names_to_remove)
+    assert "LEFT_KNEE" in point_dict['POSE_LANDMARKS']
+    assert "LEFT_HEEL" in point_dict['POSE_LANDMARKS']
+    pose = pose.remove_components([], point_dict)
+    # assert "LEFT_KNEE" not in point_dict['POSE_LANDMARKS']
     return pose
 
 
