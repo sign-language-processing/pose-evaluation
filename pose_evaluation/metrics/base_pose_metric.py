@@ -40,16 +40,9 @@ class PoseMetric(BaseMetric[Pose]):
         else:
             self.pose_preprocessers = pose_preprocessors
 
-    def score(self, hypothesis: Pose, reference: Pose) -> float:
-        hypothesis, reference = self.process_poses([hypothesis, reference])
-        return self.score(hypothesis, reference)
-
     def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
         poses = list(poses)
         for preprocessor in self.pose_preprocessers:
             preprocessor = cast(PoseProcessor, preprocessor)
             poses = preprocessor.process_poses(poses)
         return poses
-
-    def add_preprocessor(self, processor: PoseProcessor):
-        self.pose_preprocessers.append(processor)
