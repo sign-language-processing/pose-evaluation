@@ -4,9 +4,6 @@ from collections import defaultdict
 import numpy as np
 from numpy import ma
 from pose_format import Pose
-from pose_format.utils.openpose import OpenPose_Components
-from pose_format.utils.openpose_135 import OpenPose_Components as OpenPose135_Components
-from pose_format.utils.generic import detect_known_pose_format
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
@@ -25,42 +22,6 @@ def get_component_names_and_points_dict(
             points_dict[component.name].append(point)
 
     return component_names, points_dict
-
-
-def pose_remove_legs(pose: Pose) -> Pose:
-    detected_format = detect_known_pose_format(pose)
-    if detected_format == "holistic":
-        mediapipe_point_names = ["KNEE", "ANKLE", "HEEL", "HIP", "FOOT_INDEX"]
-        mediapipe_sides = ["LEFT", "RIGHT"]
-        point_names_to_remove = [
-            side + "_" + name
-            for name in mediapipe_point_names
-            for side in mediapipe_sides
-        ]
-        points_to_remove_dict ={
-            "POSE_LANDMARKS": point_names_to_remove,
-            "POSE_WORLD_LANDMARKS": point_names_to_remove,
-        }
-    elif detected_format == 'openpose':
-        openpose_point_names = ["Hip", "Knee", "Ankle", "BigToe", "SmallToe", "Heel"]
-        openpose_sides  = ["L", "R", "Mid"] 
-        point_names_to_remove = [
-            side + name 
-            for name in openpose_point_names
-            for side in openpose_sides
-        ]
-        points_to_remove_dict = {
-            "pose_keypoints_2d": point_names_to_remove
-        }
-
-
-    else:
-        raise NotImplementedError(
-            f"Remove legs not implemented yet for pose header schema {detected_format}"
-        )
-
-    pose = pose.remove_components([], points_to_remove_dict)
-    return pose
 
 
 def get_face_and_hands_from_pose(pose: Pose) -> Pose:
