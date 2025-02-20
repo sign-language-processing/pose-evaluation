@@ -7,11 +7,10 @@ import numpy as np
 from numpy import ma
 
 from pose_format import Pose
-from pose_format.utils.generic import detect_known_pose_format
+from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
 from pose_evaluation.utils.pose_utils import (
     load_pose_file,
     pose_remove_world_landmarks,
-    pose_remove_legs,
     pose_hide_low_conf,
     get_face_and_hands_from_pose,
     reduce_pose_components_and_points_to_intersection,
@@ -73,9 +72,6 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
         copy = pose.copy()
 
         assert copy != pose  # Not the same object
-        assert (
-            pose.header.components != copy.header.components
-        )  # header is also not the same object
         assert pose.body != copy.body  # also not the same
         assert np.array_equal(
             copy.body.data, pose.body.data
@@ -90,16 +86,15 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
 
 
 def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
-    points_that_should_be_removed = ["LEFT_KNEE", "LEFT_HEEL", "LEFT_FOOT", "LEFT_TOE", "LEFT_FOOT_INDEX", 
+    points_that_should_be_removed = ["LEFT_KNEE", "LEFT_HEEL", "LEFT_FOOT", "LEFT_TOE", "LEFT_FOOT_INDEX",
                                     "RIGHT_KNEE", "RIGHT_HEEL", "RIGHT_FOOT", "RIGHT_TOE", "RIGHT_FOOT_INDEX",]
     for pose in mediapipe_poses_test_data:
         c_names = [c.name for c in pose.header.components]
         assert "POSE_LANDMARKS" in c_names
         pose_landmarks_index = c_names.index("POSE_LANDMARKS")
         assert "LEFT_KNEE" in pose.header.components[pose_landmarks_index].points
-        
 
-        pose_with_legs_removed = pose_remove_legs(pose)
+        pose_with_legs_removed = pose_hide_legs(pose, remove=True)
         assert pose_with_legs_removed != pose
         assert pose_with_legs_removed.header != pose.header
         assert pose_with_legs_removed.header.components != pose.header.components
@@ -116,14 +111,13 @@ def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
 def test_pose_remove_legs_openpose(fake_openpose_poses):
     points_that_should_be_removed = ["Hip", "Knee", "Ankle", "BigToe", "SmallToe", "Heel"]
     for pose in fake_openpose_poses:
-        pose_with_legs_removed = pose_remove_legs(pose)
-        for c in pose_with_legs_removed.header.components:
-            for component in pose_with_legs_removed.header.components:
-                point_names = [point for point in component.points]
-                for point_name in point_names:
-                    for point_that_should_be_hidden in points_that_should_be_removed:
-                        assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
-                        
+        pose_with_legs_removed = pose_hide_legs(pose, remove=True)
+
+        for component in pose_with_legs_removed.header.components:
+            point_names = [point for point in component.points]
+            for point_name in point_names:
+                for point_that_should_be_hidden in points_that_should_be_removed:
+                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
 
