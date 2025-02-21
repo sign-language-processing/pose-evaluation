@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import numpy as np
-import numpy.ma as ma
+import numpy.ma as ma # pylint: disable=consider-using-from-import
 
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
@@ -114,7 +114,7 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
         pose_with_legs_removed = pose_hide_legs(pose, remove=True)
 
         for component in pose_with_legs_removed.header.components:
-            point_names = [point for point in component.points]
+            point_names = list(point for point in component.points)
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
                     assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"

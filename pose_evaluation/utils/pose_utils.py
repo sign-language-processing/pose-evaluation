@@ -54,7 +54,7 @@ def reduce_poses_to_intersection(
     for pose in poses[1:]:
         component_names.intersection_update({c.name for c in pose.header.components})
         for component in pose.header.components:
-            points[component.name].intersection_update(set(component.points)) 
+            points[component.name].intersection_update(set(component.points))
 
     # change datatypes to match get_components, then update the poses
     points_dict = {}
