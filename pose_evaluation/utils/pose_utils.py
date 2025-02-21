@@ -41,7 +41,7 @@ def load_pose_file(pose_path: Path) -> Pose:
     return pose
 
 
-def reduce_pose_components_and_points_to_intersection(
+def reduce_poses_to_intersection(
     poses: Iterable[Pose],
 ) -> List[Pose]:
     poses = [pose.copy() for pose in poses]
