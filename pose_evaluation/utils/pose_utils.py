@@ -99,10 +99,8 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
 
 def set_masked_to_origin_position(pose: Pose) -> Pose:
     pose = pose.copy()
-    # frames, person, keypoint, xyz
-    data_copy  = ma.copy(pose.body.data)
-    data_copy[data_copy.mask]=0
-    pose.body.data = data_copy
+    pose.body = pose.body.zero_filled()
+    pose.body.data[pose.body.data.mask]=0
 
     return pose
 
