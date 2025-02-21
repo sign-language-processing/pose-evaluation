@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import numpy as np
-from numpy import ma
+import numpy.ma as ma
 
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
