@@ -44,36 +44,23 @@ def load_pose_file(pose_path: Path) -> Pose:
 def reduce_poses_to_intersection(
     poses: Iterable[Pose],
 ) -> List[Pose]:
-    poses = [pose.copy() for pose in poses]
-    component_names_for_each_pose = []
-    point_dict_for_each_pose = []
-    for pose in poses:
-        names, points_dict = get_component_names_and_points_dict(pose)
-        component_names_for_each_pose.append(set(names))
-        point_dict_for_each_pose.append(points_dict)
+    poses = list(poses) # get a list, no need to copy
 
-    set_of_common_components = list(set.intersection(*component_names_for_each_pose))
+    # look at the first pose
+    component_names = {c.name for c in poses[0].header.components}
+    points = {c.name: set(c.points) for c in poses[0].header.components}
 
-    common_points = {}
-    for component_name in set_of_common_components:
-        max_length = 0
-        min_length = np.inf
-        points_for_each_pose = []
-        for point_dict in point_dict_for_each_pose:
-            points_list = point_dict.get(component_name)
-            if points_list is None:
-                min_length = 0
-            max_length = max(max_length, len(points_list))
-            min_length = min(min_length, len(points_list))
-            points_for_each_pose.append(set(points_list))
-        set_of_common_points = list(set.intersection(*points_for_each_pose))
+    # remove anything that other poses don't have
+    for pose in poses[1:]:
+        component_names.intersection_update({c.name for c in pose.header.components})
+        for component in pose.header.components:
+            points[component.name].intersection_update(set(component.points)) 
 
-        if 0 < min_length < max_length:
-            common_points[component_name] = set_of_common_points
-
-    poses = [
-        pose.get_components(set_of_common_components, common_points) for pose in poses
-    ]
+    # change datatypes to match get_components, then update the poses
+    points_dict = {}
+    for c_name in points.keys():
+        points_dict[c_name] = list(points[c_name])
+    poses = [pose.get_components(list(component_names), points_dict) for pose in poses]
     return poses
 
 

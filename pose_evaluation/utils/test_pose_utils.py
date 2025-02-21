@@ -13,7 +13,7 @@ from pose_evaluation.utils.pose_utils import (
     pose_remove_world_landmarks,
     pose_hide_low_conf,
     get_face_and_hands_from_pose,
-    reduce_pose_components_and_points_to_intersection,
+    reduce_poses_to_intersection,
     get_component_names_and_points_dict,
     zero_pad_shorter_poses,
     set_masked_to_origin_position,
@@ -163,7 +163,7 @@ def test_reduce_pose_components_to_intersection(
         pose_with_only_face_and_hands_and_no_wrist.header.total_points()
     )
 
-    reduced_poses = reduce_pose_components_and_points_to_intersection(
+    reduced_poses = reduce_poses_to_intersection(
         test_poses_with_one_reduced
     )
     for reduced_pose in reduced_poses:
@@ -244,8 +244,10 @@ def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
         # 1. Ensure the transformed data is still a MaskedArray
         assert isinstance(transformed.body.data, np.ma.MaskedArray)
 
-        # 2. Ensure the mask is now all False
-        assert np.ma.all(~transformed.body.data.mask)
+        # # 2. Ensure the mask is now all False, meaning data _exists_ though its _value_ is now zero
+        # assert np.ma.all(~transformed.body.data.mask)
+        # assert original.body.data.mask.sum() == 0
+        assert transformed.body.data.mask.sum() == 0
 
         # 3. Check the shape matches the original
         assert transformed.body.data.shape == original.body.data.shape
