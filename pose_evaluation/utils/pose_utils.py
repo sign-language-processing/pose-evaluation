@@ -84,14 +84,6 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
     return poses
 
 
-def set_masked_to_origin_position(pose: Pose) -> Pose:
-    pose = pose.copy()
-    pose.body = pose.body.zero_filled()
-    pose.body.data[pose.body.data.mask]=0
-
-    return pose
-
-
 def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     mask = pose.body.confidence <= confidence_threshold
     pose.body.confidence[mask] = 0
