@@ -1,6 +1,8 @@
-import numpy as np
-import numpy.ma as ma
 from typing import Literal
+
+import numpy as np
+import numpy.ma as ma # pylint: disable=consider-using-from-import
+
 from pose_evaluation.metrics.base import Signature
 
 AggregationStrategy=Literal["max", "min", "mean", "sum"]

@@ -76,7 +76,7 @@ class ScoreWithSignature(float):
 
     def __repr__(self):
         return f"ScoreWithSignature({super().__repr__()}, signature={repr(self._signature)})"
-    
+
 
 class BaseMetric[T]:
     """Base class for all metrics."""
@@ -92,7 +92,7 @@ class BaseMetric[T]:
 
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
-    
+
     def score_with_signature(self, hypothesis: T, reference: T) -> ScoreWithSignature:
         return ScoreWithSignature(self.score(hypothesis, reference), self.get_signature())
 
