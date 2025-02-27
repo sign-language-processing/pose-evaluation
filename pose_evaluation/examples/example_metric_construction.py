@@ -11,8 +11,9 @@ from pose_evaluation.metrics.test_distance_metric import get_poses
 
 if __name__ == "__main__":
 
-    reference_file = Path(r"pose_evaluation\utils\test\test_data\colin-1-HOUSE.pose")
-    hypothesis_file = Path(r"pose_evaluation\utils\test\test_data\colin-2-HOUSE.pose")
+
+    reference_file = Path("pose_evaluation") / "utils" / "test" / "test_data" / "colin-1-HOUSE.pose"
+    hypothesis_file = Path("pose_evaluation") / "utils" / "test" / "test_data" / "colin-2-HOUSE.pose"
 
     # poses = [Pose.read(hypothesis_file.read_bytes()),Pose.read(reference_file.read_bytes())] # not the same shape!
     # hypothesis, reference = get_poses(2, 2, conf1=0, conf2=0)
