@@ -16,7 +16,6 @@ from pose_evaluation.utils.pose_utils import (
     reduce_poses_to_intersection,
     get_component_names_and_points_dict,
     zero_pad_shorter_poses,
-    set_masked_to_origin_position,
 )
 
 
@@ -231,35 +230,6 @@ def test_detect_format(
             ValueError, match="Could not detect pose format, unknown pose header schema with component names"
         ):
             detect_known_pose_format(pose)
-
-
-def test_set_masked_to_origin_pos(mediapipe_poses_test_data: List[Pose]):
-    # Create a copy of the original poses for comparison
-    originals = [pose.copy() for pose in mediapipe_poses_test_data]
-
-    # Apply the transformation
-    poses = [set_masked_to_origin_position(pose) for pose in mediapipe_poses_test_data]
-
-    for original, transformed in zip(originals, poses):
-        # 1. Ensure the transformed data is still a MaskedArray
-        assert isinstance(transformed.body.data, np.ma.MaskedArray)
-
-        # # 2. Ensure the mask is now all False, meaning data _exists_ though its _value_ is now zero
-        # assert np.ma.all(~transformed.body.data.mask)
-        # assert original.body.data.mask.sum() == 0
-        assert transformed.body.data.mask.sum() == 0
-
-        # 3. Check the shape matches the original
-        assert transformed.body.data.shape == original.body.data.shape
-
-        # 4. Validate masked positions in the original are now zeros
-        assert ma.all(transformed.body.data.data[original.body.data.mask] == 0)
-
-        # 5. Validate unmasked positions in the original remain unchanged
-        assert ma.all(
-            transformed.body.data.data[~original.body.data.mask]
-            == original.body.data.data[~original.body.data.mask]
-        )
 
 
 def test_hide_low_conf(mediapipe_poses_test_data: List[Pose]):
