@@ -8,3 +8,9 @@ coverage.lcov
 **/test_data/
 *.npz
 *.code-workspace
+.coverage
+.vscode/
+coverage.lcov
+**/test_data/
+*.npz
+*.code-workspace
