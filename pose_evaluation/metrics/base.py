@@ -1,5 +1,5 @@
 # pylint: disable=undefined-variable
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 from tqdm import tqdm
 
 
@@ -63,6 +63,21 @@ class Signature:
     def __repr__(self):
         return self.format()
 
+class ScoreWithSignature(float):
+    __slots__ = ("_signature",)  # Explicitly allow the attribute
+
+    def __new__(cls, value, signature):
+        obj = super().__new__(cls, value)  # Create the float instance
+        obj._signature = signature  # Store signature object
+        return obj
+
+    def __str__(self):
+        return f"{self._signature.format()} = {float(self)}"
+
+    def __repr__(self):
+        return f"ScoreWithSignature({super().__repr__()}, signature={repr(self._signature)})"
+    
+
 class BaseMetric[T]:
     """Base class for all metrics."""
     # Each metric should define its Signature class' name here
@@ -77,24 +92,29 @@ class BaseMetric[T]:
 
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
+    
+    def score_with_signature(self, hypothesis: T, reference: T) -> ScoreWithSignature:
+        return ScoreWithSignature(self.score(hypothesis, reference), self.get_signature())
 
-    def score_max(self, hypothesis: T, references: list[T]) -> float:
+
+    def score_max(self, hypothesis: T, references: Sequence[T]) -> float:
         all_scores = self.score_all([hypothesis], references)
         return max(max(scores) for scores in all_scores)
 
-    def validate_corpus_score_input(self, hypotheses: list[T], references: list[list[T]]):
+    def validate_corpus_score_input(self, hypotheses: Sequence[T], references: Sequence[Sequence[T]]):
         # This method is designed to avoid mistakes in the use of the corpus_score method
         for reference in references:
             assert len(hypotheses) == len(reference), \
                 "Hypothesis and reference must have the same number of instances"
 
-    def corpus_score(self, hypotheses: list[T], references: list[list[T]]) -> float:
+    def corpus_score(self, hypotheses: Sequence[T], references: Sequence[list[T]]) -> float:
         # Default implementation: average over sentence scores
         self.validate_corpus_score_input(hypotheses, references)
         transpose_references = list(zip(*references))
-        return sum(self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)) / len(hypotheses)
+        scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
+        return sum(scores) / len(hypotheses)
 
-    def score_all(self, hypotheses: list[T], references: list[T], progress_bar=True) -> list[list[float]]:
+    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True) -> list[list[float]]:
         # Default implementation: call the score function for each hypothesis-reference pair
         return [[self.score(h, r) for r in references]
                 for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)]

@@ -1,6 +1,3 @@
-from typing import Literal
-
-from numpy import ma
 from pose_format import Pose
 
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
