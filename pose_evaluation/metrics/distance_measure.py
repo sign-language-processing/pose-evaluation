@@ -22,12 +22,12 @@ class DistanceMeasure:
         self.name = name
 
     def get_distance(
-        self, hyp_data: np.ma.MaskedArray, ref_data: np.ma.MaskedArray
+        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
     ) -> float:
         raise NotImplementedError
 
     def __call__(
-        self, hyp_data: np.ma.MaskedArray, ref_data: np.ma.MaskedArray
+        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
     ) -> float:
         return self.get_distance(hyp_data, ref_data)
 
