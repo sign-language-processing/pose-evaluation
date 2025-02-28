@@ -18,9 +18,9 @@ if __name__ == "__main__":
     # Choose whether to load real files or generate test poses
     # They have different lengths, and so some metrics will crash!
     # Change to False to generate fake poses with known distances, e.g. all 0 and all 1
-    use_real_files = True
+    USE_REAL_FILES = True
 
-    if use_real_files:
+    if USE_REAL_FILES:
         poses = [
             Pose.read(hypothesis_file.read_bytes()),
             Pose.read(reference_file.read_bytes()),
