@@ -4,71 +4,60 @@ from tqdm import tqdm
 
 
 class Signature:
-    """Represents reproducibility signatures for metrics. Inspired by sacreBLEU
-    """
-    def __init__(self, name:str, args: dict):
+    """Represents reproducibility signatures for metrics. Inspired by sacreBLEU"""
 
-        self._abbreviated = {
-            "name":"n",
-            "higher_is_better":"hb"
-        }
+    def __init__(self, name: str, args: dict):
+
+        self._abbreviated = {"name": "n", "higher_is_better": "hb"}
 
         self.signature_info = {"name": name, **args}
 
     def update(self, key: str, value: Any):
         self.signature_info[key] = value
 
-    def update_abbr(self, key, abbr):
-        self._abbreviated.update({
-            key: abbr
-        })
+    def update_abbr(self, key: str, abbr: str):
+        self._abbreviated.update({key: abbr})
 
-
-    def update_signature_and_abbr(self, key:str, abbr:str, args:dict):
+    def update_signature_and_abbr(self, key: str, abbr: str, args: dict):
         self.update_abbr(key, abbr)
 
-        self.signature_info.update({
-            key: args.get(key, None)
-        })
+        self.signature_info.update({key: args.get(key, None)})
 
     def format(self, short: bool = False) -> str:
         pairs = []
-        keys = list(self.signature_info.keys())
-        for name in keys:
-            value = self.signature_info[name]
+        for key, value in self.signature_info.items():
             if value is not None:
-                # Check for nested signature objects
+                # Check for nested signature objects and wrap them in brackets.
                 if hasattr(value, "get_signature"):
-                    # Wrap nested signatures in brackets
                     nested_signature = value.get_signature()
                     if isinstance(nested_signature, Signature):
                         nested_signature = nested_signature.format(short=short)
                     value = f"{{{nested_signature}}}"
+                # Replace booleans with yes/no.
                 if isinstance(value, bool):
-                    # Replace True/False with yes/no
                     value = "yes" if value else "no"
+                # Represent callable values by their name.
                 if isinstance(value, Callable):
                     value = value.__name__
 
-                # if the abbreviation is not defined, use the full name as a fallback.
-                abbreviated_name = self._abbreviated.get(name, name)
-                final_name = abbreviated_name if short else name
-                pairs.append(f"{final_name}:{value}")
-
+                abbreviated_key = self._abbreviated.get(key, key)
+                final_key = abbreviated_key if short else key
+                pairs.append(f"{final_key}:{value}")
         return "|".join(pairs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.format()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.format()
+
 
 class ScoreWithSignature(float):
-    __slots__ = ("_signature",)  # Explicitly allow the attribute
+    __slots__ = ("_signature",)
 
-    def __new__(cls, value, signature):
-        obj = super().__new__(cls, value)  # Create the float instance
-        obj._signature = signature  # Store signature object
+    def __new__(cls, value, signature) -> "ScoreWithSignature":
+        obj = super().__new__(cls, value)
+        obj._signature = signature
         return obj
 
     def __str__(self):
@@ -80,7 +69,7 @@ class ScoreWithSignature(float):
 
 class BaseMetric[T]:
     """Base class for all metrics."""
-    # Each metric should define its Signature class' name here
+
     _SIGNATURE_TYPE = Signature
 
     def __init__(self, name: str, higher_is_better: bool = False):
@@ -94,30 +83,42 @@ class BaseMetric[T]:
         raise NotImplementedError
 
     def score_with_signature(self, hypothesis: T, reference: T) -> ScoreWithSignature:
-        return ScoreWithSignature(self.score(hypothesis, reference), self.get_signature())
-
+        return ScoreWithSignature(
+            self.score(hypothesis, reference), self.get_signature()
+        )
 
     def score_max(self, hypothesis: T, references: Sequence[T]) -> float:
         all_scores = self.score_all([hypothesis], references)
         return max(max(scores) for scores in all_scores)
 
-    def validate_corpus_score_input(self, hypotheses: Sequence[T], references: Sequence[Sequence[T]]):
+    def validate_corpus_score_input(
+        self, hypotheses: Sequence[T], references: Sequence[Sequence[T]]
+    ):
         # This method is designed to avoid mistakes in the use of the corpus_score method
         for reference in references:
-            assert len(hypotheses) == len(reference), \
-                "Hypothesis and reference must have the same number of instances"
+            assert len(hypotheses) == len(
+                reference
+            ), "Hypothesis and reference must have the same number of instances"
 
-    def corpus_score(self, hypotheses: Sequence[T], references: Sequence[list[T]]) -> float:
-        # Default implementation: average over sentence scores
+    def corpus_score(
+        self, hypotheses: Sequence[T], references: Sequence[list[T]]
+    ) -> float:
+        """Default implementation: average over sentence scores."""
         self.validate_corpus_score_input(hypotheses, references)
         transpose_references = list(zip(*references))
-        scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
+        scores = [
+            self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)
+        ]
         return sum(scores) / len(hypotheses)
 
-    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True) -> list[list[float]]:
-        # Default implementation: call the score function for each hypothesis-reference pair
-        return [[self.score(h, r) for r in references]
-                for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)]
+    def score_all(
+        self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True
+    ) -> list[list[float]]:
+        """Call the score function for each hypothesis-reference pair."""
+        return [
+            [self.score(h, r) for r in references]
+            for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
+        ]
 
     def __str__(self):
         return self.name
