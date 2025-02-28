@@ -24,27 +24,6 @@ def get_poses(length1: int, length2: int, conf1= None, conf2=None):
     reference = Pose(header=None, body=NumPyPoseBody(fps=1, data=zeros_tensor, confidence=zeros_confidence))
     return hypothesis, reference
 
-# class TestDistanceMetricGeneric(unittest.TestCase):
-#     def setUp(self):
-#         self.metric = DistanceMetric("l2")
-
-#     def test_scores_are_symmetric(self):
-#         hypothesis, reference = get_poses(2, 2)
-
-#         score1 = self.metric.score(hypothesis, reference)
-#         # pylint: disable=arguments-out-of-order
-#         score2 = self.metric.score(reference, hypothesis)
-#         self.assertAlmostEqual(score1, score2)
-
-#     def test_score_different_length(self):
-#         hypothesis, reference = get_poses(3, 2)
-
-#         difference = 6 * np.prod(hypothesis.body.confidence.shape)
-
-#         score = self.metric.score(hypothesis, reference)
-#         self.assertIsInstance(score, float)
-#         self.assertAlmostEqual(score, difference)
-
 class TestDistanceMetricMeanL1(unittest.TestCase):
     def setUp(self):
         self.metric = DistanceMetric("mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 0))
