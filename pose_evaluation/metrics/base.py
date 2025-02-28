@@ -24,26 +24,29 @@ class Signature:
         self.signature_info.update({key: args.get(key, None)})
 
     def format(self, short: bool = False) -> str:
-        pairs = []
+        parts = []
+        # Always print the "name" value first, if available.
+        name_value = self.signature_info.get("name")
+        if name_value is not None:
+            parts.append(str(name_value))
+        # Process all other keys.
         for key, value in self.signature_info.items():
-            if value is not None:
-                # Check for nested signature objects and wrap them in brackets.
-                if hasattr(value, "get_signature"):
-                    nested_signature = value.get_signature()
-                    if isinstance(nested_signature, Signature):
-                        nested_signature = nested_signature.format(short=short)
-                    value = f"{{{nested_signature}}}"
-                # Replace booleans with yes/no.
-                if isinstance(value, bool):
-                    value = "yes" if value else "no"
-                # Represent callable values by their name.
-                if isinstance(value, Callable):
-                    value = value.__name__
+            if key == "name" or value is None:
+                continue
+            # Handle nested signature objects and wrap them in curly braces.
+            if hasattr(value, "get_signature"):
+                nested_signature = value.get_signature()
+                if isinstance(nested_signature, Signature):
+                    value = "{" + nested_signature.format(short=short) + "}"
+            if isinstance(value, bool):
+                value = "yes" if value else "no"
+            if isinstance(value, Callable):
+                value = value.__name__
+            abbreviated_key = self._abbreviated.get(key, key) if short else key
+            parts.append(f"{abbreviated_key}:{value}")
+        return "|".join(parts)
 
-                abbreviated_key = self._abbreviated.get(key, key)
-                final_key = abbreviated_key if short else key
-                pairs.append(f"{final_key}:{value}")
-        return "|".join(pairs)
+
 
     def __str__(self) -> str:
         return self.format()
