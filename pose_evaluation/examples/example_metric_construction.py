@@ -11,7 +11,7 @@ if __name__ == "__main__":
     hypothesis_file = Path("pose_evaluation") / "utils" / "test" / "test_data" / "colin-2-HOUSE.pose"
     
     # Choose whether to load real files or generate test poses
-    use_real_files = True  # Change to False to use get_poses instead
+    use_real_files = False  # Change to True to use real poses instead. They have different lengths, and so some metrics will not work
     
     if use_real_files:
         poses = [Pose.read(hypothesis_file.read_bytes()), Pose.read(reference_file.read_bytes())]
