@@ -70,10 +70,7 @@ if __name__ == "__main__":
             print(repr(score_with_sig))
             print(f"{type(score_with_sig)}")
 
-            # Verify that score behaves like a float
-            doubled = score_with_sig * 2
-            print(f"score * 2 = {doubled}")
-            print(type(doubled))
+            print(metric.score_with_signature(poses[0], poses[1], short=True))
 
         except NotImplementedError:
             print(f"{metric} score not implemented")

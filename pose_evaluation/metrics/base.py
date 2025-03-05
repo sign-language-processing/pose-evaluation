@@ -46,8 +46,6 @@ class Signature:
             parts.append(f"{abbreviated_key}:{value}")
         return "|".join(parts)
 
-
-
     def __str__(self) -> str:
         return self.format()
 
@@ -55,19 +53,19 @@ class Signature:
         return self.format()
 
 
-class ScoreWithSignature(float):
-    __slots__ = ("_signature",)
+class Score:
+    """Inspired by Sacrebleu, a base score class which can add signature information after the value."""
 
-    def __new__(cls, value, signature) -> "ScoreWithSignature":
-        obj = super().__new__(cls, value)
-        obj._signature = signature
-        return obj
+    def __init__(self, name: str, score: float, signature: str) -> None:
+        self.name = name
+        self.score = score
+        self._signature = signature
 
     def __str__(self):
-        return f"{self._signature.format()} = {float(self)}"
+        return f"{self._signature} = {self.score}"
 
     def __repr__(self):
-        return f"ScoreWithSignature({super().__repr__()}, signature={repr(self._signature)})"
+        return f"Score({super().__repr__()}, signature={repr(self._signature)})"
 
 
 class BaseMetric[T]:
@@ -85,9 +83,13 @@ class BaseMetric[T]:
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
 
-    def score_with_signature(self, hypothesis: T, reference: T) -> ScoreWithSignature:
-        return ScoreWithSignature(
-            self.score(hypothesis, reference), self.get_signature()
+    def score_with_signature(
+        self, hypothesis: T, reference: T, short: bool = False
+    ) -> Score:
+        return Score(
+            name=self.name,
+            score=self.score(hypothesis, reference),
+            signature=self.get_signature().format(short=short),
         )
 
     def score_max(self, hypothesis: T, references: Sequence[T]) -> float:
