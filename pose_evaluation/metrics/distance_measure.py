@@ -81,10 +81,10 @@ class AggregatedPowerDistance(DistanceMeasure):
         }
         if self.aggregation_strategy in aggregation_funcs:
             return aggregation_funcs[self.aggregation_strategy]()
-        else:
-            raise NotImplementedError(
-                f"Aggregation Strategy {self.aggregation_strategy} not implemented"
-            )
+
+        raise NotImplementedError(
+            f"Aggregation Strategy {self.aggregation_strategy} not implemented"
+        )
 
     def _calculate_distances(
         self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
