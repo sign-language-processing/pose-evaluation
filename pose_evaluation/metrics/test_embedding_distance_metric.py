@@ -48,7 +48,7 @@ def test_shape_checker(distance_matrix_shape_checker):
     for wrong_shape in wrong_shapes:
         if wrong_shape != (m, n):
             distances_with_wrong_shape = torch.rand(wrong_shape)
-            with pytest.raises(AssertionError, match="Distance Matrix should be MxN"):
+            with pytest.raises(AssertionError, match="expected MxN"):
                 # This SHOULD happen. If this doesn't happen then the checker itself is not working.
                 distance_matrix_shape_checker(m, n, distances_with_wrong_shape)
 
