@@ -24,7 +24,7 @@ def mediapipe_poses_test_data_paths() -> List[Path]:
 
 
 @pytest.fixture(scope="function")
-def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:
+def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]: # pylint: disable=redefined-outer-name
     original_poses = [
         load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths
     ]

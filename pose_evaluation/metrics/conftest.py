@@ -18,19 +18,25 @@ def clean_test_artifacts():
 
 
 @pytest.fixture(name="distance_matrix_shape_checker")
-def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Tensor], None]:
+def fixture_distance_matrix_shape_checker() -> (
+    Callable[[torch.Tensor, torch.Tensor], None]
+):
     def _check_shape(hyp_count: int, ref_count: int, distance_matrix: torch.Tensor):
 
         expected_shape = torch.Size([hyp_count, ref_count])
-        assert (
-            distance_matrix.shape == expected_shape
-        ), f"For M={hyp_count} hypotheses, N={ref_count} references,  Distance Matrix should be MxN={expected_shape}. Instead, received {distance_matrix.shape}"
+        assert_message = (
+            f"For M={hyp_count}, N={ref_count}, expected MxN={expected_shape}, "
+            f"but got {distance_matrix.shape}"
+        )
+        assert distance_matrix.shape == expected_shape, assert_message
 
     return _check_shape
 
 
 @pytest.fixture(name="distance_range_checker")
-def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray], float, float], None]:
+def fixture_distance_range_checker() -> (
+    Callable[[Union[torch.Tensor, np.ndarray], float, float], None]
+):
     def _check_range(
         distances: Union[torch.Tensor, np.ndarray],
         min_val: float = 0,
@@ -41,10 +47,12 @@ def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray
 
         # Use np.isclose for comparisons with tolerance
         assert (
-            np.isclose(min_distance, min_val, atol=1e-6) or min_val <= min_distance <= max_val
+            np.isclose(min_distance, min_val, atol=1e-6)
+            or min_val <= min_distance <= max_val
         ), f"Minimum distance ({min_distance}) is outside the expected range [{min_val}, {max_val}]"
         assert (
-            np.isclose(max_distance, max_val, atol=1e-6) or min_val <= max_distance <= max_val
+            np.isclose(max_distance, max_val, atol=1e-6)
+            or min_val <= max_distance <= max_val
         ), f"Maximum distance ({max_distance}) is outside the expected range [{min_val}, {max_val}]"
 
     return _check_range
