@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 import numpy as np
-import numpy.ma as ma # pylint: disable=consider-using-from-import
 
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs

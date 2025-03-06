@@ -84,7 +84,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             # https://stackoverflow.com/questions/55050717/converting-list-of-tensors-to-tensors-pytorch
             data = torch.stack(data)
 
-        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype)
+        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype) # pylint: disable=protected-access
 
     def score(
         self,
