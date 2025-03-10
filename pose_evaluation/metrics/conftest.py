@@ -22,9 +22,11 @@ def clean_test_artifacts():
 def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Tensor], None]:
     def _check_shape(hyp_count: int, ref_count: int, distance_matrix: torch.Tensor):
         expected_shape = torch.Size([hyp_count, ref_count])
-        assert (
-            distance_matrix.shape == expected_shape
-        ), f"For M={hyp_count} hypotheses, N={ref_count} references,  Distance Matrix should be MxN={expected_shape}. Instead, received {distance_matrix.shape}"
+        assert distance_matrix.shape == expected_shape, (
+            f"For M={hyp_count} hypotheses, N={ref_count} references,  "
+            f"Distance Matrix should be MxN={expected_shape}. "
+            f"Instead, received {distance_matrix.shape}"
+        )
 
     return _check_shape
 
