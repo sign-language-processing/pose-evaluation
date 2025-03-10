@@ -11,7 +11,9 @@ def pose_remove_world_landmarks(pose: Pose) -> Pose:
     return pose.remove_components(["POSE_WORLD_LANDMARKS"])
 
 
-def get_component_names_and_points_dict(pose: Pose) -> Tuple[List[str], Dict[str, List[str]]]:
+def get_component_names_and_points_dict(
+    pose: Pose,
+) -> Tuple[List[str], Dict[str, List[str]]]:
     component_names = []
     points_dict = defaultdict(list)
     for component in pose.header.components:

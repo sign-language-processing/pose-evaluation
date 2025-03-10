@@ -56,6 +56,10 @@ and correlate to human judgments.
 
 **TODO** list evaluation metrics here.
 
+### Contributing
+
+Please make sure to run `black pose_evaluation` before submitting a pull request.
+
 ## Cite
 
 If you use our toolkit in your research or projects, please consider citing the work.

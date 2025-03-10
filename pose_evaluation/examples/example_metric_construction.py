@@ -32,9 +32,7 @@ if __name__ == "__main__":
         poses = [hypothesis, reference]
 
     # Define distance metrics
-    mean_l1_metric = DistanceMetric(
-        "mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17)
-    )
+    mean_l1_metric = DistanceMetric("mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17))
     metrics = [
         BaseMetric("base"),
         DistanceMetric("PowerDistanceMetric", AggregatedPowerDistance(2, 1)),
@@ -42,15 +40,11 @@ if __name__ == "__main__":
         mean_l1_metric,
         DistanceMetric(
             "max_l1_metric",
-            AggregatedPowerDistance(
-                order=1, aggregation_strategy="max", default_distance=0
-            ),
+            AggregatedPowerDistance(order=1, aggregation_strategy="max", default_distance=0),
         ),
         DistanceMetric(
             "MeanL2Score",
-            AggregatedPowerDistance(
-                order=2, aggregation_strategy="mean", default_distance=0
-            ),
+            AggregatedPowerDistance(order=2, aggregation_strategy="mean", default_distance=0),
         ),
     ]
 

@@ -25,7 +25,12 @@ TensorConvertableType = Union[List, np.ndarray, Tensor]
 
 
 class EmbeddingDistanceMetric(EmbeddingMetric):
-    def __init__(self,kind: ValidDistanceKinds = "cosine",device: Union[torch.device, str] = None,dtype=None):
+    def __init__(
+        self,
+        kind: ValidDistanceKinds = "cosine",
+        device: Union[torch.device, str] = None,
+        dtype=None,
+    ):
         """
         Args:
             kind (ValidDistanceKinds): The type of distance metric, e.g. "cosine", or "euclidean".
@@ -80,7 +85,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
         return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype)
 
-    def score(self,hypothesis: TensorConvertableType,reference: TensorConvertableType) -> Number:
+    def score(self, hypothesis: TensorConvertableType, reference: TensorConvertableType) -> Number:
         """
         Compute the distance between two embeddings.
 
@@ -90,7 +95,12 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         return self.score_all(hypothesis, reference).item()
 
-    def score_all(self,hypotheses: Union[List[TensorConvertableType], Tensor],references: Union[List[TensorConvertableType], Tensor],progress_bar: bool = True) -> Tensor:
+    def score_all(
+        self,
+        hypotheses: Union[List[TensorConvertableType], Tensor],
+        references: Union[List[TensorConvertableType], Tensor],
+        progress_bar: bool = True,
+    ) -> Tensor:
         """
         Compute the distance between all hypotheses and all references.
 
@@ -110,8 +120,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         except RuntimeError as e:
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
-        assert hypotheses.ndim == 2 and references.ndim == 2 \
-        , f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
+        assert (
+            hypotheses.ndim == 2 and references.ndim == 2
+        ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 

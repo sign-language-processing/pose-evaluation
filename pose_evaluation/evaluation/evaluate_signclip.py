@@ -63,10 +63,12 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
     return split_df
 
 
-def calculate_mean_distances(distance_matrix: torch.Tensor,
-                             indices_a: torch.Tensor,
-                             indices_b: torch.Tensor,
-                             exclude_self: bool = False) -> float:
+def calculate_mean_distances(
+    distance_matrix: torch.Tensor,
+    indices_a: torch.Tensor,
+    indices_b: torch.Tensor,
+    exclude_self: bool = False,
+) -> float:
     """
     Calculate the mean of distances between two sets of indices in a 2D distance matrix.
 
@@ -291,8 +293,17 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate SignCLIP embeddings with score_all.")
-    parser.add_argument("emb_dir", type=Path, help="Path to the directory containing SignCLIP .npy files")
-    parser.add_argument("--split_file", type=Path, required=True, help="Path to the split CSV file (e.g., test.csv)")
+    parser.add_argument(
+        "emb_dir",
+        type=Path,
+        help="Path to the directory containing SignCLIP .npy files",
+    )
+    parser.add_argument(
+        "--split_file",
+        type=Path,
+        required=True,
+        help="Path to the split CSV file (e.g., test.csv)",
+    )
     parser.add_argument(
         "--kind",
         type=str,
@@ -301,7 +312,11 @@ def main():
         help="Type of distance metric to use (default: cosine)",
     )
 
-    parser.add_argument("--out_path", type=Path, help="Where to save output distance npz matrix+file list")
+    parser.add_argument(
+        "--out_path",
+        type=Path,
+        help="Where to save output distance npz matrix+file list",
+    )
 
     args = parser.parse_args()
 
@@ -314,7 +329,12 @@ def main():
 
     print(f"Scores will be saved to {output_file}")
 
-    evaluate_signclip(emb_dir=args.emb_dir, split_file=args.split_file, out_path=output_file, kind=args.kind)
+    evaluate_signclip(
+        emb_dir=args.emb_dir,
+        split_file=args.split_file,
+        out_path=output_file,
+        kind=args.kind,
+    )
 
 
 if __name__ == "__main__":

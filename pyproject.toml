@@ -25,6 +25,7 @@ dependencies = [
 dev = [
     "pytest",
     "pylint",
+    "black",
     # to plot metric evaluation results
     "matplotlib"
 ]
@@ -42,6 +43,9 @@ disable = [
     "W0511", # TODO
     "W1203", # use lazy % formatting in logging functions
 ]
+
+[tool.black]
+line-length = 120
 
 [tool.setuptools]
 packages = [
