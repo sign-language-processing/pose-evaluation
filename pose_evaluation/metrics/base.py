@@ -20,7 +20,6 @@ class Signature:
 
     def update_signature_and_abbr(self, key: str, abbr: str, args: dict):
         self.update_abbr(key, abbr)
-
         self.signature_info.update({key: args.get(key, None)})
 
     def format(self, short: bool = False) -> str:
@@ -38,6 +37,15 @@ class Signature:
                 nested_signature = value.get_signature()
                 if isinstance(nested_signature, Signature):
                     value = "{" + nested_signature.format(short=short) + "}"
+            elif isinstance(value, list) and all(
+                hasattr(v, "get_signature") for v in value
+            ):
+                value = (
+                    "["
+                    + ",".join(v.get_signature().format(short=short) for v in value)
+                    + "]"
+                )
+
             if isinstance(value, bool):
                 value = "yes" if value else "no"
             if isinstance(value, Callable):
@@ -117,7 +125,7 @@ class BaseMetric[T]:
         return sum(scores) / len(hypotheses)
 
     def score_all(
-        self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True
+        self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=False
     ) -> list[list[float]]:
         """Call the score function for each hypothesis-reference pair."""
         return [
@@ -125,8 +133,20 @@ class BaseMetric[T]:
             for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
         ]
 
+    def score_all_with_signature(
+        self,
+        hypotheses: Sequence[T],
+        references: Sequence[T],
+        progress_bar=False,
+        short: bool = False,
+    ) -> list[list[Score]]:
+        return [
+            [self.score_with_signature(h, r, short=short) for r in references]
+            for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
+        ]
+
     def __str__(self):
-        return self.name
+        return f"{self.get_signature()}"
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)

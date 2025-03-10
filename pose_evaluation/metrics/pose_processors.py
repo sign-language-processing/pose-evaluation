@@ -1,22 +1,26 @@
 from typing import Any, List, Union, Iterable, Callable
-from pose_format import Pose
 
-from pose_evaluation.metrics.base import SignatureMixin
+from tqdm import tqdm
+
+from pose_format import Pose
+from pose_format.utils.generic import pose_hide_legs
+from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
-    remove_components,
-    pose_remove_legs,
     get_face_and_hands_from_pose,
-    reduce_pose_components_and_points_to_intersection,
     zero_pad_shorter_poses,
-    copy_pose,
-    pose_hide_low_conf,
-    set_masked_to_origin_position,
+    reduce_poses_to_intersection,
 )
 
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 
 
-class PoseProcessor(SignatureMixin):
+class PoseProcessorSignature(Signature):
+    pass
+
+
+class PoseProcessor:
+    _SIGNATURE_TYPE = Signature
+
     def __init__(self, name="PoseProcessor") -> None:
         self.name = name
 
@@ -27,79 +31,33 @@ class PoseProcessor(SignatureMixin):
             return self.process_pose(pose_or_poses)
 
     def __repr__(self) -> str:
-        return self.name
+        return f"{self.get_signature()}"
 
     def __str__(self) -> str:
-        return self.name
+        return f"{self.get_signature()}"
 
     def process_pose(self, pose: Pose) -> Pose:
         return pose
 
-    def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
-        return [self.process_pose(pose) for pose in poses]
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+        return [self.process_pose(pose) for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)]
+
+    def get_signature(self) -> Signature:
+        return self._SIGNATURE_TYPE(self.name, self.__dict__)
 
 
-class RemoveComponentsProcessor(PoseProcessor):
-    def __init__(self, landmarks: List[str]) -> None:
-        super().__init__(f"remove_landmarks[landmarks{landmarks}]")
-        self.landmarks = landmarks
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return remove_components(pose, self.landmarks)
-
-
-class RemoveWorldLandmarksProcessor(RemoveComponentsProcessor):
-    def __init__(self) -> None:
-        landmarks = ["POSE_WORLD_LANDMARKS"]
-        super().__init__(landmarks)
-
-
-class RemoveLegsPosesProcessor(PoseProcessor):
-    def __init__(self, name="remove_legs") -> None:
-        super().__init__(name)
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return pose_remove_legs(pose)
-
-
-class GetFaceAndHandsProcessor(PoseProcessor):
-    def __init__(self, name="face_and_hands") -> None:
-        super().__init__(name)
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return get_face_and_hands_from_pose(pose)
-
-
-class ReducePosesToCommonComponentsProcessor(PoseProcessor):
-    def __init__(self, name="reduce_pose_components") -> None:
-        super().__init__(name)
-
-    def process_pose(self, pose: Pose) -> Pose:
-        return self.process_poses([pose])[0]
-
-    def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
-        return reduce_pose_components_and_points_to_intersection(poses)
-
-
-class ZeroPadShorterPosesProcessor(PoseProcessor):
-    def __init__(self) -> None:
-        super().__init__(name="zero_pad_shorter_sequence")
-
-    def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
-        return zero_pad_shorter_poses(poses)
-
-
-class PadOrTruncateByReferencePosesProcessor(PoseProcessor):
-    def __init__(self) -> None:
-        super().__init__(name="by_reference")
-
-    def process_poses(self, poses: Iterable[Pose]) -> List[Pose]:
-        raise NotImplementedError  # TODO
+class NormalizePosesSignature(Signature):
+    def __init__(self, name: str, args: dict):
+        super().__init__(name, args)
+        self.update_signature_and_abbr("scale_factor", "s", args)
+        self.update_signature_and_abbr("info", "i", args)
 
 
 class NormalizePosesProcessor(PoseProcessor):
+    _SIGNATURE_TYPE = NormalizePosesSignature
+
     def __init__(self, info=None, scale_factor=1) -> None:
-        super().__init__(f"normalize_poses[info:{info},scale_factor:{scale_factor}]")
+        super().__init__("normalize_poses")
         self.info = info
         self.scale_factor = scale_factor
 
@@ -107,26 +65,40 @@ class NormalizePosesProcessor(PoseProcessor):
         return pose.normalize(self.info, self.scale_factor)
 
 
-class HideLowConfProcessor(PoseProcessor):
-    def __init__(self, conf_threshold: float = 0.2) -> None:
-
-        super().__init__(f"hide_low_conf[{conf_threshold}]")
-        self.conf_threshold = conf_threshold
+class RemoveWorldLandmarksProcessor(PoseProcessor):
+    def __init__(self, name="remove_world_landmarks") -> None:
+        super().__init__(name)
 
     def process_pose(self, pose: Pose) -> Pose:
-        pose = copy_pose(pose)
-        pose_hide_low_conf(pose, self.conf_threshold)
-        return pose
+        return pose.remove_components(["WORLD_LANDMARKS"])
 
 
-class SetMaskedValuesToOriginPositionProcessor(PoseProcessor):
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__(name="set_masked_to_origin")
+class HideLegsPosesProcessor(PoseProcessor):
+    def __init__(self, name="hide_legs", remove=True) -> None:
+        super().__init__(name)
+        self.remove = remove
 
     def process_pose(self, pose: Pose) -> Pose:
-        return set_masked_to_origin_position(pose)
+        return pose_hide_legs(pose, remove=self.remove)
+
+
+class ReducePosesToCommonComponentsProcessor(PoseProcessor):
+    def __init__(self, name="reduce_poses_to_intersection") -> None:
+        super().__init__(name)
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return self.process_poses([pose])[0]
+
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+        return reduce_poses_to_intersection(poses, progress=progress)
+
+
+class ZeroPadShorterPosesProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="zero_pad_shorter_sequence")
+
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+        return zero_pad_shorter_poses(poses)
 
 
 def get_standard_pose_processors(
@@ -135,7 +107,6 @@ def get_standard_pose_processors(
     remove_world_landmarks=True,
     remove_legs=True,
     zero_pad_shorter=True,
-    set_masked_values_to_origin=False,
 ) -> List[PoseProcessor]:
     pose_processors = []
 
@@ -149,12 +120,9 @@ def get_standard_pose_processors(
         pose_processors.append(RemoveWorldLandmarksProcessor())
 
     if remove_legs:
-        pose_processors.append(RemoveLegsPosesProcessor())
+        pose_processors.append(HideLegsPosesProcessor())
 
     if zero_pad_shorter:
         pose_processors.append(ZeroPadShorterPosesProcessor())
-
-    if set_masked_values_to_origin:
-        pose_processors.append(SetMaskedValuesToOriginPositionProcessor())
 
     return pose_processors

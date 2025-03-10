@@ -26,9 +26,20 @@ class DistanceMeasure:
         This method should be implemented by subclasses.
         """
         raise NotImplementedError
+    
+    def _get_keypoint_trajectories(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray):
+        # frames, persons, keypoint
+        for keypoint_idx in range(hyp_data.shape[2]):
+            hyp_trajectory, ref_trajectory =hyp_data[:, 0, keypoint_idx, :], ref_data[:, 0, keypoint_idx, :]
+            yield hyp_trajectory, ref_trajectory
 
     def __call__(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         return self.get_distance(hyp_data, ref_data)
+    
+    def _calculate_distances(
+        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
+    ) -> ma.MaskedArray:
+        raise NotImplementedError
 
     def get_signature(self) -> Signature:
         """Return the signature of the distance measure."""
