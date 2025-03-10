@@ -1,13 +1,14 @@
 import itertools
+import logging
 from pathlib import Path
 from typing import List, Callable, Tuple
-import logging
-import pytest
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import torch
+
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 # TODO: many fixes. Including the fact that we test cosine but not Euclidean,
 
@@ -54,7 +55,9 @@ def test_shape_checker(distance_matrix_shape_checker):
 
 
 def call_and_call_with_inputs_swapped(
-    hyps: torch.Tensor, refs: torch.Tensor, scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    hyps: torch.Tensor,
+    refs: torch.Tensor,
+    scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     score1 = scoring_function(hyps, refs)
     score2 = scoring_function(refs, hyps)
@@ -243,7 +246,9 @@ def test_score_all_against_self(
     distance_range_checker(scores, min_val=0, max_val=2)
 
     assert torch.allclose(
-        torch.diagonal(scores), torch.zeros(len(embeddings), dtype=scores.dtype), atol=1e-6
+        torch.diagonal(scores),
+        torch.zeros(len(embeddings), dtype=scores.dtype),
+        atol=1e-6,
     ), "Self-comparison scores should be zero for cosine distance."
 
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
@@ -256,7 +261,12 @@ def test_score_all_with_one_vs_batch(cosine_metric, distance_range_checker, dist
     expected_shape = (len(hyps), 1)
 
     call_with_both_input_orders_and_do_standard_checks(
-        hyps, refs, cosine_metric.score_all, distance_range_checker, distance_matrix_shape_checker, expected_shape
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape,
     )
 
 
@@ -267,11 +277,18 @@ def test_score_all_with_different_sizes(cosine_metric, distance_range_checker, d
 
     expected_shape = (len(hyps), len(refs))
     call_with_both_input_orders_and_do_standard_checks(
-        hyps, refs, cosine_metric.score_all, distance_range_checker, distance_matrix_shape_checker, expected_shape
+        hyps,
+        refs,
+        cosine_metric.score_all,
+        distance_range_checker,
+        distance_matrix_shape_checker,
+        expected_shape,
     )
 
 
-def test_score_with_invalid_input_mismatched_embedding_sizes(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_mismatched_embedding_sizes(
+    cosine_metric: EmbeddingDistanceMetric,
+) -> None:
     hyp = random_tensor(768)
     ref = random_tensor(769)
 
@@ -281,7 +298,9 @@ def test_score_with_invalid_input_mismatched_embedding_sizes(cosine_metric: Embe
         call_and_call_with_inputs_swapped(hyp, ref, cosine_metric.score)
 
 
-def test_score_with_invalid_input_single_number(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_single_number(
+    cosine_metric: EmbeddingDistanceMetric,
+) -> None:
     hyp = random_tensor(768)
     for ref in range(-2, 2):
         with pytest.raises(AssertionError, match="score_all received non-2D input"):
@@ -292,7 +311,9 @@ def test_score_with_invalid_input_single_number(cosine_metric: EmbeddingDistance
     logger.info("Invalid input successfully crashed as expected.")
 
 
-def test_score_with_invalid_input_string(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_string(
+    cosine_metric: EmbeddingDistanceMetric,
+) -> None:
     hyp = "invalid input"
     ref = random_tensor(768)
     with pytest.raises(TypeError, match="invalid data type 'str'"):
@@ -308,7 +329,9 @@ def test_score_with_invalid_input_bool(cosine_metric: EmbeddingDistanceMetric) -
             # TODO: why does a bool make it all the way there?
 
 
-def test_score_with_invalid_input_empty_containers(cosine_metric: EmbeddingDistanceMetric) -> None:
+def test_score_with_invalid_input_empty_containers(
+    cosine_metric: EmbeddingDistanceMetric,
+) -> None:
     """Test the metric with invalid inputs."""
     emb1 = random_tensor(768)
     invalid_inputs = ["", [], {}, tuple(), set()]
@@ -342,11 +365,7 @@ def test_score_ndarray_input(cosine_metric):
     assert isinstance(score, float), "Output should be a float."
 
 
-def test_score_all_list_of_lists_of_floats(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_lists_of_floats(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Does a 2D list of floats work?"""
     hyps = [[np.random.rand() for _ in range(768)] for _ in range(5)]
     refs = [[np.random.rand() for _ in range(768)] for _ in range(5)]
@@ -379,11 +398,7 @@ def test_score_all_list_of_tensor_input(cosine_metric, distance_range_checker, d
     )
 
 
-def test_score_all_list_of_ndarray_input(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_ndarray_input(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Test score_all function with List of np.ndarray inputs."""
     hyps = [np.random.rand(768) for _ in range(5)]
     refs = [np.random.rand(768) for _ in range(5)]
@@ -401,7 +416,10 @@ def test_score_all_list_of_ndarray_input(
 
 def test_device_handling(cosine_metric):
     """Test device handling for the metric."""
-    assert cosine_metric.device.type in ["cuda", "cpu"], "Device should be either 'cuda' or 'cpu'."
+    assert cosine_metric.device.type in [
+        "cuda",
+        "cpu",
+    ], "Device should be either 'cuda' or 'cpu'."
     if torch.cuda.is_available():
         assert cosine_metric.device.type == "cuda", "Should use 'cuda' when available."
     else:
@@ -435,7 +453,13 @@ def test_score_all_mixed_input_types(cosine_metric, distance_range_checker, dist
 
 
 @pytest.mark.parametrize("num_points, dim", [(16, 2)])
-def test_unit_circle_points(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
+def test_unit_circle_points(
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
+):
     embeddings = generate_unit_circle_points(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances=distances, matrix_name="Unit Circle", num_points=num_points, dim=dim)
@@ -448,7 +472,10 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
     embeddings = generate_orthogonal_rows_with_repeats(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(
-        distances=distances, matrix_name="Orthogonal Rows (with repeats)", num_points=num_points, dim=dim
+        distances=distances,
+        matrix_name="Orthogonal Rows (with repeats)",
+        num_points=num_points,
+        dim=dim,
     )
 
     # Create expected pattern directly within the test function
@@ -466,7 +493,11 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
 def test_orthogonal_rows_in_pairs(
-    cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ):
     embeddings = generate_orthogonal_rows_in_pairs(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
@@ -476,7 +507,13 @@ def test_orthogonal_rows_in_pairs(
 
 
 @pytest.mark.parametrize("num_points, dim", [(10, 5)])
-def test_ones_tensor(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
+def test_ones_tensor(
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
+):
     embeddings = generate_ones_tensor(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "ones_tensor", num_points, dim)
@@ -485,7 +522,13 @@ def test_ones_tensor(cosine_metric, num_points, dim, distance_range_checker, dis
 
 
 @pytest.mark.parametrize("num_points, dim", [(15, 15)])  # dim should be equal to num_points for identity matrix
-def test_identity_matrix_rows(cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker):
+def test_identity_matrix_rows(
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
+):
     embeddings = generate_identity_matrix_rows(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "identity_matrix_rows", num_points, dim)

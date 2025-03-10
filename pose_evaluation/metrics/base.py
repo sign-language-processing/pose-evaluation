@@ -1,5 +1,6 @@
 # pylint: disable=undefined-variable
 from typing import Any, Callable, Sequence
+
 from tqdm import tqdm
 
 
@@ -83,9 +84,7 @@ class BaseMetric[T]:
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
 
-    def score_with_signature(
-        self, hypothesis: T, reference: T, short: bool = False
-    ) -> Score:
+    def score_with_signature(self, hypothesis: T, reference: T, short: bool = False) -> Score:
         return Score(
             name=self.name,
             score=self.score(hypothesis, reference),
@@ -96,29 +95,19 @@ class BaseMetric[T]:
         all_scores = self.score_all([hypothesis], references)
         return max(max(scores) for scores in all_scores)
 
-    def validate_corpus_score_input(
-        self, hypotheses: Sequence[T], references: Sequence[Sequence[T]]
-    ):
+    def validate_corpus_score_input(self, hypotheses: Sequence[T], references: Sequence[Sequence[T]]):
         # This method is designed to avoid mistakes in the use of the corpus_score method
         for reference in references:
-            assert len(hypotheses) == len(
-                reference
-            ), "Hypothesis and reference must have the same number of instances"
+            assert len(hypotheses) == len(reference), "Hypothesis and reference must have the same number of instances"
 
-    def corpus_score(
-        self, hypotheses: Sequence[T], references: Sequence[list[T]]
-    ) -> float:
+    def corpus_score(self, hypotheses: Sequence[T], references: Sequence[list[T]]) -> float:
         """Default implementation: average over sentence scores."""
         self.validate_corpus_score_input(hypotheses, references)
         transpose_references = list(zip(*references))
-        scores = [
-            self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)
-        ]
+        scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
         return sum(scores) / len(hypotheses)
 
-    def score_all(
-        self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True
-    ) -> list[list[float]]:
+    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True) -> list[list[float]]:
         """Call the score function for each hypothesis-reference pair."""
         return [
             [self.score(h, r) for r in references]

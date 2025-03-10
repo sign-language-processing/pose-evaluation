@@ -1,19 +1,18 @@
 from pathlib import Path
+
 from pose_format import Pose
-from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
+
 from pose_evaluation.metrics.base import BaseMetric
+from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
+from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.test_distance_metric import get_poses
 from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
 
 if __name__ == "__main__":
     # Define file paths for test pose data
-    reference_file = (
-        Path("pose_evaluation") / "utils" / "test" / "test_data" / "colin-1-HOUSE.pose"
-    )
-    hypothesis_file = (
-        Path("pose_evaluation") / "utils" / "test" / "test_data" / "colin-2-HOUSE.pose"
-    )
+    test_data_path = Path("pose_evaluation") / "utils" / "test" / "test_data"
+    reference_file = test_data_path / "colin-1-HOUSE.pose"
+    hypothesis_file = test_data_path / "colin-2-HOUSE.pose"
 
     # Choose whether to load real files or generate test poses
     # They have different lengths, and so some metrics will crash!
@@ -33,9 +32,7 @@ if __name__ == "__main__":
         poses = [hypothesis, reference]
 
     # Define distance metrics
-    mean_l1_metric = DistanceMetric(
-        "mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17)
-    )
+    mean_l1_metric = DistanceMetric("mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17))
     metrics = [
         BaseMetric("base"),
         DistanceMetric("PowerDistanceMetric", AggregatedPowerDistance(2, 1)),
@@ -43,15 +40,11 @@ if __name__ == "__main__":
         mean_l1_metric,
         DistanceMetric(
             "max_l1_metric",
-            AggregatedPowerDistance(
-                order=1, aggregation_strategy="max", default_distance=0
-            ),
+            AggregatedPowerDistance(order=1, aggregation_strategy="max", default_distance=0),
         ),
         DistanceMetric(
             "MeanL2Score",
-            AggregatedPowerDistance(
-                order=2, aggregation_strategy="mean", default_distance=0
-            ),
+            AggregatedPowerDistance(order=2, aggregation_strategy="mean", default_distance=0),
         ),
     ]
 
