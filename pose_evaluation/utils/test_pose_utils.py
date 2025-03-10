@@ -1,13 +1,11 @@
+from pathlib import Path
 from typing import List, Dict
 
-from pathlib import Path
-
-import pytest
 import numpy as np
-import numpy.ma as ma # pylint: disable=consider-using-from-import
-
+import pytest
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
+
 from pose_evaluation.utils.pose_utils import (
     load_pose_file,
     pose_remove_world_landmarks,
@@ -19,11 +17,8 @@ from pose_evaluation.utils.pose_utils import (
 )
 
 
-def test_load_poses_mediapipe(
-    mediapipe_poses_test_data_paths: List[Path],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
-):
-
+def test_load_poses_mediapipe(mediapipe_poses_test_data_paths: List[Path],
+                              standard_mediapipe_components_dict: Dict[str, List[str]]):
     poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
 
     assert len(poses) == 3
@@ -50,20 +45,15 @@ def test_load_poses_mediapipe(
         assert all(frame.shape == (1, 576, 3) for frame in pose.body.data)
 
 
-def test_remove_specific_landmarks_mediapipe(
-    mediapipe_poses_test_data: List[Pose],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
-):
+def test_remove_specific_landmarks_mediapipe(mediapipe_poses_test_data: List[Pose],
+                                             standard_mediapipe_components_dict: Dict[str, List[str]]):
     for pose in mediapipe_poses_test_data:
         component_count = len(pose.header.components)
         assert component_count == len(standard_mediapipe_components_dict.keys())
         for component_name in standard_mediapipe_components_dict.keys():
-            pose_with_component_removed =pose.remove_components([str(component_name)])
+            pose_with_component_removed = pose.remove_components([str(component_name)])
             assert component_name not in pose_with_component_removed.header.components
-            assert (
-                len(pose_with_component_removed.header.components)
-                == component_count - 1
-            )
+            assert len(pose_with_component_removed.header.components) == component_count - 1
 
 
 def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
@@ -76,17 +66,17 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
             copy.body.data, pose.body.data
         )  # the data should have the same values
 
-        assert sorted([c.name for c in pose.header.components]) == sorted(
-            [c.name for c in copy.header.components]
-        )  # same components
-        assert (
-            copy.header.total_points() == pose.header.total_points()
-        )  # same number of points
+        #
+        assert sorted([c.name for c in pose.header.components]) == \
+               sorted([c.name for c in copy.header.components]), \
+            "should have the same components"
+        assert copy.header.total_points() == pose.header.total_points(), \
+            "should have the same number of points"
 
 
 def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
     points_that_should_be_removed = ["LEFT_KNEE", "LEFT_HEEL", "LEFT_FOOT", "LEFT_TOE", "LEFT_FOOT_INDEX",
-                                    "RIGHT_KNEE", "RIGHT_HEEL", "RIGHT_FOOT", "RIGHT_TOE", "RIGHT_FOOT_INDEX",]
+                                     "RIGHT_KNEE", "RIGHT_HEEL", "RIGHT_FOOT", "RIGHT_TOE", "RIGHT_FOOT_INDEX"]
     for pose in mediapipe_poses_test_data:
         c_names = [c.name for c in pose.header.components]
         assert "POSE_LANDMARKS" in c_names
@@ -119,54 +109,36 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
                     assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
-
-def test_reduce_pose_components_to_intersection(
-    mediapipe_poses_test_data: List[Pose],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
-):
-
+def test_reduce_pose_components_to_intersection(mediapipe_poses_test_data: List[Pose],
+                                                standard_mediapipe_components_dict: Dict[str, List[str]]):
     test_poses_with_one_reduced = [pose.copy() for pose in mediapipe_poses_test_data]
 
-    pose_with_only_face_and_hands_and_no_wrist = get_face_and_hands_from_pose(
-        test_poses_with_one_reduced.pop()
-    )
+    pose_with_only_face_and_hands_and_no_wrist = get_face_and_hands_from_pose(test_poses_with_one_reduced.pop())
 
-    c_names, p_dict = get_component_names_and_points_dict(
-        pose_with_only_face_and_hands_and_no_wrist
-    )
+    c_names, p_dict = get_component_names_and_points_dict(pose_with_only_face_and_hands_and_no_wrist)
 
     new_p_dict = {}
     for c_name, p_list in p_dict.items():
-        new_p_dict[c_name] = [
-            point_name for point_name in p_list if "WRIST" not in point_name
-        ]
+        new_p_dict[c_name] = [point_name for point_name in p_list if "WRIST" not in point_name]
 
-    pose_with_only_face_and_hands_and_no_wrist = (
-        pose_with_only_face_and_hands_and_no_wrist.get_components(c_names, new_p_dict)
-    )
-
+    pose_with_only_face_and_hands_and_no_wrist = pose_with_only_face_and_hands_and_no_wrist \
+        .get_components(c_names, new_p_dict)
     test_poses_with_one_reduced.append(pose_with_only_face_and_hands_and_no_wrist)
     assert len(mediapipe_poses_test_data) == len(test_poses_with_one_reduced)
 
-    original_component_count = len(
-        standard_mediapipe_components_dict.keys()
-    )  # 5, at time of writing
+    # 5, at time of writing
+    original_component_count = len(standard_mediapipe_components_dict.keys())
 
-    target_component_count = 3  # face, left hand, right hand
-    assert (
-        len(pose_with_only_face_and_hands_and_no_wrist.header.components)
-        == target_component_count
-    )
+    num_components = len(pose_with_only_face_and_hands_and_no_wrist.header.components)
+    assert num_components == 3, "should only have face, left hand and right hand"
 
-    target_point_count = (
-        pose_with_only_face_and_hands_and_no_wrist.header.total_points()
-    )
+    target_point_count = pose_with_only_face_and_hands_and_no_wrist.header.total_points()
 
     reduced_poses = reduce_poses_to_intersection(
         test_poses_with_one_reduced
     )
     for reduced_pose in reduced_poses:
-        assert len(reduced_pose.header.components) == target_component_count
+        assert len(reduced_pose.header.components) == 3, "should only have face, left hand and right hand"
         assert reduced_pose.header.total_points() == target_point_count
 
     # check if the originals are unaffected
@@ -209,7 +181,7 @@ def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose
 
 
 def test_detect_format(
-    fake_openpose_poses, fake_openpose_135_poses, mediapipe_poses_test_data
+        fake_openpose_poses, fake_openpose_135_poses, mediapipe_poses_test_data
 ):
     for pose in fake_openpose_poses:
         assert detect_known_pose_format(pose) == "openpose"
@@ -226,9 +198,8 @@ def test_detect_format(
         pose = pose.get_components(["UNSUPPORTED"])
         assert len(pose.header.components) == 1
 
-        with pytest.raises(
-            ValueError, match="Could not detect pose format, unknown pose header schema with component names"
-        ):
+        with pytest.raises(ValueError,
+                           match="Could not detect pose format, unknown pose header schema with component names"):
             detect_known_pose_format(pose)
 
 
@@ -247,9 +218,8 @@ def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
     padded_poses = zero_pad_shorter_poses(mediapipe_poses_test_data)
 
     for i, padded_pose in enumerate(padded_poses):
-        assert (
-            mediapipe_poses_test_data[i] != padded_poses[i]
-        )  # shouldn't be the same object
+        assert mediapipe_poses_test_data[i] != padded_poses[i], \
+            "shouldn't be the same object"
         old_length = len(copies[i].body.data)
         new_length = len(padded_pose.body.data)
         assert new_length == max_len

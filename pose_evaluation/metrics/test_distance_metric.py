@@ -9,12 +9,7 @@ from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 
 
-def get_poses(
-    length1: int,
-    length2: int,
-    conf1: Optional[float] = None,
-    conf2: Optional[float] = None,
-):
+def get_poses(length1: int,length2: int,conf1: Optional[float] = None,conf2: Optional[float] = None):
     """
     Utility function to generate hypothesis and reference Pose objects for testing.
 
@@ -87,7 +82,7 @@ class TestDistanceMetricL2(unittest.TestCase):
 
     def test_score_equal_length(self):
         hypothesis, reference = get_poses(2, 2)
-        expected_distance = np.sqrt(2**2 + 2**2 + 2**2)  # sqrt(12)
+        expected_distance = np.sqrt(2 ** 2 + 2 ** 2 + 2 ** 2)  # sqrt(12)
         self._check_against_expected(hypothesis, reference, expected=expected_distance)
 
     def test_score_equal_length_one_masked(self):

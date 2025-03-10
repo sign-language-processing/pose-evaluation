@@ -1,4 +1,5 @@
 from pose_format import Pose
+
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
 from pose_evaluation.metrics.distance_measure import DistanceMeasure
 

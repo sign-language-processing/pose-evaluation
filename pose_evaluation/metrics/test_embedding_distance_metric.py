@@ -1,13 +1,14 @@
 import itertools
+import logging
 from pathlib import Path
 from typing import List, Callable, Tuple
-import logging
-import pytest
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import torch
+
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 # TODO: many fixes. Including the fact that we test cosine but not Euclidean,
 
@@ -53,22 +54,19 @@ def test_shape_checker(distance_matrix_shape_checker):
                 distance_matrix_shape_checker(m, n, distances_with_wrong_shape)
 
 
-def call_and_call_with_inputs_swapped(
-    hyps: torch.Tensor, refs: torch.Tensor, scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
-) -> Tuple[torch.Tensor, torch.Tensor]:
+def call_and_call_with_inputs_swapped(hyps: torch.Tensor, refs: torch.Tensor,
+                                      scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> Tuple[
+    torch.Tensor, torch.Tensor]:
     score1 = scoring_function(hyps, refs)
     score2 = scoring_function(refs, hyps)
     return score1, score2
 
 
-def call_with_both_input_orders_and_do_standard_checks(
-    hyps: torch.Tensor,
-    refs: torch.Tensor,
-    scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    distance_range_checker,
-    distance_matrix_shape_checker,
-    expected_shape: Tuple = None,
-):
+def call_with_both_input_orders_and_do_standard_checks(hyps: torch.Tensor, refs: torch.Tensor,
+                                                       scoring_function: Callable[
+                                                           [torch.Tensor, torch.Tensor], torch.Tensor],
+                                                       distance_range_checker, distance_matrix_shape_checker,
+                                                       expected_shape: Tuple = None):
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
         m, n = expected_shape
@@ -128,9 +126,9 @@ def generate_orthogonal_rows_with_repeats(num_rows: int, dim: int) -> torch.Tens
         random_vector = torch.randn(1, dim)
         if orthogonal_rows.shape[0] > 0:
             random_vector -= (
-                torch.matmul(random_vector, orthogonal_rows.T)
-                @ orthogonal_rows
-                / torch.norm(orthogonal_rows, dim=1, keepdim=True) ** 2
+                    torch.matmul(random_vector, orthogonal_rows.T)
+                    @ orthogonal_rows
+                    / torch.norm(orthogonal_rows, dim=1, keepdim=True) ** 2
             )
         orthogonal_rows = torch.cat([orthogonal_rows, random_vector / torch.norm(random_vector)])
     if num_rows > dim:
@@ -231,20 +229,15 @@ def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path)
     assert pytest.approx(score) == expected_score, "Score with paths should match direct computation."
 
 
-def test_score_all_against_self(
-    cosine_metric: EmbeddingDistanceMetric,
-    embeddings: List[torch.Tensor],
-    distance_range_checker,
-    distance_matrix_shape_checker,
-) -> None:
+def test_score_all_against_self(cosine_metric: EmbeddingDistanceMetric, embeddings: List[torch.Tensor],
+                                distance_range_checker, distance_matrix_shape_checker) -> None:
     """Test the score_all function."""
     scores = cosine_metric.score_all(embeddings, embeddings)
     distance_matrix_shape_checker(len(embeddings), len(embeddings), scores)
     distance_range_checker(scores, min_val=0, max_val=2)
 
-    assert torch.allclose(
-        torch.diagonal(scores), torch.zeros(len(embeddings), dtype=scores.dtype), atol=1e-6
-    ), "Self-comparison scores should be zero for cosine distance."
+    assert torch.allclose(torch.diagonal(scores), torch.zeros(len(embeddings), dtype=scores.dtype), atol=1e-6), \
+        "Self-comparison scores should be zero for cosine distance."
 
     logger.info(f"Score matrix shape: {scores.shape}, Diagonal values: {torch.diagonal(scores)}")
 
@@ -342,11 +335,7 @@ def test_score_ndarray_input(cosine_metric):
     assert isinstance(score, float), "Output should be a float."
 
 
-def test_score_all_list_of_lists_of_floats(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_lists_of_floats(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Does a 2D list of floats work?"""
     hyps = [[np.random.rand() for _ in range(768)] for _ in range(5)]
     refs = [[np.random.rand() for _ in range(768)] for _ in range(5)]
@@ -379,11 +368,7 @@ def test_score_all_list_of_tensor_input(cosine_metric, distance_range_checker, d
     )
 
 
-def test_score_all_list_of_ndarray_input(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_ndarray_input(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Test score_all function with List of np.ndarray inputs."""
     hyps = [np.random.rand(768) for _ in range(5)]
     refs = [np.random.rand(768) for _ in range(5)]
@@ -465,9 +450,9 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
 
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
-def test_orthogonal_rows_in_pairs(
-    cosine_metric, num_points, dim, distance_range_checker, distance_matrix_shape_checker
-):
+def test_orthogonal_rows_in_pairs(cosine_metric, num_points, dim,
+                                  distance_range_checker,
+                                  distance_matrix_shape_checker):
     embeddings = generate_orthogonal_rows_in_pairs(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
     save_and_plot_distances(distances, "orthogonal_rows_in_pairs", num_points, dim)

@@ -1,5 +1,5 @@
-import json
 import copy
+import json
 from pathlib import Path
 from typing import List, Dict
 
@@ -11,8 +11,6 @@ from pose_format.utils.openpose_135 import (
 )
 
 from pose_evaluation.utils.pose_utils import load_pose_file
-
-
 
 utils_test_data_dir = Path(__file__).parent / "test" / "test_data"
 

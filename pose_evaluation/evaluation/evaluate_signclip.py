@@ -1,13 +1,16 @@
 import argparse
-from pathlib import Path
-import time
 import json
 import random
-import pandas as pd
+import time
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 import torch
 from tqdm import tqdm
+
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+
 
 def load_embedding(file_path: Path) -> np.ndarray:
     """
@@ -60,9 +63,10 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
     return split_df
 
 
-def calculate_mean_distances(
-    distance_matrix: torch.Tensor, indices_a: torch.Tensor, indices_b: torch.Tensor, exclude_self: bool = False
-) -> float:
+def calculate_mean_distances(distance_matrix: torch.Tensor,
+                             indices_a: torch.Tensor,
+                             indices_b: torch.Tensor,
+                             exclude_self: bool = False) -> float:
     """
     Calculate the mean of distances between two sets of indices in a 2D distance matrix.
 
@@ -92,7 +96,6 @@ def calculate_mean_distances(
 
 
 def generate_synthetic_data(num_items, num_classes, num_items_per_class=4):
-
     torch.manual_seed(42)
     random.seed(42)
     # distance_matrix = torch.rand((num_items, num_items)) * 100
@@ -238,7 +241,7 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str
 
     find_class_distances_end = time.perf_counter()
 
-    print(f"Finding within and without took {find_class_distances_end-find_class_distances_start}")
+    print(f"Finding within and without took {find_class_distances_end - find_class_distances_start}")
 
     analysis_end = time.perf_counter()
     analysis_duration = analysis_end - analysis_start

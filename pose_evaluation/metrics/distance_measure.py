@@ -1,11 +1,15 @@
 from typing import Literal, Dict, Any
+
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
+
 from pose_evaluation.metrics.base import Signature
 
 AggregationStrategy = Literal["max", "min", "mean", "sum"]
 
+
 class DistanceMeasureSignature(Signature):
     """Signature for distance measure metrics."""
+
     def __init__(self, name: str, args: Dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_abbr("distance", "dist")
@@ -37,6 +41,7 @@ class DistanceMeasure:
 
 class PowerDistanceSignature(DistanceMeasureSignature):
     """Signature for power distance measures."""
+
     def __init__(self, name: str, args: Dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_signature_and_abbr("order", "ord", args)
@@ -48,12 +53,8 @@ class AggregatedPowerDistance(DistanceMeasure):
     """Aggregated power distance metric using a specified aggregation strategy."""
     _SIGNATURE_TYPE = PowerDistanceSignature
 
-    def __init__(
-        self,
-        order: int = 2,
-        default_distance: float = 0.0,
-        aggregation_strategy: AggregationStrategy = "mean",
-    ) -> None:
+    def __init__(self, order: int = 2, default_distance: float = 0.0,
+                 aggregation_strategy: AggregationStrategy = "mean") -> None:
         """
         Initialize the aggregated power distance metric.
         
@@ -86,9 +87,7 @@ class AggregatedPowerDistance(DistanceMeasure):
             f"Aggregation Strategy {self.aggregation_strategy} not implemented"
         )
 
-    def _calculate_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
+    def _calculate_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
         """
         Compute element-wise distances between hypothesis and reference data.
         

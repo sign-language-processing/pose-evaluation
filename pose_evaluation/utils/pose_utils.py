@@ -1,6 +1,7 @@
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Tuple, Dict, Iterable
-from collections import defaultdict
+
 import numpy as np
 from numpy import ma
 from pose_format import Pose
@@ -10,9 +11,7 @@ def pose_remove_world_landmarks(pose: Pose) -> Pose:
     return pose.remove_components(["POSE_WORLD_LANDMARKS"])
 
 
-def get_component_names_and_points_dict(
-    pose: Pose,
-) -> Tuple[List[str], Dict[str, List[str]]]:
+def get_component_names_and_points_dict(pose: Pose) -> Tuple[List[str], Dict[str, List[str]]]:
     component_names = []
     points_dict = defaultdict(list)
     for component in pose.header.components:
@@ -41,10 +40,8 @@ def load_pose_file(pose_path: Path) -> Pose:
     return pose
 
 
-def reduce_poses_to_intersection(
-    poses: Iterable[Pose],
-) -> List[Pose]:
-    poses = list(poses) # get a list, no need to copy
+def reduce_poses_to_intersection(poses: Iterable[Pose]) -> List[Pose]:
+    poses = list(poses)  # get a list, no need to copy
 
     # look at the first pose
     component_names = {c.name for c in poses[0].header.components}
@@ -78,9 +75,7 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
             padding_tensor = ma.zeros(desired_shape)
             padding_tensor_conf = ma.ones(desired_shape[:-1])
             pose.body.data = ma.concatenate([pose.body.data, padding_tensor], axis=0)
-            pose.body.confidence = ma.concatenate(
-                [pose.body.confidence, padding_tensor_conf]
-            )
+            pose.body.confidence = ma.concatenate([pose.body.confidence, padding_tensor_conf])
     return poses
 
 
