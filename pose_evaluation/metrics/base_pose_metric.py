@@ -15,10 +15,6 @@ class PoseMetricSignature(Signature):
         # self.update_signature_and_abbr("pose_preprocessors", "pre", args)
 
 
-class PoseMetricScore(Score):
-    pass
-
-
 class PoseMetric(BaseMetric[Pose]):
     _SIGNATURE_TYPE = PoseMetricSignature
 
@@ -60,8 +56,8 @@ class PoseMetric(BaseMetric[Pose]):
 
     def score_with_signature(
         self, hypothesis: Pose, reference: Pose, short: bool = False
-    ) -> PoseMetricScore:
-        return PoseMetricScore(
+    ) -> Score:
+        return Score(
             name=self.name,
             score=self.score(hypothesis, reference),
             signature=self.get_signature().format(short=short),

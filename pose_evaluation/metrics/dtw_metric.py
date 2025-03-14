@@ -94,4 +94,4 @@ class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
         hyp_data = hyp_data.reshape(1, -1)  # Adds a new leading dimension)
         ref_data = ref_data.reshape(1, -1)
         assert ref_data.ndim == 2, ref_data.shape
-        return cdist(hyp_data, ref_data, metric=self.metric) # type: ignore "no overloads match" but it works fine
+        return cdist(hyp_data, ref_data, metric=self.metric)  # type: ignore "no overloads match" but it works fine
