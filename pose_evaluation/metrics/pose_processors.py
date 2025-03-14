@@ -13,10 +13,6 @@ from pose_evaluation.utils.pose_utils import (
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 
 
-class PoseProcessorSignature(Signature):
-    pass
-
-
 class PoseProcessor:
     _SIGNATURE_TYPE = Signature
 
