@@ -1,8 +1,7 @@
-from typing import List
+from typing import Any
 from pose_format import Pose
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
 from pose_evaluation.metrics.distance_measure import DistanceMeasure
-from pose_evaluation.metrics.pose_processors import PoseProcessor
 
 
 class DistanceMetric(PoseMetric):
@@ -12,11 +11,10 @@ class DistanceMetric(PoseMetric):
         self,
         name: str,
         distance_measure: DistanceMeasure,
-        pose_preprocessors: List[PoseProcessor] | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(
-            name=name, higher_is_better=False, pose_preprocessors=pose_preprocessors
-        )
+        super().__init__(name=name, higher_is_better=False, **kwargs)
+
         self.distance_measure = distance_measure
 
     def score(self, hypothesis: Pose, reference: Pose) -> float:
