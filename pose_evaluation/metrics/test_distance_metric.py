@@ -14,6 +14,14 @@ def get_poses(
     length2: int,
     conf1: Optional[float] = None,
     conf2: Optional[float] = None,
+    people1: int = 3,
+    people2: int = 3,
+    keypoints1: int = 4,
+    keypoints2: int = 4,
+    coordinate_dimensions1: int = 3,
+    coordinate_dimensions2: int = 3,
+    fill_value1: float = 1.0,
+    fill_value2: float = 0.0,
 ):
     """
     Utility function to generate hypothesis and reference Pose objects for testing.
@@ -27,8 +35,13 @@ def get_poses(
     Returns:
         tuple: A tuple containing (hypothesis, reference) Pose objects.
     """
-    data_tensor = np.full((length1, 3, 4, 3), fill_value=2)
-    zeros_tensor = np.zeros((length2, 3, 4, 3))
+
+    data_tensor = np.full(
+        [length1, people1, keypoints1, coordinate_dimensions1], fill_value=fill_value1
+    )
+    zeros_tensor = np.full(
+        (length2, people2, keypoints2, coordinate_dimensions2), fill_value=fill_value2
+    )
     data_confidence = np.ones(data_tensor.shape[:-1])
     zeros_confidence = np.ones(zeros_tensor.shape[:-1])
 
