@@ -84,7 +84,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             # https://stackoverflow.com/questions/55050717/converting-list-of-tensors-to-tensors-pytorch
             data = torch.stack(data)
 
-        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype)
+        return st_util._convert_to_batch_tensor(data).to(
+            device=self.device, dtype=self.dtype
+        )
 
     def score(
         self,
@@ -123,7 +125,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             hypotheses = self._to_batch_tensor_on_device(hypotheses)
             references = self._to_batch_tensor_on_device(references)
         except RuntimeError as e:
-            raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
+            raise TypeError(
+                f"Inputs must support conversion to device tensors: {e}"
+            ) from e
 
         assert (
             hypotheses.ndim == 2 and references.ndim == 2
@@ -131,7 +135,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 
-    def dot_product(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def dot_product(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Compute the dot product between embeddings.
         Uses sentence_transformers.util.dot_score
@@ -139,14 +145,18 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         # https://stackoverflow.com/questions/73924697/whats-the-difference-between-torch-mm-torch-matmul-and-torch-mul
         return st_util.dot_score(hypotheses, references)
 
-    def euclidean_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def euclidean_similarities(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Returns the negative L2 norm/euclidean distances, which is what sentence-transformers uses for similarities.
         Uses sentence_transformers.util.euclidean_sim
         """
         return st_util.euclidean_sim(hypotheses, references)
 
-    def euclidean_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def euclidean_distances(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Seeing as how sentence-transformers just negates the distances to get "similarities",
         We can re-negate to get them positive again.
@@ -154,7 +164,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         return -self.euclidean_similarities(hypotheses, references)
 
-    def cosine_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def cosine_similarities(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Calculates cosine similarities, which can be thought of as the angle between two embeddings.
         The min value is -1 (least similar/pointing directly away), and the max is 1 (exactly the same angle).
@@ -162,21 +174,27 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         return st_util.cos_sim(hypotheses, references)
 
-    def cosine_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def cosine_distances(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Converts cosine similarities to distances by simply subtracting from 1.
         Max distance is 2, min distance is 0.
         """
         return 1 - self.cosine_similarities(hypotheses, references)
 
-    def manhattan_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def manhattan_similarities(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Get the L1/Manhattan similarities, aka negative distances.
         Uses sentence_transformers.util.manhattan_sim
         """
         return st_util.manhattan_sim(hypotheses, references)
 
-    def manhattan_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
+    def manhattan_distances(
+        self, hypotheses: TensorConvertableType, references: TensorConvertableType
+    ) -> Tensor:
         """
         Convert Manhattan similarities to distances.
         Sentence transformers defines similarity as negative distances.

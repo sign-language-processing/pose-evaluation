@@ -35,10 +35,32 @@ class PoseMetric(BaseMetric[Pose]):
         else:
             self.pose_preprocessors = pose_preprocessors
 
+    def _pose_score(self, hypothesis: Pose, reference: Pose):
+        raise NotImplementedError("Subclasses must implement _pose_score")
+
+    def score(self, hypothesis: Pose, reference: Pose):
+        hypothesis, reference = self.process_poses([hypothesis, reference])
+        return self._pose_score(hypothesis, reference)
+
+    def score_all(
+        self, hypotheses: Sequence[Pose], references: Sequence[Pose], progress_bar=False
+    ) -> List[List[float]]:
+        hyp_len = len(hypotheses)
+        ref_len = len(references)
+
+        all_poses = self.process_poses(list(hypotheses) + list(references))
+
+        # Recover original lists if needed
+        hypotheses = all_poses[:hyp_len]
+        references = all_poses[hyp_len : hyp_len + ref_len]
+        return [
+            [self.score(h, r) for r in references]
+            for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
+        ]
+
     def score_with_signature(
         self, hypothesis: Pose, reference: Pose, short: bool = False
     ) -> PoseMetricScore:
-        hypothesis, reference = self.process_poses([hypothesis, reference])
         return PoseMetricScore(
             name=self.name,
             score=self.score(hypothesis, reference),
@@ -52,18 +74,14 @@ class PoseMetric(BaseMetric[Pose]):
         progress_bar=False,
         short: bool = False,
     ) -> list[list[Score]]:
-        hyp_len = len(hypotheses)
-        ref_len = len(references)
-
-        all_poses = self.process_poses(hypotheses + references)
-
-        # Recover original lists if needed
-        hypotheses = all_poses[:hyp_len]
-        references = all_poses[hyp_len : hyp_len + ref_len]
 
         return [
-            [self.score_with_signature(h, r , short=short) for r in references]
-            for h in tqdm(hypotheses, desc="scoring:", disable=not progress_bar or len(hypotheses) == 1)
+            [self.score_with_signature(h, r, short=short) for r in references]
+            for h in tqdm(
+                hypotheses,
+                desc="scoring:",
+                disable=not progress_bar or len(hypotheses) == 1,
+            )
         ]
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:

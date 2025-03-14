@@ -2,12 +2,17 @@ from pathlib import Path
 from pose_format import Pose
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
-from pose_evaluation.metrics.base import BaseMetric
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
-from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistance
+from pose_evaluation.metrics.base import BaseMetric
+from pose_evaluation.metrics.dtw_metric import (
+    DTWAggregatedPowerDistanceMeasure,
+    DTWAggregatedScipyDistanceMeasure,
+)
 from pose_evaluation.metrics.test_distance_metric import get_poses
-from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
-from pose_evaluation.metrics.pose_processors import ZeroPadShorterPosesProcessor, get_standard_pose_processors
+from pose_evaluation.metrics.pose_processors import (
+    ZeroPadShorterPosesProcessor,
+    get_standard_pose_processors,
+)
 
 if __name__ == "__main__":
     # Define file paths for test pose data
@@ -40,39 +45,56 @@ if __name__ == "__main__":
 
     # Define distance metrics
     mean_l1_metric = DistanceMetric(
-        "mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17)
+        "mean_l1_metric",
+        distance_measure=AggregatedPowerDistance(order=1, default_distance=17),
     )
     metrics = [
-        # BaseMetric("base"),
-        # DistanceMetric("PowerDistanceMetric", AggregatedPowerDistance(2, 1)),
-        # DistanceMetric("AnotherPowerDistanceMetric", AggregatedPowerDistance(1, 10)),
-        # mean_l1_metric,
-        # DistanceMetric(
-        #     "max_l1_metric",
-        #     AggregatedPowerDistance(
-        #         order=1, aggregation_strategy="max", default_distance=0
-        #     ),
-        # ),
-        # DistanceMetric(
-        #     "MeanL2Score",
-        #     AggregatedPowerDistance(
-        #         order=2, aggregation_strategy="mean", default_distance=0
-        #     ),
-        #     pose_preprocessors=[ZeroPadShorterPosesProcessor()]
-        # ),
-        # DistanceMetric(
-        #     "MeanL2Score",
-        #     AggregatedPowerDistance(
-        #         order=2, aggregation_strategy="mean", default_distance=0
-        #     ),
-        # ),
-        # PoseMetric()
+        BaseMetric("base"),
+        DistanceMetric(
+            "PowerDistanceMetric", AggregatedPowerDistance(order=2, default_distance=1)
+        ),
+        DistanceMetric(
+            "AnotherPowerDistanceMetric",
+            AggregatedPowerDistance("A custom name", order=1, default_distance=10),
+        ),
+        mean_l1_metric,
+        DistanceMetric(
+            "max_l1_metric",
+            AggregatedPowerDistance(
+                order=1, aggregation_strategy="max", default_distance=0
+            ),
+        ),
+        DistanceMetric(
+            "MeanL2Score",
+            AggregatedPowerDistance(
+                order=2, aggregation_strategy="mean", default_distance=0
+            ),
+            pose_preprocessors=[ZeroPadShorterPosesProcessor()],
+        ),
+        DistanceMetric(
+            "MeanL2Score",
+            AggregatedPowerDistance(
+                order=2, aggregation_strategy="mean", default_distance=0
+            ),
+        ),
+        PoseMetric(),
         DistanceMetric(
             "DTWPowerDistance",
-            DTWAggregatedPowerDistance(
-                order=2, aggregation_strategy="mean", default_distance=0.0
+            DTWAggregatedPowerDistanceMeasure(
+                aggregation_strategy="mean", default_distance=0.0, order=2
             ),
-            pose_preprocessors=get_standard_pose_processors(zero_pad_shorter=False)
+            pose_preprocessors=get_standard_pose_processors(
+                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+            ),
+        ),
+        DistanceMetric(
+            "DTWScipyDistance",
+            DTWAggregatedScipyDistanceMeasure(
+                aggregation_strategy="mean", default_distance=0.0, metric="sqeuclidean"
+            ),
+            pose_preprocessors=get_standard_pose_processors(
+                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+            ),
         ),
     ]
 
@@ -87,16 +109,22 @@ if __name__ == "__main__":
         print(metric.get_signature().format(short=True))
 
         try:
-            print(f"\nSCORE ALL with Signature (short):")
-            print(metric.score_all_with_signature(hypotheses, references, short=True, progress_bar=True))
+            #
+            print("\nSCORE ALL with Signature (short):")
+            print(
+                metric.score_all_with_signature(
+                    hypotheses, references, short=True, progress_bar=True
+                )
+            )
+
             score = metric.score(poses[0], poses[1])
             print(f"\nSCORE: {score}")
+
             print("\nSCORE With Signature:")
             print(metric.score_with_signature(poses[0], poses[1]))
-            print(f"\nSCORE with Signature (short):")
+
+            print("\nSCORE with Signature (short):")
             print(metric.score_with_signature(poses[0], poses[1], short=True))
-
-
 
         except NotImplementedError:
             print(f"{metric} score not implemented")

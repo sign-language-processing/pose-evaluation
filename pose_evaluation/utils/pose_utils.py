@@ -53,7 +53,9 @@ def reduce_poses_to_intersection(
     points = {c.name: set(c.points) for c in poses[0].header.components}
 
     # remove anything that other poses don't have
-    for pose in tqdm(poses[1:], desc="reduce poses to intersection", disable=not progress):
+    for pose in tqdm(
+        poses[1:], desc="reduce poses to intersection", disable=not progress
+    ):
         component_names.intersection_update({c.name for c in pose.header.components})
         for component in pose.header.components:
             points[component.name].intersection_update(set(component.points))

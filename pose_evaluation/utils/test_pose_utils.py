@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import numpy as np
-import numpy.ma as ma # pylint: disable=consider-using-from-import
+import numpy.ma as ma  # pylint: disable=consider-using-from-import
 
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
@@ -58,7 +58,7 @@ def test_remove_specific_landmarks_mediapipe(
         component_count = len(pose.header.components)
         assert component_count == len(standard_mediapipe_components_dict.keys())
         for component_name in standard_mediapipe_components_dict.keys():
-            pose_with_component_removed =pose.remove_components([str(component_name)])
+            pose_with_component_removed = pose.remove_components([str(component_name)])
             assert component_name not in pose_with_component_removed.header.components
             assert (
                 len(pose_with_component_removed.header.components)
@@ -85,8 +85,18 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
 
 
 def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
-    points_that_should_be_removed = ["LEFT_KNEE", "LEFT_HEEL", "LEFT_FOOT", "LEFT_TOE", "LEFT_FOOT_INDEX",
-                                    "RIGHT_KNEE", "RIGHT_HEEL", "RIGHT_FOOT", "RIGHT_TOE", "RIGHT_FOOT_INDEX",]
+    points_that_should_be_removed = [
+        "LEFT_KNEE",
+        "LEFT_HEEL",
+        "LEFT_FOOT",
+        "LEFT_TOE",
+        "LEFT_FOOT_INDEX",
+        "RIGHT_KNEE",
+        "RIGHT_HEEL",
+        "RIGHT_FOOT",
+        "RIGHT_TOE",
+        "RIGHT_FOOT_INDEX",
+    ]
     for pose in mediapipe_poses_test_data:
         c_names = [c.name for c in pose.header.components]
         assert "POSE_LANDMARKS" in c_names
@@ -104,11 +114,20 @@ def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
             point_names = [point.upper() for point in component.points]
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
-                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
+                    assert (
+                        point_that_should_be_hidden not in point_name
+                    ), f"{component.name}: {point_names}"
 
 
 def test_pose_remove_legs_openpose(fake_openpose_poses):
-    points_that_should_be_removed = ["Hip", "Knee", "Ankle", "BigToe", "SmallToe", "Heel"]
+    points_that_should_be_removed = [
+        "Hip",
+        "Knee",
+        "Ankle",
+        "BigToe",
+        "SmallToe",
+        "Heel",
+    ]
     for pose in fake_openpose_poses:
         pose_with_legs_removed = pose_hide_legs(pose, remove=True)
 
@@ -116,8 +135,9 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
             point_names = list(point for point in component.points)
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
-                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
-
+                    assert (
+                        point_that_should_be_hidden not in point_name
+                    ), f"{component.name}: {point_names}"
 
 
 def test_reduce_pose_components_to_intersection(
@@ -162,9 +182,7 @@ def test_reduce_pose_components_to_intersection(
         pose_with_only_face_and_hands_and_no_wrist.header.total_points()
     )
 
-    reduced_poses = reduce_poses_to_intersection(
-        test_poses_with_one_reduced
-    )
+    reduced_poses = reduce_poses_to_intersection(test_poses_with_one_reduced)
     for reduced_pose in reduced_poses:
         assert len(reduced_pose.header.components) == target_component_count
         assert reduced_pose.header.total_points() == target_point_count
@@ -200,7 +218,9 @@ def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose
 
         assert component_to_drop in original_component_names
         assert point_to_drop in original_points_dict["POSE_LANDMARKS"]
-        reduced_pose = pose.remove_components(component_to_drop, {"POSE_LANDMARKS": [point_to_drop]})
+        reduced_pose = pose.remove_components(
+            component_to_drop, {"POSE_LANDMARKS": [point_to_drop]}
+        )
         new_component_names, new_points_dict = get_component_names_and_points_dict(
             reduced_pose
         )
@@ -227,7 +247,8 @@ def test_detect_format(
         assert len(pose.header.components) == 1
 
         with pytest.raises(
-            ValueError, match="Could not detect pose format, unknown pose header schema with component names"
+            ValueError,
+            match="Could not detect pose format, unknown pose header schema with component names",
         ):
             detect_known_pose_format(pose)
 

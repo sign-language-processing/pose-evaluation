@@ -3,10 +3,9 @@ from typing import Any, List, Union, Iterable, Callable
 from tqdm import tqdm
 
 from pose_format import Pose
-from pose_format.utils.generic import pose_hide_legs
+from pose_format.utils.generic import pose_hide_legs, reduce_holistic
 from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
-    get_face_and_hands_from_pose,
     zero_pad_shorter_poses,
     reduce_poses_to_intersection,
 )
@@ -34,13 +33,16 @@ class PoseProcessor:
         return f"{self.get_signature()}"
 
     def __str__(self) -> str:
-        return f"{self.get_signature()}"
+        return self.get_signature().format()
 
     def process_pose(self, pose: Pose) -> Pose:
-        return pose
+        raise NotImplementedError(f"process_pose not implemented for {self.name}")
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
-        return [self.process_pose(pose) for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)]
+        return [
+            self.process_pose(pose)
+            for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)
+        ]
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)
@@ -97,8 +99,29 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
     def __init__(self) -> None:
         super().__init__(name="zero_pad_shorter_sequence")
 
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose  # intersection with itself
+
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
         return zero_pad_shorter_poses(poses)
+
+
+class ReduceHolisticPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="reduce_holistic")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return reduce_holistic(pose)
+
+
+class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="reduce_holistic")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        pose = pose.copy()
+        pose.body = pose.body.zero_filled()
+        return pose
 
 
 def get_standard_pose_processors(
@@ -106,6 +129,8 @@ def get_standard_pose_processors(
     reduce_poses_to_common_components: bool = True,
     remove_world_landmarks=True,
     remove_legs=True,
+    reduce_holistic_to_face_and_upper_body=False,
+    zero_fill_masked=False,
     zero_pad_shorter=True,
 ) -> List[PoseProcessor]:
     pose_processors = []
@@ -121,6 +146,12 @@ def get_standard_pose_processors(
 
     if remove_legs:
         pose_processors.append(HideLegsPosesProcessor())
+
+    if reduce_holistic_to_face_and_upper_body:
+        pose_processors.append(ReduceHolisticPoseProcessor())
+
+    if zero_fill_masked:
+        pose_processors.append(ZeroFillMaskedValuesPoseProcessor())
 
     if zero_pad_shorter:
         pose_processors.append(ZeroPadShorterPosesProcessor())

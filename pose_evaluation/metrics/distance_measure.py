@@ -4,8 +4,10 @@ from pose_evaluation.metrics.base import Signature
 
 AggregationStrategy = Literal["max", "min", "mean", "sum"]
 
+
 class DistanceMeasureSignature(Signature):
     """Signature for distance measure metrics."""
+
     def __init__(self, name: str, args: Dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_abbr("distance", "dist")
@@ -14,29 +16,36 @@ class DistanceMeasureSignature(Signature):
 
 class DistanceMeasure:
     """Abstract base class for distance measures."""
+
     _SIGNATURE_TYPE = DistanceMeasureSignature
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, default_distance=0.0) -> None:
         self.name = name
+        self.default_distance = default_distance
 
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         """
         Compute the distance between hypothesis and reference data.
-        
+
         This method should be implemented by subclasses.
         """
         raise NotImplementedError
-    
-    def _get_keypoint_trajectories(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray):
+
+    def _get_keypoint_trajectories(
+        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
+    ):
         # frames, persons, keypoint
         for keypoint_idx in range(hyp_data.shape[2]):
-            hyp_trajectory, ref_trajectory =hyp_data[:, 0, keypoint_idx, :], ref_data[:, 0, keypoint_idx, :]
+            hyp_trajectory, ref_trajectory = (
+                hyp_data[:, 0, keypoint_idx, :],
+                ref_data[:, 0, keypoint_idx, :],
+            )
             yield hyp_trajectory, ref_trajectory
 
     def __call__(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         return self.get_distance(hyp_data, ref_data)
-    
-    def _calculate_distances(
+
+    def _calculate_pointwise_distances(
         self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
     ) -> ma.MaskedArray:
         raise NotImplementedError
@@ -48,6 +57,7 @@ class DistanceMeasure:
 
 class PowerDistanceSignature(DistanceMeasureSignature):
     """Signature for power distance measures."""
+
     def __init__(self, name: str, args: Dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_signature_and_abbr("order", "ord", args)
@@ -55,32 +65,20 @@ class PowerDistanceSignature(DistanceMeasureSignature):
         self.update_signature_and_abbr("aggregation_strategy", "agg", args)
 
 
-class AggregatedPowerDistance(DistanceMeasure):
-    """Aggregated power distance metric using a specified aggregation strategy."""
-    _SIGNATURE_TYPE = PowerDistanceSignature
-
+class AggregatedDistanceMeasure(DistanceMeasure):
     def __init__(
         self,
-        order: int = 2,
+        name: str,
         default_distance: float = 0.0,
         aggregation_strategy: AggregationStrategy = "mean",
     ) -> None:
-        """
-        Initialize the aggregated power distance metric.
-        
-        :param order: The exponent to which differences are raised.
-        :param default_distance: The value to fill in for masked entries.
-        :param aggregation_strategy: Strategy to aggregate computed distances.
-        """
-        super().__init__(name="power_distance")
-        self.power = float(order)
-        self.default_distance = default_distance
+        super().__init__(name, default_distance=default_distance)
         self.aggregation_strategy = aggregation_strategy
 
     def _aggregate(self, distances: ma.MaskedArray) -> float:
         """
         Aggregate computed distances using the specified strategy.
-        
+
         :param distances: A masked array of computed distances.
         :return: A single aggregated distance value.
         """
@@ -97,19 +95,51 @@ class AggregatedPowerDistance(DistanceMeasure):
             f"Aggregation Strategy {self.aggregation_strategy} not implemented"
         )
 
-    def _calculate_distances(
+    def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
+        """Compute and aggregate the distance between hypothesis and reference data."""
+        calculated = self._calculate_pointwise_distances(hyp_data, ref_data)
+        return self._aggregate(calculated)
+
+
+class AggregatedPowerDistance(AggregatedDistanceMeasure):
+    """Aggregated power distance metric using a specified aggregation strategy."""
+
+    _SIGNATURE_TYPE = PowerDistanceSignature
+
+    def __init__(
+        self,
+        name="AggregatedPowerDistance",
+        order: int = 2,
+        default_distance: float = 0.0,
+        aggregation_strategy: AggregationStrategy = "mean",
+    ) -> None:
+        """
+        Initialize the aggregated power distance metric.
+
+        :param order: The exponent to which differences are raised.
+        :param default_distance: The value to fill in for masked entries.
+        :param aggregation_strategy: Strategy to aggregate computed distances.
+        """
+        super().__init__(
+            name=name,
+            aggregation_strategy=aggregation_strategy,
+            default_distance=default_distance,
+        )
+        self.power = float(order)
+
+    def _calculate_pointwise_distances(
         self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
     ) -> ma.MaskedArray:
         """
         Compute element-wise distances between hypothesis and reference data.
-        
+
         Steps:
           1. Compute the absolute differences.
           2. Raise the differences to the specified power.
           3. Sum the powered differences along the last axis.
           4. Extract the root corresponding to the power.
           5. Fill masked values with the default distance.
-        
+
         :param hyp_data: Hypothesis data as a masked array.
         :param ref_data: Reference data as a masked array.
         :return: A masked array of computed distances.
@@ -119,8 +149,3 @@ class AggregatedPowerDistance(DistanceMeasure):
         summed_results = ma.sum(raised_to_power, axis=-1, keepdims=True)
         roots = ma.power(summed_results, 1 / self.power)
         return ma.filled(roots, self.default_distance)
-
-    def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
-        """Compute and aggregate the distance between hypothesis and reference data."""
-        calculated = self._calculate_distances(hyp_data, ref_data)
-        return self._aggregate(calculated)

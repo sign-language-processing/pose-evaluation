@@ -72,8 +72,28 @@ class Score:
     def __str__(self):
         return f"{self._signature} = {self.score}"
 
+    def format(
+        self,
+        width: int = 2,
+        score_only: bool = False,
+    ) -> str:
+        d = {
+            "name": self.name,
+            "score": float(f"{self.score:.{width}f}"),
+            "signature": self._signature,
+        }
+
+        sc = f"{self.score:.{width}f}"
+
+        full_score = f"{self._signature}" if self._signature else self.name
+        full_score = f"{full_score} = {sc}"
+
+        if score_only:
+            return sc
+        return full_score
+
     def __repr__(self):
-        return f"Score({super().__repr__()}, signature={repr(self._signature)})"
+        return self.format()
 
 
 class BaseMetric[T]:
@@ -92,7 +112,10 @@ class BaseMetric[T]:
         raise NotImplementedError
 
     def score_with_signature(
-        self, hypothesis: T, reference: T, short: bool = False
+        self,
+        hypothesis: T,
+        reference: T,
+        short: bool = False,
     ) -> Score:
         return Score(
             name=self.name,
@@ -146,7 +169,7 @@ class BaseMetric[T]:
         ]
 
     def __str__(self):
-        return f"{self.get_signature()}"
+        return self.get_signature().format()
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)

@@ -8,8 +8,15 @@ from pose_evaluation.metrics.pose_processors import PoseProcessor
 class DistanceMetric(PoseMetric):
     """Computes the distance between two poses using the provided distance measure."""
 
-    def __init__(self, name: str, distance_measure: DistanceMeasure, pose_preprocessors: List[PoseProcessor] | None = None) -> None:
-        super().__init__(name=name, higher_is_better=False, pose_preprocessors=pose_preprocessors)
+    def __init__(
+        self,
+        name: str,
+        distance_measure: DistanceMeasure,
+        pose_preprocessors: List[PoseProcessor] | None = None,
+    ) -> None:
+        super().__init__(
+            name=name, higher_is_better=False, pose_preprocessors=pose_preprocessors
+        )
         self.distance_measure = distance_measure
 
     def score(self, hypothesis: Pose, reference: Pose) -> float:
