@@ -1,6 +1,6 @@
 from fastdtw import fastdtw
 from scipy.spatial.distance import cdist
-import numpy.ma as ma
+import numpy.ma as ma # pylint: disable=consider-using-from-import
 from tqdm import tqdm
 
 from pose_evaluation.metrics.distance_measure import (

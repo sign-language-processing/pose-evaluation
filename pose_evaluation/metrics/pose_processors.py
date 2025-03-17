@@ -22,8 +22,8 @@ class PoseProcessor:
     def __call__(self, pose_or_poses: Union[Iterable[Pose], Pose]) -> Any:
         if isinstance(pose_or_poses, Iterable):
             return self.process_poses(pose_or_poses)
-        else:
-            return self.process_pose(pose_or_poses)
+
+        return self.process_pose(pose_or_poses)
 
     def __repr__(self) -> str:
         return f"{self.get_signature()}"

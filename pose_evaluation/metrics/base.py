@@ -72,11 +72,6 @@ class Score:
         width: int = 2,
         score_only: bool = False,
     ) -> str:
-        d = {
-            "name": self.name,
-            "score": float(f"{self.score:.{width}f}"),
-            "signature": self._signature,
-        }
 
         sc = f"{self.score:.{width}f}"
 

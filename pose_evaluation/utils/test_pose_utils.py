@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import List, Dict
 
 import numpy as np
-import numpy.ma as ma  # pylint: disable=consider-using-from-import
 
 import pytest
 from pose_format import Pose

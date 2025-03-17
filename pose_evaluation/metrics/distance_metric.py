@@ -18,7 +18,5 @@ class DistanceMetric(PoseMetric):
 
         self.distance_measure = distance_measure
 
-    def score(self, hypothesis: Pose, reference: Pose) -> float:
-        """Calculate the distance score between hypothesis and reference poses."""
-        hypothesis, reference = self.process_poses([hypothesis, reference])
-        return self.distance_measure(hypothesis.body.data, reference.body.data)
+    def _pose_score(self, processed_hypothesis: Pose, processed_reference: Pose) -> float:
+        return self.distance_measure(processed_hypothesis.body.data, processed_reference.body.data)

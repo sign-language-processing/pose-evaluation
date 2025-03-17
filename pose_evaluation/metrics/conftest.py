@@ -5,7 +5,6 @@ import torch
 import numpy as np
 import pytest
 from pose_format import Pose
-import torch
 
 
 @pytest.fixture(scope="session", autouse=True)

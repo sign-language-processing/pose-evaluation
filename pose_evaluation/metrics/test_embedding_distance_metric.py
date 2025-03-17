@@ -432,7 +432,7 @@ def test_score_mixed_input_types(cosine_metric):
     emb2 = torch.rand(768)
 
     all_scores = call_and_call_with_inputs_swapped(emb1, emb2, cosine_metric.score)
-    assert all([isinstance(score, float) for score in all_scores]), "Output should be a float."
+    assert all(isinstance(score, float) for score in all_scores), "Output should be a float."
 
 
 def test_score_all_mixed_input_types(cosine_metric, distance_range_checker, distance_matrix_shape_checker):

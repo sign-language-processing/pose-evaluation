@@ -31,10 +31,11 @@ class PoseMetric(BaseMetric[Pose]):
         else:
             self.pose_preprocessors = pose_preprocessors
 
-    def _pose_score(self, hypothesis: Pose, reference: Pose):
+    def _pose_score(self, processed_hypothesis: Pose, processed_reference: Pose):
         raise NotImplementedError("Subclasses must implement _pose_score")
 
     def score(self, hypothesis: Pose, reference: Pose):
+        """For PoseMetrics, preprocessors are called before scoring."""
         hypothesis, reference = self.process_poses([hypothesis, reference])
         return self._pose_score(hypothesis, reference)
 
