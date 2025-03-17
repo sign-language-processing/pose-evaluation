@@ -23,7 +23,7 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
             aggregation_strategy=aggregation_strategy,
         )
 
-    def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
+    def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray, progress=False) -> float:
         keypoint_count = hyp_data.shape[2]  # Assuming shape: (frames, person, keypoints, xyz)
         traj_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
@@ -31,6 +31,7 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
             enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
             desc="getting dtw distances for trajectories",
             total=keypoint_count,
+            disable=not progress,
         ):
             distance, _ = fastdtw(hyp_traj, ref_traj, dist=self._calculate_pointwise_distances)
             traj_distances[i] = distance  # Store distance in the preallocated array
