@@ -149,7 +149,7 @@ class BaseMetric[T]:
         ]
 
     def __str__(self):
-        return self.get_signature().format()
+        return str(self.get_signature())
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)
