@@ -1,11 +1,12 @@
 from fastdtw import fastdtw
 from scipy.spatial.distance import cdist
-import numpy.ma as ma # pylint: disable=consider-using-from-import
+import numpy.ma as ma  # pylint: disable=consider-using-from-import
 from tqdm import tqdm
 
 from pose_evaluation.metrics.distance_measure import (
     AggregatedDistanceMeasure,
     AggregationStrategy,
+    masked_array_power_distance,
 )
 
 
@@ -56,11 +57,9 @@ class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
         self.power = order
 
     def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
-        diffs = ma.abs(hyp_data - ref_data)
-        raised_to_power = ma.power(diffs, self.power)
-        summed_results = ma.sum(raised_to_power, axis=-1, keepdims=True)
-        roots = ma.power(summed_results, 1 / self.power)
-        return ma.filled(roots, self.default_distance)
+        return masked_array_power_distance(
+            hyp_data=hyp_data, ref_data=ref_data, power=self.power, default_distance=self.default_distance
+        )
 
 
 class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
