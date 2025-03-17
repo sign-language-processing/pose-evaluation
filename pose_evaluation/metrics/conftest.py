@@ -20,9 +20,7 @@ def clean_test_artifacts():
 
 
 @pytest.fixture(name="distance_matrix_shape_checker")
-def fixture_distance_matrix_shape_checker() -> (
-    Callable[[torch.Tensor, torch.Tensor], None]
-):
+def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Tensor], None]:
     def _check_shape(hyp_count: int, ref_count: int, distance_matrix: torch.Tensor):
         expected_shape = torch.Size([hyp_count, ref_count])
         # "line too long"
@@ -38,9 +36,7 @@ def fixture_distance_matrix_shape_checker() -> (
 
 
 @pytest.fixture(name="distance_range_checker")
-def fixture_distance_range_checker() -> (
-    Callable[[Union[torch.Tensor, np.ndarray], float, float], None]
-):
+def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray], float, float], None]:
     def _check_range(
         distances: Union[torch.Tensor, np.ndarray],
         min_val: float = 0,
@@ -51,12 +47,10 @@ def fixture_distance_range_checker() -> (
 
         # Use np.isclose for comparisons with tolerance
         assert (
-            np.isclose(min_distance, min_val, atol=1e-6)
-            or min_val <= min_distance <= max_val
+            np.isclose(min_distance, min_val, atol=1e-6) or min_val <= min_distance <= max_val
         ), f"Minimum distance ({min_distance}) is outside the expected range [{min_val}, {max_val}]"
         assert (
-            np.isclose(max_distance, max_val, atol=1e-6)
-            or min_val <= max_distance <= max_val
+            np.isclose(max_distance, max_val, atol=1e-6) or min_val <= max_distance <= max_val
         ), f"Maximum distance ({max_distance}) is outside the expected range [{min_val}, {max_val}]"
 
     return _check_range
@@ -65,8 +59,5 @@ def fixture_distance_range_checker() -> (
 @pytest.fixture
 def real_pose_files() -> List[Pose]:
     test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data"
-    real_pose_files_list = [
-        Pose.read(test_file.read_bytes())
-        for test_file in test_files_folder.glob("*.pose")
-    ]
+    real_pose_files_list = [Pose.read(test_file.read_bytes()) for test_file in test_files_folder.glob("*.pose")]
     return real_pose_files_list

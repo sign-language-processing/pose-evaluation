@@ -77,7 +77,6 @@ if __name__ == "__main__":
                 remove_legs=False,  # If you want the legs
             ),
         ),
-        
         # Recreating Existing Metrics: Average Position Error/ Mean Joint Error
         # As defined in Ham2Pose,
         # APE is "the average L2 distance between the predicted and the GT pose keypoints across all frames and data samples.
@@ -92,9 +91,13 @@ if __name__ == "__main__":
         DistanceMetric(
             "AveragePositionError",
             AggregatedPowerDistance(order=2, aggregation_strategy="mean", default_distance=0),
-            pose_preprocessors=[NormalizePosesProcessor(), HideLegsPosesProcessor(), ZeroPadShorterPosesProcessor(), ReduceHolisticPoseProcessor()],
+            pose_preprocessors=[
+                NormalizePosesProcessor(),
+                HideLegsPosesProcessor(),
+                ZeroPadShorterPosesProcessor(),
+                ReduceHolisticPoseProcessor(),
+            ],
         ),
-        
         # Recreating Dynamic Time Warping - Mean Joint Error
         # As before, only now we use the Dynamic Time Warping version!
         DistanceMetric(
@@ -104,7 +107,6 @@ if __name__ == "__main__":
                 zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
             ),
         ),
-
         # We can also implement a version that uses scipy distances "cdist"
         # This lets us experiment with e.g. jaccard
         # Options are listed at the documentation for scipy:

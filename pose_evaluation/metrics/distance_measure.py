@@ -33,9 +33,7 @@ class DistanceMeasure:
         """
         raise NotImplementedError
 
-    def _get_keypoint_trajectories(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ):
+    def _get_keypoint_trajectories(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray):
         # frames, persons, keypoint
         for keypoint_idx in range(hyp_data.shape[2]):
             hyp_trajectory, ref_trajectory = (
@@ -47,9 +45,7 @@ class DistanceMeasure:
     def __call__(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         return self.get_distance(hyp_data, ref_data)
 
-    def _calculate_pointwise_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
+    def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
         raise NotImplementedError
 
     def get_signature(self) -> Signature:
@@ -127,9 +123,7 @@ class AggregatedPowerDistance(AggregatedDistanceMeasure):
         )
         self.power = float(order)
 
-    def _calculate_pointwise_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
+    def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
         """
         Compute element-wise distances between hypothesis and reference data.
 

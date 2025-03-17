@@ -7,9 +7,7 @@ from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure
 
 class TestDTWMetricL1(unittest.TestCase):
     def setUp(self):
-        distance_measure = DTWAggregatedPowerDistanceMeasure(
-            order=1, aggregation_strategy="mean", default_distance=0.0
-        )
+        distance_measure = DTWAggregatedPowerDistanceMeasure(order=1, aggregation_strategy="mean", default_distance=0.0)
         self.metric = DistanceMetric(
             name="DTWPowerDistance",
             distance_measure=distance_measure,

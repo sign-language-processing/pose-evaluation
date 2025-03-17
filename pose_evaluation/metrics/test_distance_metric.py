@@ -36,12 +36,8 @@ def get_poses(
         tuple: A tuple containing (hypothesis, reference) Pose objects.
     """
 
-    data_tensor = np.full(
-        [length1, people1, keypoints1, coordinate_dimensions1], fill_value=fill_value1
-    )
-    zeros_tensor = np.full(
-        (length2, people2, keypoints2, coordinate_dimensions2), fill_value=fill_value2
-    )
+    data_tensor = np.full([length1, people1, keypoints1, coordinate_dimensions1], fill_value=fill_value1)
+    zeros_tensor = np.full((length2, people2, keypoints2, coordinate_dimensions2), fill_value=fill_value2)
     data_confidence = np.ones(data_tensor.shape[:-1])
     zeros_confidence = np.ones(zeros_tensor.shape[:-1])
 

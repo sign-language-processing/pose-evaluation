@@ -35,10 +35,7 @@ class PoseProcessor:
         raise NotImplementedError(f"process_pose not implemented for {self.name}")
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
-        return [
-            self.process_pose(pose)
-            for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)
-        ]
+        return [self.process_pose(pose) for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)]
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)
@@ -151,5 +148,8 @@ def get_standard_pose_processors(
 
     if zero_pad_shorter:
         pose_processors.append(ZeroPadShorterPosesProcessor())
+
+    # TODO: prune leading/trailing frames containing "almost all zeros, almost no face, or no hands"
+    # TODO: Focus processor https://github.com/rotem-shalev/Ham2Pose/blob/main/metrics.py#L32-L62
 
     return pose_processors

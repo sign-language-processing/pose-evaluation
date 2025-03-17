@@ -38,14 +38,8 @@ class Signature:
                 nested_signature = value.get_signature()
                 if isinstance(nested_signature, Signature):
                     value = "{" + nested_signature.format(short=short) + "}"
-            elif isinstance(value, list) and all(
-                hasattr(v, "get_signature") for v in value
-            ):
-                value = (
-                    "["
-                    + ",".join(v.get_signature().format(short=short) for v in value)
-                    + "]"
-                )
+            elif isinstance(value, list) and all(hasattr(v, "get_signature") for v in value):
+                value = "[" + ",".join(v.get_signature().format(short=short) for v in value) + "]"
 
             if isinstance(value, bool):
                 value = "yes" if value else "no"
@@ -140,9 +134,7 @@ class BaseMetric[T]:
         scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
         return sum(scores) / len(hypotheses)
 
-    def score_all(
-        self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=False
-    ) -> list[list[float]]:
+    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=False) -> list[list[float]]:
         """Call the score function for each hypothesis-reference pair."""
         return [
             [self.score(h, r) for r in references]

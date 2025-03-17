@@ -23,9 +23,7 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
         )
 
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
-        keypoint_count = hyp_data.shape[
-            2
-        ]  # Assuming shape: (frames, person, keypoints, xyz)
+        keypoint_count = hyp_data.shape[2]  # Assuming shape: (frames, person, keypoints, xyz)
         traj_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
         for i, (hyp_traj, ref_traj) in tqdm(
@@ -33,19 +31,13 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
             desc="getting dtw distances for trajectories",
             total=keypoint_count,
         ):
-            distance, _ = fastdtw(
-                hyp_traj, ref_traj, dist=self._calculate_pointwise_distances
-            )
+            distance, _ = fastdtw(hyp_traj, ref_traj, dist=self._calculate_pointwise_distances)
             traj_distances[i] = distance  # Store distance in the preallocated array
         traj_distances = ma.array(traj_distances)
         return self._aggregate(traj_distances)
 
-    def _calculate_pointwise_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
-        raise NotImplementedError(
-            "_calculate_pointwise_distances must be a callable that can be passed to fastdtw"
-        )
+    def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
+        raise NotImplementedError("_calculate_pointwise_distances must be a callable that can be passed to fastdtw")
 
 
 class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
@@ -63,9 +55,7 @@ class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
         )
         self.power = order
 
-    def _calculate_pointwise_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
+    def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
         diffs = ma.abs(hyp_data - ref_data)
         raised_to_power = ma.power(diffs, self.power)
         summed_results = ma.sum(raised_to_power, axis=-1, keepdims=True)
@@ -88,9 +78,7 @@ class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
         )
         self.metric = metric
 
-    def _calculate_pointwise_distances(
-        self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray
-    ) -> ma.MaskedArray:
+    def _calculate_pointwise_distances(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> ma.MaskedArray:
         hyp_data = hyp_data.reshape(1, -1)  # Adds a new leading dimension)
         ref_data = ref_data.reshape(1, -1)
         assert ref_data.ndim == 2, ref_data.shape

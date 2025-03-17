@@ -54,9 +54,7 @@ class PoseMetric(BaseMetric[Pose]):
             for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
         ]
 
-    def score_with_signature(
-        self, hypothesis: Pose, reference: Pose, short: bool = False
-    ) -> Score:
+    def score_with_signature(self, hypothesis: Pose, reference: Pose, short: bool = False) -> Score:
         return Score(
             name=self.name,
             score=self.score(hypothesis, reference),
@@ -82,9 +80,7 @@ class PoseMetric(BaseMetric[Pose]):
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
         poses = list(poses)
-        for preprocessor in tqdm(
-            self.pose_preprocessors, desc="Preprocessing Poses", disable=not progress
-        ):
+        for preprocessor in tqdm(self.pose_preprocessors, desc="Preprocessing Poses", disable=not progress):
             preprocessor = cast(PoseProcessor, preprocessor)
             poses = preprocessor.process_poses(poses, progress=progress)
         return poses

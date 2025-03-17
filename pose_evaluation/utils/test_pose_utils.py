@@ -105,9 +105,7 @@ def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
             point_names = [point.upper() for point in component.points]
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
-                    assert (
-                        point_that_should_be_hidden not in point_name
-                    ), f"{component.name}: {point_names}"
+                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
 def test_pose_remove_legs_openpose(fake_openpose_poses):
@@ -126,9 +124,7 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
             point_names = list(point for point in component.points)
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
-                    assert (
-                        point_that_should_be_hidden not in point_name
-                    ), f"{component.name}: {point_names}"
+                    assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
 def test_reduce_pose_components_to_intersection(
@@ -190,12 +186,8 @@ def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose
 
         assert component_to_drop in original_component_names
         assert point_to_drop in original_points_dict["POSE_LANDMARKS"]
-        reduced_pose = pose.remove_components(
-            component_to_drop, {"POSE_LANDMARKS": [point_to_drop]}
-        )
-        new_component_names, new_points_dict = get_component_names_and_points_dict(
-            reduced_pose
-        )
+        reduced_pose = pose.remove_components(component_to_drop, {"POSE_LANDMARKS": [point_to_drop]})
+        new_component_names, new_points_dict = get_component_names_and_points_dict(reduced_pose)
         assert component_to_drop not in new_component_names
         assert point_to_drop not in new_points_dict["POSE_LANDMARKS"]
 

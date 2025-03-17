@@ -42,9 +42,7 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
 
     # Step 1: Create a mapping of numerical IDs to .npy files
     map_start = time.perf_counter()
-    embeddings_map = {
-        npy_file.stem.split("-")[0]: npy_file for npy_file in emb_dir.glob("*.npy")
-    }
+    embeddings_map = {npy_file.stem.split("-")[0]: npy_file for npy_file in emb_dir.glob("*.npy")}
     map_end = time.perf_counter()
     print(f"Creating embeddings map took {map_end - map_start:.4f} seconds")
 
@@ -109,8 +107,7 @@ def generate_synthetic_data(num_items, num_classes, num_items_per_class=4):
     random.shuffle(indices)
 
     classes = {
-        f"CLASS_{i}": torch.tensor([indices.pop() for _ in range(num_items_per_class)])
-        for i in range(num_classes)
+        f"CLASS_{i}": torch.tensor([indices.pop() for _ in range(num_items_per_class)]) for i in range(num_classes)
     }
     # Assign intra-class distances
     mean_values_by_class = {}
@@ -130,21 +127,15 @@ def calculate_class_means(gloss_indices, scores):
     class_means_by_gloss = {}
     all_indices = torch.arange(scores.size(0), dtype=int)
 
-    for gloss, indices in tqdm(
-        gloss_indices.items(), desc="Finding mean values by gloss"
-    ):
+    for gloss, indices in tqdm(gloss_indices.items(), desc="Finding mean values by gloss"):
         indices = torch.LongTensor(indices)
         class_means_by_gloss[gloss] = {}
-        within_class_mean = calculate_mean_distances(
-            scores, indices, indices, exclude_self=True
-        )
+        within_class_mean = calculate_mean_distances(scores, indices, indices, exclude_self=True)
 
         class_means_by_gloss[gloss]["in_class"] = within_class_mean
 
         complement_indices = all_indices[~torch.isin(all_indices, indices)]
-        without_class_mean = calculate_mean_distances(
-            scores, indices, complement_indices
-        )
+        without_class_mean = calculate_mean_distances(scores, indices, complement_indices)
         class_means_by_gloss[gloss]["out_of_class"] = without_class_mean
 
     return class_means_by_gloss
@@ -175,9 +166,7 @@ def calculate_class_means(gloss_indices, scores):
 #    return within_class_means_by_gloss
 
 
-def evaluate_signclip(
-    emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"
-):
+def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"):
     """
     Evaluate SignCLIP embeddings using score_all.
 
@@ -204,9 +193,7 @@ def evaluate_signclip(
 
     # Step 3: Filter out rows without embeddings
     filter_start = time.perf_counter()
-    items_with_embeddings_df = split_df.dropna(subset=["embedding"]).reset_index(
-        drop=True
-    )
+    items_with_embeddings_df = split_df.dropna(subset=["embedding"]).reset_index(drop=True)
     embeddings = items_with_embeddings_df["embedding"].tolist()
     filter_end = time.perf_counter()
     print(f"Filtering embeddings took {filter_end - filter_start:.4f} seconds")
@@ -243,9 +230,7 @@ def evaluate_signclip(
     print(f"We have a vocabulary of {len(unique_glosses)} glosses")
     gloss_indices = {}
     for gloss in items_with_embeddings_df["Gloss"].unique():
-        gloss_indices[gloss] = items_with_embeddings_df.index[
-            items_with_embeddings_df["Gloss"] == gloss
-        ].tolist()
+        gloss_indices[gloss] = items_with_embeddings_df.index[items_with_embeddings_df["Gloss"] == gloss].tolist()
 
     for gloss, indices in list(gloss_indices.items())[:10]:
         print(f"Here are the {len(indices)} indices for {gloss}:{indices}")
@@ -277,18 +262,14 @@ def evaluate_signclip(
     # Step 8: Save the scores and files to a compressed file
 
     save_start = time.perf_counter()
-    class_means_json = out_path.with_name(f"{out_path.stem}_class_means").with_suffix(
-        ".json"
-    )
+    class_means_json = out_path.with_name(f"{out_path.stem}_class_means").with_suffix(".json")
     with open(class_means_json, "w") as f:
         print(f"Writing class means to {f}")
         json.dump(class_means, f)
     np.savez(out_path, scores=scores, files=files)
     save_end = time.perf_counter()
     print(f"Saving scores and files took {save_end - save_start:.4f} seconds")
-    print(
-        f"Scores of shape {scores.shape} with files list of length {len(files)} saved to {out_path}"
-    )
+    print(f"Scores of shape {scores.shape} with files list of length {len(files)} saved to {out_path}")
 
     # Step 9: Read back the saved scores
     read_start = time.perf_counter()
@@ -341,9 +322,7 @@ def main():
 
     output_file = args.out_path
     if output_file is None:
-        output_file = Path(f"signclip_scores_{args.split_file.name}").with_suffix(
-            ".npz"
-        )
+        output_file = Path(f"signclip_scores_{args.split_file.name}").with_suffix(".npz")
 
     if output_file.suffix != ".npz":
         output_file = Path(f"{output_file}.npz")
