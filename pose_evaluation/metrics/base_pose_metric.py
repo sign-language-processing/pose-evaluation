@@ -74,7 +74,7 @@ class PoseMetric(BaseMetric[Pose]):
             [self.score_with_signature(h, r, short=short) for r in references]
             for h in tqdm(
                 hypotheses,
-                desc="scoring:",
+                desc=f"{self.name} scoring",
                 disable=not progress_bar or len(hypotheses) == 1,
             )
         ]
