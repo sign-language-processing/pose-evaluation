@@ -62,10 +62,10 @@ class Score:
     def __init__(self, name: str, score: float, signature: str) -> None:
         self.name = name
         self.score = score
-        self._signature = signature
+        self.signature = signature
 
     def __str__(self):
-        return f"{self._signature} = {self.score}"
+        return f"{self.signature} = {self.score}"
 
     def format(
         self,
@@ -75,7 +75,7 @@ class Score:
 
         sc = f"{self.score:.{width}f}"
 
-        full_score = f"{self._signature}" if self._signature else self.name
+        full_score = f"{self.signature}" if self.signature else self.name
         full_score = f"{full_score} = {sc}"
 
         if score_only:
