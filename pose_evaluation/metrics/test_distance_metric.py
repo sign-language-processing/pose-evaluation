@@ -88,9 +88,7 @@ class TestDistanceMetricL2(unittest.TestCase):
         self.default_distance = 17
         self.metric = DistanceMetric(
             "l2_metric",
-            distance_measure=AggregatedPowerDistance(
-                order=2, default_distance=self.default_distance
-            ),
+            distance_measure=AggregatedPowerDistance(order=2, default_distance=self.default_distance),
         )
 
     def _check_against_expected(self, hypothesis, reference, expected):
@@ -105,9 +103,7 @@ class TestDistanceMetricL2(unittest.TestCase):
 
     def test_score_equal_length_one_masked(self):
         hypothesis, reference = get_poses(2, 2, conf1=0.0)
-        self._check_against_expected(
-            hypothesis, reference, expected=self.default_distance
-        )
+        self._check_against_expected(hypothesis, reference, expected=self.default_distance)
 
     # TODO: Add tests for other aggregation strategies and power values
 

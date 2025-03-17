@@ -1,5 +1,7 @@
 from typing import Literal, Dict, Any
+
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
+
 from pose_evaluation.metrics.base import Signature
 
 AggregationStrategy = Literal["max", "min", "mean", "sum"]
@@ -91,9 +93,7 @@ class AggregatedDistanceMeasure(DistanceMeasure):
         if self.aggregation_strategy in aggregation_funcs:
             return aggregation_funcs[self.aggregation_strategy]()
 
-        raise NotImplementedError(
-            f"Aggregation Strategy {self.aggregation_strategy} not implemented"
-        )
+        raise NotImplementedError(f"Aggregation Strategy {self.aggregation_strategy} not implemented")
 
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         """Compute and aggregate the distance between hypothesis and reference data."""

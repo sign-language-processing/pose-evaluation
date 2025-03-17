@@ -1,5 +1,5 @@
-import json
 import copy
+import json
 from pathlib import Path
 from typing import List, Dict
 
@@ -24,9 +24,7 @@ def mediapipe_poses_test_data_paths() -> List[Path]:
 
 @pytest.fixture(scope="function")
 def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:
-    original_poses = [
-        load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths
-    ]
+    original_poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
     # I ran into issues where if one test would modify a Pose, it would affect other tests.
     # specifically, pose.header.components[0].name = unsupported_component_name in test_detect_format
     # this ensures we get a fresh object each time.

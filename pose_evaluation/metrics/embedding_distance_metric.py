@@ -1,14 +1,13 @@
-from typing import Literal, List, Union
 import logging
+from typing import Literal, List, Union
 
+import numpy as np
 import torch
+from sentence_transformers import util as st_util
 from torch import Tensor
 from torch.types import Number
-import numpy as np
-from sentence_transformers import util as st_util
 
 from pose_evaluation.metrics.base_embedding_metric import EmbeddingMetric
-
 
 # Useful reference: https://github.com/UKPLab/sentence-transformers/blob/master/sentence_transformers/util.py#L31
 # * Helper functions such as batch_to_device, _convert_to_tensor, _convert_to_batch, _convert_to_batch_tensor
@@ -88,11 +87,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             device=self.device, dtype=self.dtype
         )
 
-    def score(
-        self,
-        hypothesis: TensorConvertableType,
-        reference: TensorConvertableType,
-    ) -> Number:
+    def score(self, hypothesis: TensorConvertableType, reference: TensorConvertableType) -> Number:
         """
         Compute the distance between two embeddings.
 

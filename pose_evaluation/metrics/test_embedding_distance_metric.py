@@ -1,13 +1,14 @@
 import itertools
+import logging
 from pathlib import Path
 from typing import List, Callable, Tuple
-import logging
-import pytest
-import numpy as np
-import matplotlib.pyplot as plt
-import torch
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+import torch
+
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 # TODO: many fixes. Including the fact that we test cosine but not Euclidean,
 
@@ -382,11 +383,7 @@ def test_score_ndarray_input(cosine_metric):
     assert isinstance(score, float), "Output should be a float."
 
 
-def test_score_all_list_of_lists_of_floats(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_lists_of_floats(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Does a 2D list of floats work?"""
     hyps = [[np.random.rand() for _ in range(768)] for _ in range(5)]
     refs = [[np.random.rand() for _ in range(768)] for _ in range(5)]
@@ -421,11 +418,7 @@ def test_score_all_list_of_tensor_input(
     )
 
 
-def test_score_all_list_of_ndarray_input(
-    cosine_metric,
-    distance_range_checker,
-    distance_matrix_shape_checker,
-):
+def test_score_all_list_of_ndarray_input(cosine_metric, distance_range_checker, distance_matrix_shape_checker):
     """Test score_all function with List of np.ndarray inputs."""
     hyps = [np.random.rand(768) for _ in range(5)]
     refs = [np.random.rand(768) for _ in range(5)]
