@@ -8,6 +8,8 @@ from pose_format.numpy import NumPyPoseBody
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 
+from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
+
 
 def get_poses(
     length1: int,
@@ -66,11 +68,21 @@ class TestDistanceMetricMeanL1(unittest.TestCase):
         self.metric = DistanceMetric(
             "mean_l1_metric",
             distance_measure=AggregatedPowerDistance(order=1, default_distance=0),
+            # preprocessors that won't crash
+            pose_preprocessors=get_standard_pose_processors(
+                normalize_poses=False,
+                remove_world_landmarks=False,
+                remove_legs=False,
+                reduce_poses_to_common_components=False,
+            ),
         )
 
     def test_score_equal_length(self):
-        hypothesis, reference = get_poses(2, 2)
-        expected_distance = 6  # Sum of absolute differences: 2 + 2 + 2
+        hypothesis, reference = get_poses(3, 3)
+
+        # each pointwise distance is 3 (1+1+1)
+        # Since they're all the same, the mean is also 3
+        expected_distance = 3
 
         score = self.metric.score(hypothesis, reference)
         self.assertIsInstance(score, float)
@@ -85,6 +97,13 @@ class TestDistanceMetricL2(unittest.TestCase):
         self.metric = DistanceMetric(
             "l2_metric",
             distance_measure=AggregatedPowerDistance(order=2, default_distance=self.default_distance),
+            # preprocessors that won't crash
+            pose_preprocessors=get_standard_pose_processors(
+                normalize_poses=False,
+                remove_world_landmarks=False,
+                remove_legs=False,
+                reduce_poses_to_common_components=False,
+            ),
         )
 
     def _check_against_expected(self, hypothesis, reference, expected):
@@ -93,8 +112,10 @@ class TestDistanceMetricL2(unittest.TestCase):
         self.assertAlmostEqual(score, expected)
 
     def test_score_equal_length(self):
-        hypothesis, reference = get_poses(2, 2)
-        expected_distance = np.sqrt(2**2 + 2**2 + 2**2)  # sqrt(12)
+        hypothesis, reference = get_poses(3, 3)
+        # pointwise distance is sqrt((1-0)**2 + (1-0)**2 + (1-0)**2) = sqrt(3)
+        # Every pointwise distance is the same, so the mean is also 3.
+        expected_distance = np.sqrt(3)
         self._check_against_expected(hypothesis, reference, expected=expected_distance)
 
     def test_score_equal_length_one_masked(self):
