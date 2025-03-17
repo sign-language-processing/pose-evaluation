@@ -26,7 +26,7 @@ class PoseProcessor:
         return self.process_pose(pose_or_poses)
 
     def __repr__(self) -> str:
-        return f"{self.get_signature()}"
+        return str(self.get_signature())
 
     def __str__(self) -> str:
         return self.get_signature().format()
