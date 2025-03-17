@@ -124,6 +124,13 @@ if __name__ == "__main__":
     for metric in metrics:
         print("*" * 10)
         print(metric.name)
+
+        print("\nMETRIC __str__: ")
+        print(str(metric))
+
+        print("\nMETRIC to repr: ")
+        print(repr(metric))
+
         print("\nSIGNATURE: ")
         print(metric.get_signature().format())
 
