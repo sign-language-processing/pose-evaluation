@@ -117,7 +117,7 @@ class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
         return pose
 
 
-def get_standard_pose_processors(
+def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     normalize_poses: bool = True,
     reduce_poses_to_common_components: bool = True,
     remove_world_landmarks=True,

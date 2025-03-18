@@ -11,7 +11,7 @@ from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
 
 
-def get_poses(
+def get_poses(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     length1: int,
     length2: int,
     conf1: Optional[float] = None,

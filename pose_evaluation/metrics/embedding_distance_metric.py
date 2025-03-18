@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, List, Union
+from typing import Literal, List, Optional, Union
 
 import numpy as np
 import torch
@@ -28,13 +28,13 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     def __init__(
         self,
         kind: ValidDistanceKinds = "cosine",
-        device: Union[torch.device, str] = None,
+        device: Optional[Union[torch.device, str]] = None,
         dtype=None,
     ):
         """
         Args:
             kind (ValidDistanceKinds): The type of distance metric, e.g. "cosine", or "euclidean".
-            device (Union[torch.device, str]): The device to use for computation.
+            device:The device to use for computation.
                 If None, automatically detects.
             dtype (torch.dtype): The data type to use for tensors.
                 If None, uses torch.get_default_dtype()
@@ -83,7 +83,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             # https://stackoverflow.com/questions/55050717/converting-list-of-tensors-to-tensors-pytorch
             data = torch.stack(data)
 
-        return st_util._convert_to_batch_tensor(data).to(device=self.device, dtype=self.dtype)
+        return st_util._convert_to_batch_tensor(data).to(  # pylint: disable=protected-access
+            device=self.device, dtype=self.dtype
+        )
 
     def score(self, hypothesis: TensorConvertableType, reference: TensorConvertableType) -> Number:
         """
