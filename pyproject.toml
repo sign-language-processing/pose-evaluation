@@ -20,6 +20,8 @@ dependencies = [
     # For segment similarity
     "sign_language_segmentation @ git+https://github.com/sign-language-processing/segmentation",
     "fastdtw",
+    # alternative to fastdtw
+    "dtaidistance",
 ]
 
 [project.optional-dependencies]
