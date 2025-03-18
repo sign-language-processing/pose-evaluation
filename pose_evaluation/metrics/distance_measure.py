@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Literal, Dict, Any
 
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
@@ -16,7 +17,7 @@ class DistanceMeasureSignature(Signature):
         self.update_abbr("power", "pow")
 
 
-class DistanceMeasure:
+class DistanceMeasure(ABC):
     """Abstract base class for distance measures."""
 
     _SIGNATURE_TYPE = DistanceMeasureSignature
@@ -25,6 +26,7 @@ class DistanceMeasure:
         self.name = name
         self.default_distance = default_distance
 
+    @abstractmethod
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
         """
         Compute the distance between hypothesis and reference data.
