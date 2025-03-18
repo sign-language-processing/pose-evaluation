@@ -2,9 +2,7 @@ from pathlib import Path
 
 from pose_format import Pose
 
-from pose_evaluation.metrics.base import BaseMetric
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
-from pose_evaluation.metrics.base_pose_metric import PoseMetric
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.dtw_metric import (
     DTWAggregatedPowerDistanceMeasure,
@@ -44,12 +42,21 @@ if __name__ == "__main__":
     hypotheses = [pose.copy() for pose in poses]
     references = [pose.copy() for pose in poses]
 
+    #############################
+    # Abstract classes:
+
+    # BaseMetric does not actually have score() function
+    # base_metric = BaseMetric("base")
+
+    # PoseMetric calls preprocessors before scoring,
+    # It is also an abstract class
+    # PoseMetric("pose base"),
+
+    # Segments first, also abstract.
+    # SegmentedPoseMetric("SegmentedMetric")
+
     # Define distance metrics
     metrics = [
-        # BaseMetric does not actually have score() function, and will give you a NotImplementedError
-        BaseMetric("base"),
-        # PoseMetric calls preprocessors before scoring, and is also an abstract class
-        PoseMetric("pose base"),
         # a DistanceMetric uses a DistanceMeasure to calculate distances between two Poses
         # This one is effectively (normalized) Average Position Error (APE)
         # as it by default will run zero-padding of the shorter pose, and normalization,
@@ -79,9 +86,10 @@ if __name__ == "__main__":
         ),
         # Recreating Existing Metrics: Average Position Error/ Mean Joint Error
         # As defined in Ham2Pose,
-        # APE is "the average L2 distance between the predicted and the GT pose keypoints across all frames and data samples.
-        # Since it compares absolute positions, it is sensitive to different body shapes and slight changes in timing or
-        # position of the performed movement"
+        # APE is "the average L2 distance between the predicted and the GT pose keypoints
+        # across all frames and data samples. Since it compares absolute positions,
+        # it is sensitive to different body shapes and slight changes
+        # in timing or position of the performed movement"
         # So we:
         # - Select AggregatedPowerDistance measure
         # - set the order to 2 (Euclidean distance)

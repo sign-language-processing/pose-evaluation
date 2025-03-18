@@ -1,7 +1,9 @@
-# pylint: disable=undefined-variable
-from typing import Any, Callable, Sequence
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Generic, Sequence, TypeVar
 
 from tqdm import tqdm
+
+T = TypeVar("T")
 
 
 class Signature:
@@ -86,7 +88,7 @@ class Score:
         return self.format()
 
 
-class BaseMetric[T]:
+class BaseMetric(ABC, Generic[T]):  # Ensure it extends ABC
     """Base class for all metrics."""
 
     _SIGNATURE_TYPE = Signature
@@ -98,6 +100,7 @@ class BaseMetric[T]:
     def __call__(self, hypothesis: T, reference: T) -> float:
         return self.score(hypothesis, reference)
 
+    @abstractmethod
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
 

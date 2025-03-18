@@ -1,15 +1,16 @@
+from abc import ABC
 from importlib import resources
 
 import numpy as np
 from pose_format import Pose
 from scipy.optimize import linear_sum_assignment
-from sign_language_segmentation.bin import load_model, predict, process_pose
+from sign_language_segmentation.bin import load_model, predict
 from sign_language_segmentation.src.utils.probs_to_segments import probs_to_segments
 
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
 
 
-class SegmentedPoseMetric(PoseMetric):
+class SegmentedPoseMetric(PoseMetric, ABC):
     def __init__(self, isolated_metric: PoseMetric):
         super().__init__("SegmentedPoseMetric", higher_is_better=isolated_metric.higher_is_better)
 

@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Iterable, List, Sequence, cast, Union
 from tqdm import tqdm
 
@@ -15,7 +16,7 @@ class PoseMetricSignature(Signature):
         # self.update_signature_and_abbr("pose_preprocessors", "pre", args)
 
 
-class PoseMetric(BaseMetric[Pose]):
+class PoseMetric(BaseMetric[Pose], ABC):
     _SIGNATURE_TYPE = PoseMetricSignature
 
     def __init__(
@@ -31,6 +32,7 @@ class PoseMetric(BaseMetric[Pose]):
         else:
             self.pose_preprocessors = pose_preprocessors
 
+    @abstractmethod
     def _pose_score(self, processed_hypothesis: Pose, processed_reference: Pose):
         raise NotImplementedError("Subclasses must implement _pose_score")
 
