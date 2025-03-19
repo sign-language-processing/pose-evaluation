@@ -12,6 +12,7 @@ from pose_format.utils.openpose_135 import (
 
 from pose_evaluation.utils.pose_utils import load_pose_file
 
+
 utils_test_data_dir = Path(__file__).parent / "test" / "test_data"
 
 
@@ -22,7 +23,7 @@ def mediapipe_poses_test_data_paths() -> List[Path]:
 
 
 @pytest.fixture(scope="function")
-def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:
+def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:  # pylint: disable=redefined-outer-name
     original_poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
     # I ran into issues where if one test would modify a Pose, it would affect other tests.
     # specifically, pose.header.components[0].name = unsupported_component_name in test_detect_format

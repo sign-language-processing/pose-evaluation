@@ -1,7 +1,9 @@
-# pylint: disable=undefined-variable
-from typing import Any, Callable, Sequence
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Generic, Sequence, TypeVar
 
 from tqdm import tqdm
+
+T = TypeVar("T")
 
 
 class Signature:
@@ -21,7 +23,6 @@ class Signature:
 
     def update_signature_and_abbr(self, key: str, abbr: str, args: dict):
         self.update_abbr(key, abbr)
-
         self.signature_info.update({key: args.get(key, None)})
 
     def format(self, short: bool = False) -> str:
@@ -39,6 +40,9 @@ class Signature:
                 nested_signature = value.get_signature()
                 if isinstance(nested_signature, Signature):
                     value = "{" + nested_signature.format(short=short) + "}"
+            elif isinstance(value, list) and all(hasattr(v, "get_signature") for v in value):
+                value = "[" + ",".join(v.get_signature().format(short=short) for v in value) + "]"
+
             if isinstance(value, bool):
                 value = "yes" if value else "no"
             if isinstance(value, Callable):
@@ -60,16 +64,31 @@ class Score:
     def __init__(self, name: str, score: float, signature: str) -> None:
         self.name = name
         self.score = score
-        self._signature = signature
+        self.signature = signature
 
     def __str__(self):
-        return f"{self._signature} = {self.score}"
+        return f"{self.signature} = {self.score}"
+
+    def format(
+        self,
+        width: int = 2,
+        score_only: bool = False,
+    ) -> str:
+
+        sc = f"{self.score:.{width}f}"
+
+        full_score = f"{self.signature}" if self.signature else self.name
+        full_score = f"{full_score} = {sc}"
+
+        if score_only:
+            return sc
+        return full_score
 
     def __repr__(self):
-        return f"Score({super().__repr__()}, signature={repr(self._signature)})"
+        return self.format()
 
 
-class BaseMetric[T]:
+class BaseMetric(ABC, Generic[T]):  # Ensure it extends ABC
     """Base class for all metrics."""
 
     _SIGNATURE_TYPE = Signature
@@ -81,10 +100,16 @@ class BaseMetric[T]:
     def __call__(self, hypothesis: T, reference: T) -> float:
         return self.score(hypothesis, reference)
 
+    @abstractmethod
     def score(self, hypothesis: T, reference: T) -> float:
         raise NotImplementedError
 
-    def score_with_signature(self, hypothesis: T, reference: T, short: bool = False) -> Score:
+    def score_with_signature(
+        self,
+        hypothesis: T,
+        reference: T,
+        short: bool = False,
+    ) -> Score:
         return Score(
             name=self.name,
             score=self.score(hypothesis, reference),
@@ -107,15 +132,27 @@ class BaseMetric[T]:
         scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
         return sum(scores) / len(hypotheses)
 
-    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=True) -> list[list[float]]:
+    def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=False) -> list[list[float]]:
         """Call the score function for each hypothesis-reference pair."""
         return [
             [self.score(h, r) for r in references]
             for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
         ]
 
+    def score_all_with_signature(
+        self,
+        hypotheses: Sequence[T],
+        references: Sequence[T],
+        progress_bar=False,
+        short: bool = False,
+    ) -> list[list[Score]]:
+        return [
+            [self.score_with_signature(h, r, short=short) for r in references]
+            for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
+        ]
+
     def __str__(self):
-        return self.name
+        return str(self.get_signature())
 
     def get_signature(self) -> Signature:
         return self._SIGNATURE_TYPE(self.name, self.__dict__)

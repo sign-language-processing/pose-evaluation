@@ -2,11 +2,20 @@ from pathlib import Path
 
 from pose_format import Pose
 
-from pose_evaluation.metrics.base import BaseMetric
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
 from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.metrics.dtw_metric import (
+    DTWAggregatedPowerDistanceMeasure,
+    DTWAggregatedScipyDistanceMeasure,
+)
 from pose_evaluation.metrics.test_distance_metric import get_poses
-from pose_evaluation.utils.pose_utils import zero_pad_shorter_poses
+from pose_evaluation.metrics.pose_processors import (
+    NormalizePosesProcessor,
+    ZeroPadShorterPosesProcessor,
+    HideLegsPosesProcessor,
+    ReduceHolisticPoseProcessor,
+    get_standard_pose_processors,
+)
 
 if __name__ == "__main__":
     # Define file paths for test pose data
@@ -16,7 +25,8 @@ if __name__ == "__main__":
 
     # Choose whether to load real files or generate test poses
     # They have different lengths, and so some metrics will crash!
-    # Change to False to generate fake poses with known distances, e.g. all 0 and all 1
+    # Metrics with ZeroPadShorterPosesProcessor, DTWMetrics are fine.
+    # Change to False to generate fake poses with known distances, e.g. all 0 and all 1\
     USE_REAL_FILES = True
 
     if USE_REAL_FILES:
@@ -24,45 +34,129 @@ if __name__ == "__main__":
             Pose.read(hypothesis_file.read_bytes()),
             Pose.read(reference_file.read_bytes()),
         ]
-        # TODO: add PosePreprocessors to PoseDistanceMetrics, with their own signatures
-        poses = zero_pad_shorter_poses(poses)
 
     else:
         hypothesis, reference = get_poses(2, 2, conf1=1, conf2=1)
         poses = [hypothesis, reference]
 
+    hypotheses = [pose.copy() for pose in poses]
+    references = [pose.copy() for pose in poses]
+
+    #############################
+    # Abstract classes:
+
+    # BaseMetric does not actually have score() function
+    # base_metric = BaseMetric("base")
+
+    # PoseMetric calls preprocessors before scoring,
+    # It is also an abstract class
+    # PoseMetric("pose base"),
+
+    # Segments first, also abstract.
+    # SegmentedPoseMetric("SegmentedMetric")
+
     # Define distance metrics
-    mean_l1_metric = DistanceMetric("mean_l1_metric", distance_measure=AggregatedPowerDistance(1, 17))
     metrics = [
-        BaseMetric("base"),
-        DistanceMetric("PowerDistanceMetric", AggregatedPowerDistance(2, 1)),
-        DistanceMetric("AnotherPowerDistanceMetric", AggregatedPowerDistance(1, 10)),
-        mean_l1_metric,
+        # a DistanceMetric uses a DistanceMeasure to calculate distances between two Poses
+        # This one is effectively (normalized) Average Position Error (APE)
+        # as it by default will run zero-padding of the shorter pose, and normalization,
+        # and AggregatedPowerDistance does mean absolute (euclidean) distances by default.
         DistanceMetric(
-            "max_l1_metric",
-            AggregatedPowerDistance(order=1, aggregation_strategy="max", default_distance=0),
+            "NormalizedAveragePositionError",
+            AggregatedPowerDistance(),  #
         ),
+        # Customizing Distances
+        # Distance Measures have signatures as well.
+        # You can set options on the DistanceMeasure and they will be reflected in the signature.
+        # This one would be distance_measure:{power_distance|pow:1.0|dflt:1.0|agg:max}
         DistanceMetric(
-            "MeanL2Score",
+            "MaxL1DistanceMetric",
+            AggregatedPowerDistance(order=1, default_distance=1, aggregation_strategy="max"),  #
+        ),
+        # Customizing Preprocessing
+        # A DistanceMetric is a PoseMetric, and so it will call PosePreprocessors before scoring
+        # get_standard_pose_processors gives you some default options,
+        # for example you could decide not to remove the legs
+        DistanceMetric(
+            "CustomizedPosePreprocessorsWithLegsMetric",
+            distance_measure=AggregatedPowerDistance("A custom name", order=1, default_distance=10),
+            pose_preprocessors=get_standard_pose_processors(
+                remove_legs=False,  # If you want the legs
+            ),
+        ),
+        # Recreating Existing Metrics: Average Position Error/ Mean Joint Error
+        # As defined in Ham2Pose,
+        # APE is "the average L2 distance between the predicted and the GT pose keypoints
+        # across all frames and data samples. Since it compares absolute positions,
+        # it is sensitive to different body shapes and slight changes
+        # in timing or position of the performed movement"
+        # So we:
+        # - Select AggregatedPowerDistance measure
+        # - set the order to 2 (Euclidean distance)
+        # - set the aggregation strategy to mean
+        # - recreate the set of preprocessors from https://github.com/rotem-shalev/Ham2Pose/blob/main/metrics.py#L32-L62
+        # (adapting to MediaPipe Holistic keypoints format instead of OpenPose)
+        DistanceMetric(
+            "AveragePositionError",
             AggregatedPowerDistance(order=2, aggregation_strategy="mean", default_distance=0),
+            pose_preprocessors=[
+                NormalizePosesProcessor(),
+                HideLegsPosesProcessor(),
+                ZeroPadShorterPosesProcessor(),
+                ReduceHolisticPoseProcessor(),
+            ],
+        ),
+        # Recreating Dynamic Time Warping - Mean Joint Error
+        # As before, only now we use the Dynamic Time Warping version!
+        DistanceMetric(
+            "DTWPowerDistance",
+            DTWAggregatedPowerDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, order=2),
+            pose_preprocessors=get_standard_pose_processors(
+                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+            ),
+        ),
+        # We can also implement a version that uses scipy distances "cdist"
+        # This lets us experiment with e.g. jaccard
+        # Options are listed at the documentation for scipy:
+        # https://docs.scipy.org/doc/scipy-1.15.0/reference/generated/scipy.spatial.distance.cdist.html
+        DistanceMetric(
+            "DTWScipyDistance",
+            DTWAggregatedScipyDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, metric="jaccard"),
+            pose_preprocessors=get_standard_pose_processors(
+                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+            ),
         ),
     ]
 
     # Evaluate each metric on the test poses
     for metric in metrics:
         print("*" * 10)
+        print(metric.name)
+
+        print("\nMETRIC __str__: ")
+        print(str(metric))
+
+        print("\nMETRIC to repr: ")
+        print(repr(metric))
+
+        print("\nSIGNATURE: ")
         print(metric.get_signature().format())
+
+        print("\nSIGNATURE (short): ")
         print(metric.get_signature().format(short=True))
 
         try:
-            score = metric.score(poses[0], poses[1])
-            print(f"SCORE: {score}")
-            print("SCORE With Signature:")
-            score_with_sig = metric.score_with_signature(poses[0], poses[1])
-            print(score_with_sig)
-            print(repr(score_with_sig))
-            print(f"{type(score_with_sig)}")
+            #
+            print("\nSCORE ALL with Signature (short):")
+            print(metric.score_all_with_signature(hypotheses, references, short=True, progress_bar=True))
 
+            score = metric.score(poses[0], poses[1])
+            print(f"\nSCORE: {score}")
+
+            print("\nSCORE With Signature:")
+            print(metric.score_with_signature(poses[0], poses[1]))
+
+            print("\nSCORE with Signature (short):")
             print(metric.score_with_signature(poses[0], poses[1], short=True))
 
         except NotImplementedError:

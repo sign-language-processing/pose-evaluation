@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Dict
 
 import numpy as np
+
 import pytest
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs

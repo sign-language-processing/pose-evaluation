@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Iterable
 import numpy as np
 from numpy import ma
 from pose_format import Pose
+from tqdm import tqdm
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
@@ -42,7 +43,10 @@ def load_pose_file(pose_path: Path) -> Pose:
     return pose
 
 
-def reduce_poses_to_intersection(poses: Iterable[Pose]) -> List[Pose]:
+def reduce_poses_to_intersection(
+    poses: Iterable[Pose],
+    progress=False,
+) -> List[Pose]:
     poses = list(poses)  # get a list, no need to copy
 
     # look at the first pose
@@ -50,7 +54,7 @@ def reduce_poses_to_intersection(poses: Iterable[Pose]) -> List[Pose]:
     points = {c.name: set(c.points) for c in poses[0].header.components}
 
     # remove anything that other poses don't have
-    for pose in poses[1:]:
+    for pose in tqdm(poses[1:], desc="reduce poses to intersection", disable=not progress):
         component_names.intersection_update({c.name for c in pose.header.components})
         for component in pose.header.components:
             points[component.name].intersection_update(set(component.points))

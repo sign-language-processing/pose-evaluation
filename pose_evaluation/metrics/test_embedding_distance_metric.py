@@ -1,7 +1,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import List, Callable, Tuple
+from typing import List, Callable, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -64,13 +64,13 @@ def call_and_call_with_inputs_swapped(
     return score1, score2
 
 
-def call_with_both_input_orders_and_do_standard_checks(
+def call_with_both_input_orders_and_do_standard_checks(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     hyps: torch.Tensor,
     refs: torch.Tensor,
     scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     distance_range_checker,
     distance_matrix_shape_checker,
-    expected_shape: Tuple = None,
+    expected_shape: Optional[Tuple] = None,
 ):
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
@@ -432,7 +432,7 @@ def test_score_mixed_input_types(cosine_metric):
     emb2 = torch.rand(768)
 
     all_scores = call_and_call_with_inputs_swapped(emb1, emb2, cosine_metric.score)
-    assert all([isinstance(score, float) for score in all_scores]), "Output should be a float."
+    assert all(isinstance(score, float) for score in all_scores), "Output should be a float."
 
 
 def test_score_all_mixed_input_types(cosine_metric, distance_range_checker, distance_matrix_shape_checker):

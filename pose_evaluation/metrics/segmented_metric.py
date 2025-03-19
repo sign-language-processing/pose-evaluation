@@ -1,15 +1,16 @@
+from abc import ABC
 from importlib import resources
 
 import numpy as np
 from pose_format import Pose
 from scipy.optimize import linear_sum_assignment
-from sign_language_segmentation.bin import load_model, predict, process_pose
+from sign_language_segmentation.bin import load_model, predict
 from sign_language_segmentation.src.utils.probs_to_segments import probs_to_segments
 
 from pose_evaluation.metrics.base_pose_metric import PoseMetric
 
 
-class SegmentedPoseMetric(PoseMetric):
+class SegmentedPoseMetric(PoseMetric, ABC):
     def __init__(self, isolated_metric: PoseMetric):
         super().__init__("SegmentedPoseMetric", higher_is_better=isolated_metric.higher_is_better)
 
@@ -21,8 +22,7 @@ class SegmentedPoseMetric(PoseMetric):
     # pylint: disable=too-many-locals
     def score(self, hypothesis: Pose, reference: Pose) -> float:
         # Process input files
-        processed_hypothesis = process_pose(hypothesis)
-        processed_reference = process_pose(reference)
+        processed_hypothesis, processed_reference = self.process_poses([hypothesis, reference])
         # Predict segments BIO
         hypothesis_probs = predict(self.segmentation_model, processed_hypothesis)["sign"]
         reference_probs = predict(self.segmentation_model, processed_reference)["sign"]
@@ -30,7 +30,7 @@ class SegmentedPoseMetric(PoseMetric):
         hypothesis_signs = probs_to_segments(hypothesis_probs, 60, 50)
         reference_signs = probs_to_segments(reference_probs, 60, 50)
 
-        print(hypothesis_signs)  # TODO convert segmentes to Pose objects
+        print(hypothesis_signs)  # TODO convert segments to Pose objects
 
         # Fallback to isolated metric if no segments are found
         if len(hypothesis_signs) == 0 or len(reference_signs) == 0:

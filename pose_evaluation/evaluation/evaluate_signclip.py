@@ -166,7 +166,9 @@ def calculate_class_means(gloss_indices, scores):
 #    return within_class_means_by_gloss
 
 
-def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"):
+def evaluate_signclip(
+    emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"
+):  # pylint: disable=too-many-locals, too-many-statements
     """
     Evaluate SignCLIP embeddings using score_all.
 
@@ -263,7 +265,7 @@ def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str
 
     save_start = time.perf_counter()
     class_means_json = out_path.with_name(f"{out_path.stem}_class_means").with_suffix(".json")
-    with open(class_means_json, "w") as f:
+    with open(class_means_json, "w", encoding="utf-8") as f:
         print(f"Writing class means to {f}")
         json.dump(class_means, f)
     np.savez(out_path, scores=scores, files=files)
