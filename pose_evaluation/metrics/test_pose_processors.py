@@ -5,9 +5,9 @@ from pose_format import Pose
 from pose_evaluation.metrics.pose_processors import TrimMeaninglessFramesPoseProcessor
 
 
-def test_trim_pose(real_pose_file_paths: List[Path]):
+def test_trim_pose(real_refined_landmark_pose_file_paths: List[Path]):
 
-    for pose_path in real_pose_file_paths:
+    for pose_path in real_refined_landmark_pose_file_paths:
         if "needs-trim" in pose_path.name:
             pose = Pose.read(pose_path.read_bytes())
 

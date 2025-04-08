@@ -13,12 +13,14 @@ from pose_format.utils.openpose_135 import (
 from pose_evaluation.utils.pose_utils import load_pose_file
 
 
-utils_test_data_dir = Path(__file__).parent / "test" / "test_data"
+utils_standard_mediapipe_landmarks_test_data_dir = (
+    Path(__file__).parent / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+)
 
 
 @pytest.fixture(scope="function")
 def mediapipe_poses_test_data_paths() -> List[Path]:
-    pose_file_paths = list(utils_test_data_dir.glob("*.pose"))
+    pose_file_paths = list(utils_standard_mediapipe_landmarks_test_data_dir.glob("*.pose"))
     return pose_file_paths
 
 
@@ -33,7 +35,7 @@ def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:  #
 
 @pytest.fixture
 def standard_mediapipe_components_dict() -> Dict[str, List[str]]:
-    format_json = utils_test_data_dir / "mediapipe_components_and_points.json"
+    format_json = utils_standard_mediapipe_landmarks_test_data_dir / "mediapipe_components_and_points.json"
     with open(format_json, "r", encoding="utf-8") as f:
         return json.load(f)
 

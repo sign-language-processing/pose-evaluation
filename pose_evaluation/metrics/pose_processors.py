@@ -3,7 +3,7 @@ from typing import Any, List, Union, Iterable, Callable
 from tqdm import tqdm
 
 from pose_format import Pose
-from pose_format.utils.generic import pose_hide_legs, reduce_holistic
+from pose_format.utils.generic import pose_hide_legs, reduce_holistic, detect_known_pose_format
 from spoken_to_signed.gloss_to_pose.concatenate import trim_pose
 
 from pose_evaluation.metrics.base import Signature
@@ -127,7 +127,11 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
         self.end = end
 
     def process_pose(self, pose):
-        return trim_pose(pose.copy(), start=self.start, end=self.end)
+        if detect_known_pose_format(pose) == "holistic":
+            
+            return trim_pose(pose.copy(), start=self.start, end=self.end)
+        # not supported
+        return pose
 
 
 def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many-positional-arguments
