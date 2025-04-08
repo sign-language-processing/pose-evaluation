@@ -12,6 +12,7 @@ class TestDTWMetricL1(unittest.TestCase):
             name="DTWPowerDistance",
             distance_measure=distance_measure,
             pose_preprocessors=get_standard_pose_processors(
+                trim_meaningless_frames=False,  # fake poses have no components, this crashes.
                 normalize_poses=False,  # no shoulders, will crash
                 remove_world_landmarks=False,  # there are none, will crash
                 reduce_poses_to_common_components=False,  # removes all components, there are none in common

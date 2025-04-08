@@ -70,6 +70,7 @@ class TestDistanceMetricMeanL1(unittest.TestCase):
             distance_measure=AggregatedPowerDistance(order=1, default_distance=0),
             # preprocessors that won't crash
             pose_preprocessors=get_standard_pose_processors(
+                trim_meaningless_frames=False,  # fake poses have no components, this crashes.
                 normalize_poses=False,
                 remove_world_landmarks=False,
                 remove_legs=False,
