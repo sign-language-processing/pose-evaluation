@@ -4,11 +4,14 @@ from tqdm import tqdm
 
 from pose_format import Pose
 from pose_format.utils.generic import pose_hide_legs, reduce_holistic
+from spoken_to_signed.gloss_to_pose.concatenate import trim_pose
+
 from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
     reduce_poses_to_intersection,
 )
+
 
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 
@@ -117,7 +120,18 @@ class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
         return pose
 
 
+class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
+    def __init__(self, start=True, end=True) -> None:
+        super().__init__(name="trim_pose")
+        self.start = start
+        self.end = end
+
+    def process_pose(self, pose):
+        return trim_pose(pose.copy(), start=self.start, end=self.end)
+
+
 def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    trim_meaningless_frames: bool = True,
     normalize_poses: bool = True,
     reduce_poses_to_common_components: bool = True,
     remove_world_landmarks=True,
@@ -128,6 +142,12 @@ def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many
 ) -> List[PoseProcessor]:
     pose_processors = []
 
+    # remove leading/trailing frames with no hands in frame.
+    if trim_meaningless_frames:
+        pose_processors.append(TrimMeaninglessFramesPoseProcessor())
+
+    # Note: by default this uses the shoulder joints,
+    # so it should be BEFORE anything that might remove those, such as reduce poses to common components
     if normalize_poses:
         pose_processors.append(NormalizePosesProcessor())
 
