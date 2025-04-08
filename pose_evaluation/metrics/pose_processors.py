@@ -128,7 +128,7 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
 
     def process_pose(self, pose):
         if detect_known_pose_format(pose) == "holistic":
-            
+
             return trim_pose(pose.copy(), start=self.start, end=self.end)
         # not supported
         return pose
