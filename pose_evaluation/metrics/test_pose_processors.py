@@ -2,8 +2,6 @@ from typing import List
 from pathlib import Path
 from pose_format import Pose
 
-import pytest
-
 from pose_evaluation.metrics.pose_processors import TrimMeaninglessFramesPoseProcessor
 
 
@@ -22,7 +20,7 @@ def test_trim_pose(real_pose_file_paths: List[Path]):
             # not expecting it to edit the original
             assert (
                 pose.body.data.shape[0] == original_frame_count
-            ), f"Processor changed the original data! Original frame count: {original_frame_count}. Now: {pose.body.data.shape[0]}"
+            ), f"Original data changed! Frames before: {original_frame_count}. Now: {pose.body.data.shape[0]}"
 
             # should have fewer frames
             assert (
