@@ -60,3 +60,9 @@ def real_pose_files() -> List[Pose]:
     test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data"
     real_pose_files_list = [Pose.read(test_file.read_bytes()) for test_file in test_files_folder.glob("*.pose")]
     return real_pose_files_list
+
+
+@pytest.fixture
+def real_pose_file_paths() -> List[Path]:
+    test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data"
+    return list(test_files_folder.glob("*.pose"))
