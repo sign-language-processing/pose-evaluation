@@ -1,23 +1,44 @@
+from collections import defaultdict
+from typing import List
+
 import pandas as pd
 from pathlib import Path
-from typing import List
+
 
 STANDARDIZED_VIDEO_ID_COL_NAME = "VIDEO_ID"
 STANDARDIZED_SPLIT_COL_NAME = "SPLIT"
 STANDARDIZED_GLOSS_COL_NAME = "GLOSS"
 
 
-def file_paths_list_to_df(file_paths: List[Path], prefix="") -> pd.DataFrame:
+def file_paths_list_to_df(
+    file_paths: List[Path], prefix="", parse_metatadata_from_folder_structure=False
+) -> pd.DataFrame:
     # Define the column names dynamically based on the prefix
     columns = {
         f"{prefix.upper()}_FILE_PATH" if prefix else "FILE_PATH": [str(f) for f in file_paths],
         # f"{prefix} FILE NAME" if prefix else "FILE NAME": [f.name for f in file_paths],
     }
 
+    if parse_metatadata_from_folder_structure:
+        columns.update(parse_split_and_gloss_from_file_paths(file_paths))
+
     # Create the DataFrame with the correct column names
     df_paths = pd.DataFrame(columns)
 
     return df_paths
+
+
+def parse_split_and_gloss_from_file_paths(file_paths: List[Path], gloss_level=0, split_level=1):
+    columns = defaultdict(list)
+    parent_level = 0
+
+    for file_path in file_paths:
+        parents = file_path.parents
+        split_val = parents[split_level].name
+        gloss_val = parents[gloss_level].name
+        columns[STANDARDIZED_GLOSS_COL_NAME].append(gloss_val)
+        columns[STANDARDIZED_SPLIT_COL_NAME].append(split_val)
+    return columns
 
 
 def df_to_standardized_df(
@@ -44,7 +65,10 @@ def df_to_standardized_df(
     df.columns = [col.replace(" ", "_").upper() for col in df.columns]
 
     # capitalize all glosses
-    df["GLOSS"] = df["GLOSS"].str.upper()
+    df[STANDARDIZED_GLOSS_COL_NAME] = df[STANDARDIZED_GLOSS_COL_NAME].str.upper()
+
+    # lowercase all splits
+    df[STANDARDIZED_SPLIT_COL_NAME] = df[STANDARDIZED_SPLIT_COL_NAME].str.lower()
 
     if keep_cols:
         df = df[[col for col in keep_cols if col in df.columns]]

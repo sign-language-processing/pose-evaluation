@@ -1,11 +1,11 @@
+from pathlib import Path
+from typing import Optional
+
 import pandas as pd
 import typer
-from pathlib import Path
-from typing import Optional, List
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
-    find_duplicates,
     file_paths_list_to_df,
     deduplicate_by_video_id,
     df_to_standardized_df,
@@ -18,13 +18,12 @@ app = typer.Typer()
 
 
 @app.command()
-def collect_semlex(
+def collect(
     dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
     pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
     metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
     video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    embedding_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    out: Optional[Path] = typer.Option(None, exists=False, file_okay=False),
+    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     """Read in Sem-Lex files and metadata, combine to one dataframe, and save out to csv"""
 
@@ -33,11 +32,9 @@ def collect_semlex(
         pose_files_path=pose_files_path,
         metadata_path=metadata_path,
         video_files_path=video_files_path,
-        embedding_files_path=embedding_files_path,
         pose_patterns=["*.pose"],
         metadata_patterns=["train.csv", "val.csv", "test.csv"],
         video_patterns=["*.mp4"],
-        embedding_patterns=["*.npy"],
     )
 
     for name, paths in result.items():
@@ -47,26 +44,22 @@ def collect_semlex(
 
     # metadata
     meta_dfs = []
-    result["METADATA_FILES"]
     for meta_file in result["METADATA_FILES"]:
-        split_name = meta_file.name
+        split_name = meta_file.stem
 
         df = pd.read_csv(meta_file, index_col=0, header=0)
 
         # 8336197103293617-CHAMP.mp4 becomes 8336197103293617
         df[STANDARDIZED_VIDEO_ID_COL_NAME] = df["Video file"].apply(lambda x: Path(x).stem.split("-")[0])
 
-        typer.echo(f"Found sem-lex metadata file: {meta_file}")
-        typer.echo(df.head())
+        typer.echo(f"Found metadata file: {meta_file}")
 
+        df["SPLIT"] = split_name
         df = df_to_standardized_df(
             df,
             gloss_col="",
             keep_cols=[STANDARDIZED_VIDEO_ID_COL_NAME, STANDARDIZED_GLOSS_COL_NAME, STANDARDIZED_SPLIT_COL_NAME],
         )
-        df["SPLIT"] = split_name
-
-        typer.echo(df.head())
 
         meta_dfs.append(df)
 
@@ -83,27 +76,17 @@ def collect_semlex(
         files_df[STANDARDIZED_VIDEO_ID_COL_NAME] = files_df[f"{prefix}_FILE_PATH"].apply(
             lambda x: Path(x).stem.split("-")[0]
         )
-        typer.echo(files_df.head())
+        # typer.echo(files_df.head())
         typer.echo(f"Merging {len(files_df)} {prefix} files into df")
         df = df.merge(files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
-
+    df = df_to_standardized_df(
+        df,
+        video_id_col=STANDARDIZED_VIDEO_ID_COL_NAME,
+        split_col=STANDARDIZED_SPLIT_COL_NAME,
+        gloss_col=STANDARDIZED_GLOSS_COL_NAME,
+    )
     typer.echo(df.info())
     typer.echo(df.head())
-    exit()
-    embedding_files_files_df = file_paths_list_to_df(result["EMBEDDING_FILES"], prefix="EMBEDDING")
-    embedding_files_files_df["VIDEO_ID"] = embedding_files_files_df["EMBEDDING_FILE_PATH"].apply(
-        lambda x: Path(x).stem.split("-")[0]
-    )
-    embedding_files_files_df["EMBEDDING_MODEL"] = embedding_files_files_df["EMBEDDING_FILE_PATH"].apply(
-        lambda x: Path(x).stem.split("-using-model-")[-1]
-    )
-    print(embedding_files_files_df.head())
-
-    df = df.merge(embedding_files_files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
-    print(df.info())
-    print(df.head())
-
-    # print(result.keys())
     if out is not None:
         if out.name.endswith(".csv"):
             df.to_csv(out, index=False)
