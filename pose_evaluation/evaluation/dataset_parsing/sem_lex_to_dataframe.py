@@ -1,7 +1,8 @@
-import pandas as pd
-import typer
 from pathlib import Path
 from typing import Optional
+
+import pandas as pd
+import typer
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
@@ -12,6 +13,7 @@ from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     STANDARDIZED_GLOSS_COL_NAME,
     STANDARDIZED_SPLIT_COL_NAME,
 )
+
 
 app = typer.Typer()
 
@@ -24,8 +26,8 @@ def collect_semlex(
     video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
     out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
-    """Read in Sem-Lex files and metadata, combine to one dataframe, and save out to csv"""
-
+    """Read in files and metadata, combine to one dataframe, and save out to csv"""
+    # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
         pose_files_path=pose_files_path,
@@ -35,11 +37,7 @@ def collect_semlex(
         metadata_patterns=["*semlex_metadata.csv"],
         video_patterns=["*.webm"],
     )
-
-    for name, paths in result.items():
-        typer.echo(f"🎯 Found {len(paths)} {name.replace('_', ' ')}. Samples:")
-        for path in paths[:3]:
-            typer.echo(f"* {path}")
+    # pylint: enable=duplicate-code
 
     # metadata
     meta_dfs = []
@@ -52,21 +50,17 @@ def collect_semlex(
             typer.echo(f"Found sem-lex metadata file: {meta_file}")
 
             typer.echo("Deduplicating by video ID and split")
-            df = deduplicate_by_video_id(
-                df, video_id_col="video_id", split_col="split", priority_order=["train", "val", "test"]
-            )
+
             typer.echo(f"There are now {len(df)} rows")
 
             df = df_to_standardized_df(
                 df,
                 gloss_col="label",
-                keep_cols=[STANDARDIZED_VIDEO_ID_COL_NAME, STANDARDIZED_GLOSS_COL_NAME, STANDARDIZED_SPLIT_COL_NAME],
             )
 
             meta_dfs.append(df)
 
     df = pd.concat(meta_dfs)
-    assert len(df) == 88174  # should be exactly this long after deduplication
 
     for prefix in ["POSE", "VIDEO"]:
 
@@ -81,8 +75,30 @@ def collect_semlex(
         split_col=STANDARDIZED_SPLIT_COL_NAME,
         gloss_col=STANDARDIZED_GLOSS_COL_NAME,
     )
+
+    df = df[
+        [
+            col
+            for col in [
+                STANDARDIZED_GLOSS_COL_NAME,
+                STANDARDIZED_SPLIT_COL_NAME,
+                STANDARDIZED_VIDEO_ID_COL_NAME,
+                "POSE_FILE_PATH",
+                # "VIDEO_FILE_PATH",
+            ]
+            if col in df.columns
+        ]
+    ]
+    df = deduplicate_by_video_id(
+        df, video_id_col="VIDEO_ID", split_col="SPLIT", priority_order=["train", "val", "test"]
+    )
+
+    assert len(df["VIDEO_ID"].unique()) == len(df["VIDEO_ID"])
+    assert len(df["VIDEO_ID"].unique()) == len(df["POSE_FILE_PATH"])
+    assert len(df) == 88174
     typer.echo(df.info())
     typer.echo(df.head())
+    typer.echo(df.describe())
 
     if out is not None:
         if out.name.endswith(".csv"):
