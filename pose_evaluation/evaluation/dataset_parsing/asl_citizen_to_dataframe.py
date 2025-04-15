@@ -58,8 +58,6 @@ def collect(
         df["SPLIT"] = split_name
         df = df_to_standardized_df(
             df,
-            gloss_col="",
-            keep_cols=[STANDARDIZED_VIDEO_ID_COL_NAME, STANDARDIZED_GLOSS_COL_NAME, STANDARDIZED_SPLIT_COL_NAME],
         )
 
         meta_dfs.append(df)
