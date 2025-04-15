@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-
+import pandas as pd
 import typer
 
 
@@ -12,6 +12,7 @@ from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     STANDARDIZED_VIDEO_ID_COL_NAME,
     STANDARDIZED_GLOSS_COL_NAME,
     STANDARDIZED_SPLIT_COL_NAME,
+    convert_eng_to_ase_gloss_translations,
 )
 
 app = typer.Typer()
@@ -22,8 +23,10 @@ def collect(
     dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
     pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
     video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    asl_knowledge_graph_path: Optional[Path] = typer.Option(None, exists=True, file_okay=True, readable=True),
     out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
+
     # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
@@ -64,8 +67,10 @@ def collect(
         files_df = files_df.drop(columns=["GLOSS", "SPLIT"])
         df = df.merge(files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
 
-    print(f"There are {len(df[STANDARDIZED_VIDEO_ID_COL_NAME].unique())} unique video ids")
+    # Popsign ASL uses English, not ASL Glosses
+    df["GLOSS"] = "en:" + df["GLOSS"].astype(str)
 
+    print(f"There are {len(df[STANDARDIZED_VIDEO_ID_COL_NAME].unique())} unique video ids")
     df = df_to_standardized_df(
         df,
         video_id_col=STANDARDIZED_VIDEO_ID_COL_NAME,
@@ -75,6 +80,16 @@ def collect(
 
     typer.echo(df.info())
     typer.echo(df.head())
+
+    if asl_knowledge_graph_path:
+        typer.echo("*" * 40)
+        typer.echo(f"Reading ASL Knowledge Graph from {asl_knowledge_graph_path}")
+        asl_knowledge_graph_df = pd.read_csv(asl_knowledge_graph_path, sep="\t", index_col=0)
+
+        df = convert_eng_to_ase_gloss_translations(df, asl_knowledge_graph_df, translations_only=False)
+
+    typer.echo("Translated vocabulary:")
+    typer.echo(df["GLOSS"].unique())
 
     if out is not None:
         if out.name.endswith(".csv"):
