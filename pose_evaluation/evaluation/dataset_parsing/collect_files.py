@@ -21,6 +21,11 @@ def collect_files_once(
     # Sort all lists for consistency
     for files in result.values():
         files.sort()
+
+    for name, paths in result.items():
+        typer.echo(f"🎯 Found {len(paths)} {name.replace('_', ' ')}. Samples:")
+        for path in paths[:3]:
+            typer.echo(f"* {path}")
     return result
 
 
@@ -29,11 +34,20 @@ def collect_files_main(
     pose_files_path: Optional[Path] = None,
     metadata_path: Optional[Path] = None,
     video_files_path: Optional[Path] = None,
-    pose_patterns: List[str] = ["*.pose", "*.pose.zst"],
-    metadata_patterns: List[str] = ["*.csv"],
-    video_patterns: List[str] = ["*.mp4", "*.avi", "*.mov"],
+    pose_patterns: Optional[List[str]] = None,
+    metadata_patterns: Optional[List[str]] = None,
+    video_patterns: Optional[List[str]] = None,
 ):
     """Efficiently collect all files by walking each root directory only once."""
+    if pose_patterns is None:
+        pose_patterns = ["*.pose", "*.pose.zst"]
+
+    if metadata_patterns is None:
+        metadata_patterns = ["*.csv"]
+
+    if video_patterns is None:
+        video_patterns = ["*.mp4", "*.avi", "*.mov"]
+
     result = {}
 
     search_roots = {
@@ -49,7 +63,7 @@ def collect_files_main(
             root_to_keys.setdefault(root, []).append((key, patterns))
 
     for root, keys_and_patterns in root_to_keys.items():
-        pattern_map = {key: patterns for key, patterns in keys_and_patterns}
+        pattern_map = dict(keys_and_patterns)
         root_results = collect_files_once(root, pattern_map)
         result.update({f"{key.upper()}_FILES": root_results[key] for key in pattern_map})
 
@@ -67,6 +81,7 @@ def collect_files_cli(
     video_patterns: List[str] = typer.Option(["*.mp4", "*.avi", "*.mov"]),
 ):
     """CLI wrapper around collect_files_main"""
+    # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
         pose_files_path=pose_files_path,
@@ -76,6 +91,7 @@ def collect_files_cli(
         metadata_patterns=metadata_patterns,
         video_patterns=video_patterns,
     )
+    # pylint: enable=duplicate-code
 
     for name, paths in result.items():
         typer.echo(f"✅ Found {len(paths)} {name.replace('_', ' ')}")
