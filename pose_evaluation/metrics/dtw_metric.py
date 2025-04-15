@@ -1,6 +1,7 @@
 from fastdtw import fastdtw  # type: ignore
 from dtaidistance import dtw_ndim
 from scipy.spatial.distance import cdist
+import numpy as np
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
 from tqdm import tqdm
 
@@ -67,7 +68,7 @@ class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
 class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
     def __init__(
         self,
-        name="DTWAggregatedDistanceMeasure",
+        name="DTWAggregatedScipyDistanceMeasure",
         default_distance: float = 0,
         aggregation_strategy: AggregationStrategy = "mean",
         metric: str = "euclidean",
@@ -167,9 +168,11 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
             disable=not progress,
         ):
             if self.use_fast:
-                distance = dtw_ndim.distance_fast(hyp_trajectory, ref_trajectory)  # about 8s per call
+                hyp_trajectory = np.asarray(hyp_trajectory, dtype=np.float64)
+                ref_trajectory = np.asarray(ref_trajectory, dtype=np.float64)
+                distance = dtw_ndim.distance_fast(hyp_trajectory, ref_trajectory)
             else:
-                distance = dtw_ndim.distance(hyp_trajectory, ref_trajectory)  # about 8s per call
+                distance = dtw_ndim.distance(hyp_trajectory, ref_trajectory)
 
             trajectory_distances[i] = distance  # Store distance in the preallocated array
         trajectory_distances = ma.array(trajectory_distances)
