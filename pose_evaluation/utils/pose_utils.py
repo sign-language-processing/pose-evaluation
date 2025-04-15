@@ -47,23 +47,30 @@ def reduce_poses_to_intersection(
     poses: Iterable[Pose],
     progress=False,
 ) -> List[Pose]:
-    poses = list(poses)  # get a list, no need to copy
+    poses = list(poses)  # ensure list
 
-    # look at the first pose
+    if not poses:
+        return []
+
+    # Initialize from the first pose
     component_names = {c.name for c in poses[0].header.components}
     points = {c.name: set(c.points) for c in poses[0].header.components}
 
-    # remove anything that other poses don't have
+    # Intersect with all other poses
     for pose in tqdm(poses[1:], desc="reduce poses to intersection", disable=not progress):
-        component_names.intersection_update({c.name for c in pose.header.components})
-        for component in pose.header.components:
-            points[component.name].intersection_update(set(component.points))
+        current_names = {c.name for c in pose.header.components}
+        component_names.intersection_update(current_names)
 
-    # change datatypes to match get_components, then update the poses
-    points_dict = {}
-    for c_name in points.keys():
-        points_dict[c_name] = list(points[c_name])
-    poses = [pose.get_components(list(component_names), points_dict) for pose in poses]
+        # Create a lookup for current component points
+        current_points = {c.name: set(c.points) for c in pose.header.components}
+
+        # Only update points for names still in the intersection
+        for name in component_names:
+            points[name].intersection_update(current_points[name])
+
+    # Final conversion
+    points_dict = {name: list(points[name]) for name in component_names}
+    poses = [pose.get_components(sorted(component_names), points_dict) for pose in poses]
     return poses
 
 
