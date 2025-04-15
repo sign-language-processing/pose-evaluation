@@ -1,8 +1,8 @@
 from collections import defaultdict
 from typing import List
+from pathlib import Path
 
 import pandas as pd
-from pathlib import Path
 
 
 STANDARDIZED_VIDEO_ID_COL_NAME = "VIDEO_ID"
@@ -30,7 +30,6 @@ def file_paths_list_to_df(
 
 def parse_split_and_gloss_from_file_paths(file_paths: List[Path], gloss_level=0, split_level=1):
     columns = defaultdict(list)
-    parent_level = 0
 
     for file_path in file_paths:
         parents = file_path.parents
@@ -47,9 +46,9 @@ def df_to_standardized_df(
     split_col="split",
     gloss_col="gloss",
     signer_id_col="signer_id",
-    keep_cols=None,
 ):
     # Standardize to specific predictable names: "Video ID" or "video_id" for example,  becomes "VIDEO_ID"
+
     df = df.rename(
         columns={
             video_id_col: STANDARDIZED_VIDEO_ID_COL_NAME,
@@ -70,13 +69,12 @@ def df_to_standardized_df(
     # lowercase all splits
     df[STANDARDIZED_SPLIT_COL_NAME] = df[STANDARDIZED_SPLIT_COL_NAME].str.lower()
 
-    if keep_cols:
-        df = df[[col for col in keep_cols if col in df.columns]]
-
     return df
 
 
-def deduplicate_by_video_id(df, video_id_col="video_id", split_col="split", priority_order=["train", "val", "test"]):
+def deduplicate_by_video_id(df, video_id_col="video_id", split_col="split", priority_order=None):
+    if priority_order is None:
+        priority_order = ["train", "val", "test"]
     # Sort by the priority of split, with 'train' first, then 'val', and 'test' last
     df["priority"] = df[split_col].apply(
         lambda x: priority_order.index(x) if x in priority_order else len(priority_order)

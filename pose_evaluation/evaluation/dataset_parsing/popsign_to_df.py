@@ -24,7 +24,7 @@ def collect(
     video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
     out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
-
+    # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
         pose_files_path=pose_files_path,
@@ -34,11 +34,7 @@ def collect(
         metadata_patterns=None,
         video_patterns=["*.mp4"],
     )
-
-    for name, paths in result.items():
-        typer.echo(f"🎯 Found {len(paths)} {name.replace('_', ' ')}. Samples:")
-        for path in paths[:3]:
-            typer.echo(f"* {path}")
+    # pylint: enable=duplicate-code
 
     files_dfs = []
     for prefix in ["POSE", "VIDEO"]:

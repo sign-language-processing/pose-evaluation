@@ -26,7 +26,7 @@ def collect(
     out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     """Read in Sem-Lex files and metadata, combine to one dataframe, and save out to csv"""
-
+    # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
         pose_files_path=pose_files_path,
@@ -36,6 +36,7 @@ def collect(
         metadata_patterns=["train.csv", "val.csv", "test.csv"],
         video_patterns=["*.mp4"],
     )
+    # pylint: enable=duplicate-code
 
     for name, paths in result.items():
         typer.echo(f"🎯 Found {len(paths)} {name.replace('_', ' ')}. Samples:")
