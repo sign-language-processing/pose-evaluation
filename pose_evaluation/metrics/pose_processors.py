@@ -134,7 +134,27 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
         return pose
 
 
-def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+class GetHandsOnlyHolisticPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="get_hands_only")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose.get_components(["LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"])
+
+
+class InterpolateAllToSetFPSPoseProcessor(PoseProcessor):
+    def __init__(self, fps=15, kind: str = "cubic") -> None:
+        super().__init__(name="interpolate_to_fps")
+        self.fps = fps
+        self.kind = kind
+
+    def process_pose(self, pose: Pose) -> Pose:
+        pose = pose.copy()
+        pose = pose.interpolate(new_fps=self.fps, kind=self.kind)
+        return pose
+
+
+def get_standard_pose_processors(
     trim_meaningless_frames: bool = True,
     normalize_poses: bool = True,
     reduce_poses_to_common_components: bool = True,
