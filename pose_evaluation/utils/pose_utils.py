@@ -136,6 +136,12 @@ def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     pose.body.data = masked_data
 
 
+def pose_mask_invalid_values(pose: Pose) -> Pose:
+    pose = pose.copy()
+    pose.body.data = ma.masked_invalid(pose.body.data)  # replace all unmasked invalid values
+    return pose
+
+
 def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0) -> Pose:
     pose = pose.copy()
     pose.body.data = ma.masked_invalid(pose.body.data)  # replace all unmasked invalid values

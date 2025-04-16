@@ -13,6 +13,7 @@ from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
     reduce_poses_to_intersection,
     pose_fill_masked_or_invalid,
+    pose_mask_invalid_values,
 )
 
 
@@ -121,6 +122,14 @@ class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
         pose = pose.copy()
         pose.body = pose.body.zero_filled()
         return pose
+
+
+class MaskInvalidValuesPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="mask_invalid_values")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose_mask_invalid_values(pose)
 
 
 class FillMaskedOrInvalidValuesPoseProcessor(PoseProcessor):
