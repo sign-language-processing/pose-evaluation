@@ -1,6 +1,8 @@
 from typing import Any, List, Union, Iterable, Callable
 
+
 from tqdm import tqdm
+from numpy import ma
 
 from pose_format import Pose
 from pose_format.utils.generic import pose_hide_legs, reduce_holistic, detect_known_pose_format
@@ -10,6 +12,7 @@ from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
     reduce_poses_to_intersection,
+    pose_fill_masked_or_invalid,
 )
 
 
@@ -112,12 +115,21 @@ class ReduceHolisticPoseProcessor(PoseProcessor):
 
 class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
     def __init__(self) -> None:
-        super().__init__(name="reduce_holistic")
+        super().__init__(name="zero_fill_masked")
 
     def process_pose(self, pose: Pose) -> Pose:
         pose = pose.copy()
         pose.body = pose.body.zero_filled()
         return pose
+
+
+class FillMaskedOrInvalidValuesPoseProcessor(PoseProcessor):
+    def __init__(self, masked_fill_value: float = 0.0) -> None:
+        super().__init__(name="fill_masked_or_invalid")
+        self.fill_val = masked_fill_value
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose_fill_masked_or_invalid(pose, self.fill_val)
 
 
 class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
