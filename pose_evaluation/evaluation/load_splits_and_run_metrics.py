@@ -49,7 +49,7 @@ def run_metrics(
     out_path: Path,
     metrics: List[DistanceMetric],
     gloss_count: Optional[int] = 5,
-    out_gloss_multiplier=2,
+    out_gloss_multiplier=4,
 ):
 
     gloss_vocabulary = df[STANDARDIZED_GLOSS_COL_NAME].unique().tolist()
@@ -71,24 +71,26 @@ def run_metrics(
             f"For gloss {gloss} We have {len(in_gloss_df)} in, {len(out_gloss_df)} out, and we have loaded {len(pose_data.keys())} poses total"
         )
 
-        for metric in metrics:
-            typer.echo(f"Metric: {metric.name}")
-            typer.echo(f"Metric: {metric.get_signature().format()}")
+        for i, metric in enumerate(metrics):
+            typer.echo("*" * 60)
+            typer.echo(f"Gloss: {gloss}")
+            typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
+            typer.echo(f"Metric #{i}/{len(metrics)} Signature: {metric.get_signature().format()}")
             results = defaultdict(list)
             results_path = out_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.csv"
             if results_path.exists():
                 print(f"Results for {results_path} already exist. Skipping!")
                 continue
 
+            typer.echo(f"Saving results to {results_path}")
+
             for _, hyp_row in tqdm(in_gloss_df.iterrows()):
                 hyp_path = hyp_row["POSE_FILE_PATH"]
                 hyp_pose = pose_data[hyp_path].copy()
-                # hyp_pose = Pose.read(Path(hyp_path).read_bytes())
 
                 for _, ref_row in out_gloss_df.iterrows():
                     ref_path = ref_row["POSE_FILE_PATH"]
                     ref_pose = pose_data[ref_path].copy()
-                    # ref_pose = Pose.read(Path(ref_path).read_bytes())
 
                     start_time = time.perf_counter()
                     score = metric.score_with_signature(hyp_pose, ref_pose)
@@ -147,7 +149,7 @@ def main(
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
-    run_metrics(df, out_path=out, metrics=metrics, gloss_count=3, out_gloss_multiplier=5)
+    run_metrics(df, out_path=out, metrics=metrics, gloss_count=3, out_gloss_multiplier=4)
 
 
 if __name__ == "__main__":
