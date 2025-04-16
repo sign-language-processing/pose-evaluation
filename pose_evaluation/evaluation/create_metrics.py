@@ -57,16 +57,20 @@ def construct_metric(
 
     name_pieces.append(keypoint_selection)
 
-    if sequence_alignment == "zeropad":
-        pose_preprocessors.append(ZeroPadShorterPosesProcessor())
-
-    name_pieces.append(sequence_alignment)
+    
 
     if fps is not None:
         pose_preprocessors.append(InterpolateAllToSetFPSPoseProcessor(fps=fps))
         name_pieces.append(f"interp{fps}")
     else:
         name_pieces.append("nointerp")
+
+
+    # Only can go AFTER things that change the length like Interpolate
+    if sequence_alignment == "zeropad":
+        pose_preprocessors.append(ZeroPadShorterPosesProcessor())
+
+    name_pieces.append(sequence_alignment)        
 
     pose_preprocessors.append(ReducePosesToCommonComponentsProcessor())
 
