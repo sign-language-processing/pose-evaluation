@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Dict
 
 import numpy as np
+import numpy.ma as ma
 
 import pytest
 from pose_format import Pose
@@ -15,6 +16,7 @@ from pose_evaluation.utils.pose_utils import (
     reduce_poses_to_intersection,
     get_component_names_and_points_dict,
     zero_pad_shorter_poses,
+    pose_fill_masked_or_invalid,
 )
 
 
@@ -163,6 +165,31 @@ def test_reduce_pose_components_to_intersection(
     assert all(len(pose.header.components) == original_component_count for pose in mediapipe_poses_test_data)
 
 
+def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
+
+    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (44, 1, 553, 3)
+    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (111, 1, 553, 3)
+    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (37, 1, 576, 3)
+
+    for pose in mediapipe_poses_test_data_mixed_shapes:
+        c_names = [c.name for c in pose.header.components]
+        if pose.body.data.shape[2] == 553:
+            assert c_names == ["POSE_LANDMARKS", "FACE_LANDMARKS", "LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"]
+        if pose.body.data.shape[2] == 576:
+            assert c_names == [
+                "POSE_LANDMARKS",
+                "FACE_LANDMARKS",
+                "LEFT_HAND_LANDMARKS",
+                "RIGHT_HAND_LANDMARKS",
+                "POSE_WORLD_LANDMARKS",
+            ]
+
+    reduced_poses = reduce_poses_to_intersection(mediapipe_poses_test_data_mixed_shapes)
+
+    keypoint_shapes = [p.body.data.shape[2] for p in reduced_poses]
+    assert keypoint_shapes == [543, 543, 543]
+
+
 def test_remove_world_landmarks(mediapipe_poses_test_data: List[Pose]):
     for pose in mediapipe_poses_test_data:
         component_names = [c.name for c in pose.header.components]
@@ -238,3 +265,18 @@ def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
 
         # does the confidence match?
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
+
+
+def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe_poses_test_data_mixed_shapes):
+    poses = mediapipe_poses_test_data
+    poses.extend(mediapipe_poses_test_data_mixed_shapes)
+
+    for pose in poses:
+        # assert ma.count_masked(pose.body.data) != 0
+        filled_pose = pose_fill_masked_or_invalid(pose, fill_val=1.1)
+        assert filled_pose != pose
+        assert ma.count_masked(filled_pose.body.data) <= ma.count_masked(pose.body.data)
+        assert np.isnan(filled_pose.body.data).sum() <= np.isnan(pose.body.data).sum()
+        assert np.isnan(filled_pose.body.data).sum() == 0
+        assert ma.count_masked(filled_pose.body.data) == 0
+        assert filled_pose.body.data.mask.shape == pose.body.data.mask.shape
