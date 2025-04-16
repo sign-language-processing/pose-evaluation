@@ -6,6 +6,8 @@ from pathlib import Path
 from tqdm import tqdm
 from pose_format import Pose
 import pandas as pd
+import numpy as np
+import random
 import typer
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
@@ -50,6 +52,7 @@ def run_metrics(
     metrics: List[DistanceMetric],
     gloss_count: Optional[int] = 5,
     out_gloss_multiplier=4,
+    shuffle_metrics=True,
 ):
 
     gloss_vocabulary = df[STANDARDIZED_GLOSS_COL_NAME].unique().tolist()
@@ -57,7 +60,10 @@ def run_metrics(
     if gloss_count:
         gloss_vocabulary = gloss_vocabulary[:gloss_count]
 
-    for gloss in gloss_vocabulary:
+    if shuffle_metrics:
+        random.shuffle(metrics)
+
+    for g_index, gloss in enumerate(gloss_vocabulary):
         in_gloss_df = df[df[STANDARDIZED_GLOSS_COL_NAME] == gloss]
         out_gloss_df = df[df[STANDARDIZED_GLOSS_COL_NAME] != gloss]
 
@@ -73,7 +79,7 @@ def run_metrics(
 
         for i, metric in enumerate(metrics):
             typer.echo("*" * 60)
-            typer.echo(f"Gloss: {gloss}")
+            typer.echo(f"Gloss #{g_index}/{len(gloss_vocabulary)}: {gloss} ")
             typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
             typer.echo(f"Metric #{i}/{len(metrics)} Signature: {metric.get_signature().format()}")
             results = defaultdict(list)
@@ -81,8 +87,6 @@ def run_metrics(
             if results_path.exists():
                 print(f"Results for {results_path} already exist. Skipping!")
                 continue
-
-            typer.echo(f"Saving results to {results_path}")
 
             for _, hyp_row in tqdm(in_gloss_df.iterrows()):
                 hyp_path = hyp_row["POSE_FILE_PATH"]
@@ -94,6 +98,28 @@ def run_metrics(
 
                     start_time = time.perf_counter()
                     score = metric.score_with_signature(hyp_pose, ref_pose)
+
+                    if score is None or score.score is None or np.isnan(score.score):
+
+                        typer.echo(f"⚠️ Got invalid score {score.score} for {hyp_path} vs {ref_path}")
+                        if score.score is None:
+                            print(f"None score")
+                        elif np.isnan(score.score):
+                            print("NaN score")
+
+                        print(metric.get_signature().format())
+                        print(metric.pose_preprocessors)
+                        print(hyp_pose.body.data.shape)
+                        print(ref_pose.body.data.shape)
+
+                        exit()
+
+                        # print(hyp_pose.body.data)
+
+                        # print(ref_pose.body.data)
+
+                        # exit()
+
                     end_time = time.perf_counter()
                     results["METRIC"].append(metric.name)
                     results["SCORE"].append(score.score)
@@ -107,7 +133,7 @@ def run_metrics(
             results_df = pd.DataFrame.from_dict(results)
             results_df.to_csv(results_path)
             print(f"Wrote {len(results_df)} scores to {results_path}")
-            print("*" * 50)
+            print("\n")
 
 
 @app.command()
@@ -118,6 +144,8 @@ def main(
     splits: Optional[str] = typer.Option(
         None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
     ),
+    gloss_count: Optional[int] = typer.Option(5, help="Number of glosses to select"),
+    out_gloss_multiplier: Optional[int] = typer.Option(4, help="Number of out-of-gloss items to sample"),
     filter_en_vocab: Annotated[
         bool,
         typer.Option(
@@ -149,7 +177,7 @@ def main(
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
-    run_metrics(df, out_path=out, metrics=metrics, gloss_count=3, out_gloss_multiplier=4)
+    run_metrics(df, out_path=out, metrics=metrics, gloss_count=gloss_count, out_gloss_multiplier=out_gloss_multiplier)
 
 
 if __name__ == "__main__":
