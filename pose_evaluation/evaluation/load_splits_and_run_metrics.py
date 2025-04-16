@@ -53,12 +53,20 @@ def run_metrics(
     gloss_count: Optional[int] = 5,
     out_gloss_multiplier=4,
     shuffle_metrics=True,
+    additional_glosses: Optional[List[str]] = None,
 ):
 
     gloss_vocabulary = df[STANDARDIZED_GLOSS_COL_NAME].unique().tolist()
 
     if gloss_count:
         gloss_vocabulary = gloss_vocabulary[:gloss_count]
+
+    if additional_glosses:
+        # prepend them
+        print(f"Prepending additional glosses {additional_glosses}")
+        additional_glosses.extend(gloss_vocabulary)
+        gloss_vocabulary = additional_glosses
+        print(f"Gloss vocabulary is now length {len(gloss_vocabulary)}")
 
     if shuffle_metrics:
         random.shuffle(metrics)
@@ -79,7 +87,8 @@ def run_metrics(
 
         for i, metric in enumerate(metrics):
             typer.echo("*" * 60)
-            typer.echo(f"Gloss #{g_index}/{len(gloss_vocabulary)}: {gloss} ")
+            typer.echo(f"Gloss #{g_index}/{len(gloss_vocabulary)}: {gloss}")
+            typer.echo(f"Testing with {len(in_gloss_df)} in-gloss files, and {len(out_gloss_df)} out-gloss")
             typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
             typer.echo(f"Metric #{i}/{len(metrics)} Signature: {metric.get_signature().format()}")
             results = defaultdict(list)
@@ -145,6 +154,10 @@ def main(
         None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
     ),
     gloss_count: Optional[int] = typer.Option(5, help="Number of glosses to select"),
+    additional_glosses: Optional[str] = typer.Option(
+        None,
+        help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
+    ),
     out_gloss_multiplier: Optional[int] = typer.Option(4, help="Number of out-of-gloss items to sample"),
     filter_en_vocab: Annotated[
         bool,
@@ -162,6 +175,9 @@ def main(
     else:
         splits = [s.strip() for s in splits.split(",") if s.strip()]
 
+    if additional_glosses is not None:
+        additional_glosses = additional_glosses.split(",")
+
     df = combine_dataset_dfs(dataset_df_files=dataset_df_files, splits=splits, filter_en_vocab=filter_en_vocab)
 
     typer.echo("\nCOMBINED DATAFRAME")
@@ -177,8 +193,16 @@ def main(
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
-    run_metrics(df, out_path=out, metrics=metrics, gloss_count=gloss_count, out_gloss_multiplier=out_gloss_multiplier)
+    run_metrics(
+        df,
+        out_path=out,
+        metrics=metrics,
+        gloss_count=gloss_count,
+        out_gloss_multiplier=out_gloss_multiplier,
+        additional_glosses=additional_glosses,
+    )
 
 
 if __name__ == "__main__":
     app()
+# python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER" 2>&1|tee out2.txt
