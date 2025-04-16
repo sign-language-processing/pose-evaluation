@@ -1,3 +1,4 @@
+import warnings
 from fastdtw import fastdtw  # type: ignore
 from dtaidistance import dtw_ndim
 from scipy.spatial.distance import cdist
@@ -36,7 +37,8 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
             disable=not progress,
         ):
             distance, _ = fastdtw(hyp_trajectory, ref_trajectory, dist=self._calculate_pointwise_distances)
-            trajectory_distances[i] = distance  # Store distance in the preallocated array
+            # distance is an ndarray of shape (1,)
+            trajectory_distances[i] = distance.item()  # Store distance in the preallocated array
         trajectory_distances = ma.array(trajectory_distances)
         return self._aggregate(trajectory_distances)
 
@@ -144,7 +146,6 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
         name="dtaiDTWAggregatedDistanceMeasure",
         default_distance: float = 0,
         aggregation_strategy: AggregationStrategy = "mean",
-        masked_fill_value=0,
         use_fast=True,
     ) -> None:
         super().__init__(
@@ -152,14 +153,14 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
             default_distance=default_distance,
             aggregation_strategy=aggregation_strategy,
         )
-        self.masked_fill_value = masked_fill_value
         self.use_fast = use_fast
 
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray, progress=False) -> float:
-        hyp_data = hyp_data.filled(self.masked_fill_value)
-        ref_data = ref_data.filled(self.masked_fill_value)
         keypoint_count = hyp_data.shape[2]  # Assuming shape: (frames, person, keypoints, xyz)
-        trajectory_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
+        trajectory_distances = ma.masked_array(  # preallocate for speed
+            data=np.empty(keypoint_count, dtype=float),
+            mask=np.ones(keypoint_count, dtype=bool),  # all masked by default
+        )
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
             enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
@@ -167,13 +168,28 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
             total=keypoint_count,
             disable=not progress,
         ):
+            hyp_trajectory = np.asarray(hyp_trajectory, dtype=np.float64)
+            ref_trajectory = np.asarray(ref_trajectory, dtype=np.float64)
             if self.use_fast:
-                hyp_trajectory = np.asarray(hyp_trajectory, dtype=np.float64)
-                ref_trajectory = np.asarray(ref_trajectory, dtype=np.float64)
                 distance = dtw_ndim.distance_fast(hyp_trajectory, ref_trajectory)
             else:
                 distance = dtw_ndim.distance(hyp_trajectory, ref_trajectory)
+            trajectory_distances[i] = distance
+            trajectory_distances.mask[i] = False
+            if np.isnan(distance) or np.isinf(distance):
+                warnings.warn(
+                    f"Invalid trajectory distance calculated, hyp shape: {hyp_data.shape} with {np.isnan(hyp_data).sum()} nans and {ma.count_masked(hyp_data)} masked, ref shape: {ref_data.shape} with {np.isnan(ref_data).sum()} nans and {ma.count_masked(ref_data)} masked"
+                )
+            #     trajectory_distances[i] = distance
+            #     # trajectory_distances.mask[i] = False  # explicitly unmask this value
+            # else:
+            #     # it is masked still
+            #     # TODO: option to just skip nan trajectory distances
+            #     trajectory_distances[i] = self.default_distance
+            #     # trajectory_distances.mask[i] = False
 
-            trajectory_distances[i] = distance  # Store distance in the preallocated array
-        trajectory_distances = ma.array(trajectory_distances)
-        return self._aggregate(trajectory_distances)
+        distance = self._aggregate(trajectory_distances)
+        if distance is None or np.isnan(distance) or np.isinf(distance):
+            distance = self.default_distance
+
+        return float(distance)
