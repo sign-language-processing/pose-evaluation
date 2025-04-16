@@ -77,6 +77,7 @@ def run_metrics(
 
         other_class_count = len(in_gloss_df) * out_gloss_multiplier
         out_gloss_df = out_gloss_df.sample(n=other_class_count, random_state=42)
+        ref_df = pd.concat([in_gloss_df, out_gloss_df], ignore_index=True)
 
         pose_data = load_pose_files(in_gloss_df)
         pose_data.update(load_pose_files(out_gloss_df))
@@ -101,7 +102,7 @@ def run_metrics(
                 hyp_path = hyp_row["POSE_FILE_PATH"]
                 hyp_pose = pose_data[hyp_path].copy()
 
-                for _, ref_row in out_gloss_df.iterrows():
+                for _, ref_row in ref_df.iterrows():
                     ref_path = ref_row["POSE_FILE_PATH"]
                     ref_pose = pose_data[ref_path].copy()
 
