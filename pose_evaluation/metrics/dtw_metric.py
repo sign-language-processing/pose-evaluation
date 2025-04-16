@@ -176,10 +176,7 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
                 distance = dtw_ndim.distance(hyp_trajectory, ref_trajectory)
             trajectory_distances[i] = distance
             trajectory_distances.mask[i] = False
-            if np.isnan(distance) or np.isinf(distance):
-                warnings.warn(
-                    f"Invalid trajectory distance calculated, hyp shape: {hyp_data.shape} with {np.isnan(hyp_data).sum()} nans and {ma.count_masked(hyp_data)} masked, ref shape: {ref_data.shape} with {np.isnan(ref_data).sum()} nans and {ma.count_masked(ref_data)} masked"
-                )
+
             #     trajectory_distances[i] = distance
             #     # trajectory_distances.mask[i] = False  # explicitly unmask this value
             # else:
@@ -190,6 +187,10 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
 
         distance = self._aggregate(trajectory_distances)
         if distance is None or np.isnan(distance) or np.isinf(distance):
+            warnings.warn(
+                f"Invalid distance calculated, setting to default value {self.default_distance}, hyp shape: {hyp_data.shape} with {np.isnan(hyp_data).sum()} nans and {ma.count_masked(hyp_data)} masked, ref shape: {ref_data.shape} with {np.isnan(ref_data).sum()} nans and {ma.count_masked(ref_data)} masked",
+                category=RuntimeWarning,
+            )
             distance = self.default_distance
 
         return float(distance)
