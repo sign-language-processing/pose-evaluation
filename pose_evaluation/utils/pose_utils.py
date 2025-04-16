@@ -136,16 +136,28 @@ def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     pose.body.data = masked_data
 
 
-def pose_mask_invalid_values(pose: Pose) -> Pose:
+def pose_mask_invalid_values(pose: Pose, overwrite_confidence=True) -> Pose:
     pose = pose.copy()
-    pose.body.data = ma.masked_invalid(pose.body.data)  # replace all unmasked invalid values
+    pose.body.data = ma.masked_invalid(pose.body.data)  # mask all invalid values
+    if overwrite_confidence:
+        # Zero confidence wherever any coordinate is masked
+        invalid_mask = pose.body.data.mask
+        if invalid_mask is not ma.nomask:
+            pose.body.confidence[invalid_mask.any(axis=-1)] = 0
     return pose
 
 
-def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0) -> Pose:
-    pose = pose.copy()
-    pose.body.data = ma.masked_invalid(pose.body.data)  # replace all unmasked invalid values
-    pose.body.data = ma.array(
+def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0, overwrite_confidence=True) -> Pose:
+    pose = pose_mask_invalid_values(pose, overwrite_confidence=overwrite_confidence)
+
+    # Fill it...
+    pose.body.data = ma.masked_array(
         pose.body.data.filled(fill_val), mask=False
     )  # Replace masked values. Still a MaskedArray for compatibility
+
+    # ...and overwrite the confidence as well.
+    if overwrite_confidence:
+        # update the confidence to all ones. We are now fully "confident" that these are this value
+        pose.body.confidence = np.ones_like(pose.body.confidence, dtype=pose.body.confidence.dtype)
+
     return pose
