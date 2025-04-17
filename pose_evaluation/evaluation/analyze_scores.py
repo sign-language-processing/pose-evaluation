@@ -24,9 +24,12 @@ def precision_at_k(df: pd.DataFrame, k: int) -> float:
     for gloss_a_path, group in df.groupby(GLOSS_A_PATH):
         # Exclude rows where 'Gloss B Path' matches 'Gloss A Path'
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
 
-        # Sort by score (lower is better)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        # Sort by score in ascending order (lower score is better), 
+        # kind='stable' ensures the sort doesn’t disturb the shuffle when scores are equal — it only reorders where necessary.
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Select top-k results
         top_k = sorted_group.head(k)
@@ -46,8 +49,12 @@ def recall_at_k(df: pd.DataFrame, k: int) -> float:
         # Exclude trivial cases
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
 
-        # Sort by score (ascending)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
+
+        # Sort by score in ascending order (lower score is better), 
+        # kind='stable' ensures the sort doesn’t disturb the shuffle when scores are equal — it only reorders where necessary.
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Count total correct matches in the full set
         total_correct = (sorted_group[GLOSS_A] == sorted_group[GLOSS_B]).sum()
@@ -72,8 +79,12 @@ def match_count_at_k(df: pd.DataFrame, k: int) -> int:
         # Exclude trivial cases
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
 
-        # Sort by score (ascending)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
+
+        # Sort by score in ascending order (lower score is better), 
+        # kind='stable' ensures the sort doesn’t disturb the shuffle when scores are equal — it only reorders where necessary.
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Select top-k results
         top_k = sorted_group.head(k)
@@ -91,8 +102,11 @@ def mean_average_precision(df: pd.DataFrame) -> float:
         # Exclude trivial cases
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
 
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
+
         # Sort by score (ascending)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Identify relevant positions
         relevant_mask = sorted_group[GLOSS_A].values == sorted_group[GLOSS_B].values
@@ -120,8 +134,12 @@ def mean_reciprocal_rank(df: pd.DataFrame) -> float:
         # Exclude rows where 'Gloss B Path' matches 'Gloss A Path'
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
 
-        # Sort by score in ascending order (lower score is better)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
+
+        # Sort by score in ascending order (lower score is better), 
+        # kind='stable' ensures the sort doesn’t disturb the shuffle when scores are equal — it only reorders where necessary.
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Find the first correct match
         relevant_mask = sorted_group[GLOSS_A].values == sorted_group[GLOSS_B].values
@@ -141,9 +159,12 @@ def mean_match_count_at_k(df: pd.DataFrame, k: int) -> float:
     for gloss_a_path, group in df.groupby(GLOSS_A_PATH):
         # Exclude trivial cases
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
+        # Shuffle to prevent bias in case of score ties
+        filtered_group = filtered_group.sample(frac=1, random_state=42)  # random_state for reproducibility
 
-        # Sort by score (ascending)
-        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True)
+        # Sort by score in ascending order (lower score is better), 
+        # kind='stable' ensures the sort doesn’t disturb the shuffle when scores are equal — it only reorders where necessary.
+        sorted_group = filtered_group.sort_values(by=SCORE, ascending=True, kind="stable")
 
         # Select top-k results
         top_k = sorted_group.head(k)
@@ -185,7 +206,7 @@ if __name__ == "__main__":
     analysis_folder.mkdir(exist_ok=True)
 
     csv_stats_dfs = []
-    for csv_file in tqdm(stats_folder.glob("*.csv"), desc="Loading stats csvs"):
+    for csv_file in tqdm(stats_folder.glob("*.csv"), desc="Loading scores csvs"):
         # print(f"Reading {csv_file}")
         # ,METRIC,SCORE,GLOSS_A,GLOSS_B,SIGNATURE,GLOSS_A_PATH,GLOSS_B_PATH,TIME
         csv_stats_df = pd.read_csv(
@@ -316,7 +337,7 @@ if __name__ == "__main__":
         metric_stats["std_dev_of_score_time"].append(metric_df[TIME].std())
 
         metric_stats["mrr_of_same_gloss"].append(mean_reciprocal_rank(metric_df))
-        metric_stats["map_of_same_gloss"].append(mean_average_precision(metric_df))
+        metric_stats["map_of_same_gloss"].append(mean_average_precision(metric_df))  # bugged? return4 wins
 
         print("#" * 30)
 
