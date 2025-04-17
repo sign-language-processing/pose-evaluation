@@ -3,6 +3,7 @@ from typing import Literal, Optional, List
 
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.distance_measure import DistanceMeasure, AggregatedPowerDistance
+from pose_evaluation.metrics.nonsense_measures import Return4Measure
 from pose_evaluation.metrics.dtw_metric import (
     DTWDTAIImplementationDistanceMeasure,
     DTWAggregatedScipyDistanceMeasure,
@@ -170,7 +171,13 @@ def get_metrics(measures: List[DistanceMeasure] = None):
         )
         metrics.append(metric)
 
+
+    # baseline/nonsense measures
+    metrics.append(DistanceMetric(name="Return4Metric", distance_measure=Return4Measure(), pose_preprocessors=[]))
+
     metric_names = [metric.name for metric in metrics]
     metric_names_set = set(metric_names)
     assert len(metric_names_set) == len(metric_names)
+
+
     return metrics
