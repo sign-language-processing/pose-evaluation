@@ -27,12 +27,15 @@ class Signature:
 
     def format(self, short: bool = False) -> str:
         parts = []
+
         # Always print the "name" value first, if available.
         name_value = self.signature_info.get("name")
         if name_value is not None:
             parts.append(str(name_value))
         # Process all other keys.
         for key, value in self.signature_info.items():
+            if str(key).startswith("_"):
+                continue
             if key == "name" or value is None:
                 continue
             # Handle nested signature objects and wrap them in curly braces.
