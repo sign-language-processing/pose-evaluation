@@ -1,8 +1,20 @@
+import pytest
+import itertools
+from typing import List
 import unittest
+
+import numpy as np
+import numpy.ma as ma
+
+from pose_format import Pose
 from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
+from pose_evaluation.metrics.pose_processors import (
+    get_standard_pose_processors,
+    FillMaskedOrInvalidValuesPoseProcessor,
+    ReducePosesToCommonComponentsProcessor,
+)
 from pose_evaluation.metrics.test_distance_metric import get_poses
-from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure
+from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 
 
 class TestDTWMetricL1(unittest.TestCase):
@@ -44,3 +56,46 @@ class TestDTWMetricL1(unittest.TestCase):
         score = self.metric.score(hypothesis, reference)
         self.assertIsInstance(score, float)
         self.assertAlmostEqual(score, expected_distance)
+
+
+def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
+
+    default_distance = 10.0
+    metric = DistanceMetric(
+        name="testmetric_with_no_masked_preprocessing",
+        distance_measure=DTWDTAIImplementationDistanceMeasure(
+            name="dtaiDTWAggregatedDistanceMeasureFast",
+            use_fast=True,
+            default_distance=default_distance,
+        ),
+        pose_preprocessors=[],
+    )
+    with pytest.warns(
+        RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
+    ):
+        for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
+            score = metric.score_with_signature(hyp, ref)
+            assert score is not None
+            assert score.score is not None
+            assert not np.isinf(score.score)
+            assert not np.isnan(score.score)
+            assert score.score == default_distance
+
+    metric = DistanceMetric(
+        name="testmetric_with_masked_preprocessing",
+        distance_measure=DTWDTAIImplementationDistanceMeasure(
+            name="dtaiDTWAggregatedDistanceMeasureFast", use_fast=True
+        ),
+        pose_preprocessors=[FillMaskedOrInvalidValuesPoseProcessor(), ReducePosesToCommonComponentsProcessor()],
+    )
+    for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
+
+        processed_poses = metric.process_poses([hyp, ref], progress=True)
+        for pose in processed_poses:
+            assert ma.count_masked(pose.body.data) == 0
+        score = metric.score_with_signature(hyp, ref)
+        assert score is not None
+        assert score.score is not None
+        assert not np.isinf(score.score)
+        assert not np.isnan(score.score)
+        assert score.score != default_distance

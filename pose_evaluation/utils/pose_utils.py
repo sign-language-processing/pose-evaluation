@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Dict, Iterable
+from typing import List, Tuple, Dict, Iterable, Union, Set
 
 import numpy as np
 from numpy import ma
@@ -44,27 +44,70 @@ def load_pose_file(pose_path: Path) -> Pose:
 
 
 def reduce_poses_to_intersection(
-    poses: Iterable[Pose],
-    progress=False,
-) -> List[Pose]:
-    poses = list(poses)  # get a list, no need to copy
+    poses: Iterable["Pose"],
+    progress: bool = False,
+    debug: bool = False,
+) -> List["Pose"]:
+    poses = list(poses)  # Ensure it's a list so we can iterate multiple times
 
-    # look at the first pose
-    component_names = {c.name for c in poses[0].header.components}
-    points = {c.name: set(c.points) for c in poses[0].header.components}
+    if not poses:
+        if debug:
+            print("No poses provided, returning empty list.")
+        return []
 
-    # remove anything that other poses don't have
-    for pose in tqdm(poses[1:], desc="reduce poses to intersection", disable=not progress):
-        component_names.intersection_update({c.name for c in pose.header.components})
-        for component in pose.header.components:
-            points[component.name].intersection_update(set(component.points))
+    # === Stage 1: Reduce to common components ===
+    common_components: Set[str] = {comp.name for comp in poses[0].header.components}
+    if debug:
+        print(f"Initial components from first pose: {sorted(common_components)}")
 
-    # change datatypes to match get_components, then update the poses
-    points_dict = {}
-    for c_name in points.keys():
-        points_dict[c_name] = list(points[c_name])
-    poses = [pose.get_components(list(component_names), points_dict) for pose in poses]
-    return poses
+    for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting components", disable=not progress)):
+        current_components = {comp.name for comp in pose.header.components}
+        if debug:
+            print(f"Pose {i+1} components: {sorted(current_components)}")
+        common_components.intersection_update(current_components)
+        if debug:
+            print(f"Updated common components: {sorted(common_components)}")
+
+    common_components_list = sorted(common_components)
+
+    if debug:
+        print(f"Final list of common components: {common_components_list}")
+        print("Applying get_components to all poses...")
+
+    # Apply component filtering
+    poses = [pose.get_components(common_components_list) for pose in poses]
+
+    # === Stage 2: Reduce to common points within each component ===
+    common_points: Dict[str, Set[str]] = {comp.name: set(comp.points) for comp in poses[0].header.components}
+
+    if debug:
+        print("Initial points per component:")
+        for name, pts in common_points.items():
+            print(f"  {name}: {sorted(pts)}")
+
+    for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting points", disable=not progress)):
+        current_points = {comp.name: set(comp.points) for comp in pose.header.components}
+        for name in common_points:
+            if debug:
+                before = common_points[name]
+                current = current_points.get(name, set())
+                print(f"Pose {i+1}, component '{name}': intersecting {sorted(before)} with {sorted(current)}")
+            common_points[name].intersection_update(current_points.get(name, set()))
+            if debug:
+                print(f"Updated points for '{name}': {sorted(common_points[name])}")
+
+    # Final dictionary of intersected points
+    final_points_dict: Dict[str, List[str]] = {name: sorted(list(pts)) for name, pts in common_points.items()}
+
+    if debug:
+        print("Final points per component to apply:")
+        for name, pts in final_points_dict.items():
+            print(f"  {name}: {pts}")
+
+    # Apply final component + point reduction
+    reduced_poses = [pose.get_components(common_components_list, points=final_points_dict) for pose in poses]
+
+    return reduced_poses
 
 
 def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
@@ -91,3 +134,30 @@ def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     stacked_confidence = np.stack([mask, mask, mask], axis=3)
     masked_data = ma.masked_array(pose.body.data, mask=stacked_confidence)
     pose.body.data = masked_data
+
+
+def pose_mask_invalid_values(pose: Pose, overwrite_confidence=True) -> Pose:
+    pose = pose.copy()
+    pose.body.data = ma.masked_invalid(pose.body.data)  # mask all invalid values
+    if overwrite_confidence:
+        # Zero confidence wherever any coordinate is masked
+        invalid_mask = pose.body.data.mask
+        if invalid_mask is not ma.nomask:
+            pose.body.confidence[invalid_mask.any(axis=-1)] = 0
+    return pose
+
+
+def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0, overwrite_confidence=True) -> Pose:
+    pose = pose_mask_invalid_values(pose, overwrite_confidence=overwrite_confidence)
+
+    # Fill it...
+    pose.body.data = ma.masked_array(
+        pose.body.data.filled(fill_val), mask=False
+    )  # Replace masked values. Still a MaskedArray for compatibility
+
+    # ...and overwrite the confidence as well.
+    if overwrite_confidence:
+        # update the confidence to all ones. We are now fully "confident" that these are this value
+        pose.body.confidence = np.ones_like(pose.body.confidence, dtype=pose.body.confidence.dtype)
+
+    return pose

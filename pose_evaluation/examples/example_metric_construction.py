@@ -7,6 +7,7 @@ from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.dtw_metric import (
     DTWAggregatedPowerDistanceMeasure,
     DTWAggregatedScipyDistanceMeasure,
+    DTWDTAIImplementationDistanceMeasure,
 )
 from pose_evaluation.metrics.test_distance_metric import get_poses
 from pose_evaluation.metrics.pose_processors import (
@@ -19,7 +20,7 @@ from pose_evaluation.metrics.pose_processors import (
 
 if __name__ == "__main__":
     # Define file paths for test pose data
-    test_data_path = Path("pose_evaluation") / "utils" / "test" / "test_data"
+    test_data_path = Path("pose_evaluation") / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
     reference_file = test_data_path / "colin-1-HOUSE.pose"
     hypothesis_file = test_data_path / "colin-2-HOUSE.pose"
 
@@ -108,22 +109,29 @@ if __name__ == "__main__":
         ),
         # Recreating Dynamic Time Warping - Mean Joint Error
         # As before, only now we use the Dynamic Time Warping version!
-        DistanceMetric(
-            "DTWPowerDistance",
-            DTWAggregatedPowerDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, order=2),
-            pose_preprocessors=get_standard_pose_processors(
-                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
-            ),
-        ),
+        # DistanceMetric(
+        #     "DTWPowerDistance",
+        #     DTWAggregatedPowerDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, order=2),
+        #     pose_preprocessors=get_standard_pose_processors(
+        #         zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+        #     ),
+        # ),
         # We can also implement a version that uses scipy distances "cdist"
         # This lets us experiment with e.g. jaccard
         # Options are listed at the documentation for scipy:
         # https://docs.scipy.org/doc/scipy-1.15.0/reference/generated/scipy.spatial.distance.cdist.html
+        # DistanceMetric(
+        #     "DTWScipyDistance",
+        #     DTWAggregatedScipyDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, metric="jaccard"),
+        #     pose_preprocessors=get_standard_pose_processors(
+        #         zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+        #     ),
+        # ),
         DistanceMetric(
-            "DTWScipyDistance",
-            DTWAggregatedScipyDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, metric="jaccard"),
+            "n-dtai-DTW-MJE (fast)",
+            distance_measure=DTWDTAIImplementationDistanceMeasure(use_fast=True),
             pose_preprocessors=get_standard_pose_processors(
-                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+                reduce_holistic_to_face_and_upper_body=True, zero_pad_shorter=False
             ),
         ),
     ]
