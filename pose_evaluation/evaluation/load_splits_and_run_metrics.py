@@ -180,7 +180,7 @@ def run_metrics(
                     results["SCORE"].append(score.score)
                     results["GLOSS_A"].append(hyp_row[STANDARDIZED_GLOSS_COL_NAME])
                     results["GLOSS_B"].append(ref_row[STANDARDIZED_GLOSS_COL_NAME])
-                    results["SIGNATURE"].append(score.format())
+                    results["SIGNATURE"].append(metric.get_signature().format())
                     results["GLOSS_A_PATH"].append(hyp_path)
                     results["GLOSS_B_PATH"].append(ref_path)
                     results["TIME"].append(end_time - start_time)
@@ -256,3 +256,4 @@ if __name__ == "__main__":
     app()
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
+# cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
