@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict
 from collections import defaultdict
 from pathlib import Path
 import pandas as pd
@@ -31,7 +31,7 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
     average_precisions = []
     reciprocal_ranks = []
 
-    for gloss_a_path, group in df.groupby(GLOSS_A_PATH):
+    for gloss_a_path, group in tqdm(df.groupby(GLOSS_A_PATH), "Iterating over hyp paths", disable=len(df) < 1000):
         filtered_group = group[group[GLOSS_B_PATH] != gloss_a_path]
         if filtered_group.empty:
             continue
@@ -83,6 +83,57 @@ def standardize_path_order(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int]) -> Dict[str, any]:
+    result = {METRIC: metric_name}
+
+    # Shuffle to prevent bias in case of score ties
+    metric_df = metric_df.sample(frac=1, random_state=42)
+
+    # Check signatures
+    signatures = metric_df[SIGNATURE].str.split("=").str[0].unique()
+    if metric_df[SIGNATURE].isna().any():
+        print("nan_rows:")
+        print(metric_df[metric_df[SIGNATURE].isna()])
+
+    if (metric_df[SIGNATURE] == "").any():
+        print("empty_rows:")
+        print(metric_df[metric_df[SIGNATURE] == ""])
+        print(signatures)
+
+    assert len(signatures) == 1, signatures
+    result[SIGNATURE] = signatures[0]
+
+    # Summary metrics
+    gloss_tuples = metric_df["gloss_tuple"].unique()
+    metric_glosses = set(metric_df[GLOSS_A].tolist() + metric_df[GLOSS_B].tolist())
+
+    not_self_score_df = metric_df[metric_df[GLOSS_A] != metric_df[GLOSS_B]]
+    self_scores_df = metric_df[metric_df[GLOSS_A] == metric_df[GLOSS_B]]
+
+    print(
+        f"{metric_name} has \n"
+        f"*\t{len(metric_df)} distances,\n"
+        f"*\tcovering {len(metric_glosses)} glosses,\n"
+        f"*\twith {len(metric_df[GLOSS_A].unique())} unique query glosses,\n"
+        f"*\t{len(metric_df[GLOSS_B].unique())} unique ref glosses,\n"
+        f"*\tin {len(gloss_tuples)} combinations,\n"
+        f"*\t{len(not_self_score_df)} out-of-class scores,\n"
+        f"*\t{len(self_scores_df)} in-class scores"
+    )
+
+    result["unique_gloss_pairs"] = len(gloss_tuples)
+    result["unique_glosses"] = len(metric_glosses)
+    result["hyp_gloss_count"] = len(metric_df[GLOSS_A].unique())
+    result["ref_gloss_count"] = len(metric_df[GLOSS_B].unique())
+    result["total_count"] = len(metric_df)
+
+    # Retrieval metrics
+    retrieval_stats = calculate_retrieval_stats(metric_df, ks=ks)
+    result.update(retrieval_stats)
+
+    return result
+
+
 if __name__ == "__main__":
 
     # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\similar_sign_analysis\scores")
@@ -97,6 +148,8 @@ if __name__ == "__main__":
     analysis_folder = stats_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
+    metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
+    metric_by_gloss_stats_folder.mkdir(exist_ok=True)
     ks = [1, 5, 10]
 
     previous_stats_by_metric = None
@@ -113,7 +166,7 @@ if __name__ == "__main__":
     for csv_file in tqdm(stats_folder.glob("*.csv"), desc="Loading scores csvs"):
         # print(f"Reading {csv_file}")
         # ,METRIC,SCORE,GLOSS_A,GLOSS_B,SIGNATURE,GLOSS_A_PATH,GLOSS_B_PATH,TIME
-        csv_stats_df = pd.read_csv(
+        scores_csv_df = pd.read_csv(
             csv_file,
             index_col=0,
             dtype={
@@ -127,155 +180,40 @@ if __name__ == "__main__":
             float_precision="high",
         )
 
-        csv_stats_df["SIGNATURE"] = csv_stats_df["SIGNATURE"].apply(
+        scores_csv_df["SIGNATURE"] = scores_csv_df["SIGNATURE"].apply(
             lambda x: x.split("=")[0].strip() if "=" in x else x.strip()
         )
-        assert len(csv_stats_df[METRIC].unique()) == 1
-        assert len(csv_stats_df[SIGNATURE].unique()) == 1, f"{csv_file}, {csv_stats_df[SIGNATURE].unique()}"
+        assert len(scores_csv_df[METRIC].unique()) == 1
+        assert len(scores_csv_df[SIGNATURE].unique()) == 1, f"{csv_file}, {scores_csv_df[SIGNATURE].unique()}"
 
-        csv_stats_dfs.append(csv_stats_df)        
+        csv_stats_dfs.append(scores_csv_df)
 
-    stats_df = pd.concat(csv_stats_dfs)
+    scores_df = pd.concat(csv_stats_dfs)
 
-    print(f"{stats_df}")
+    print(f"{scores_df}")
 
-    # Normalize path pairs by sorting them
+    # Normalize gloss pairs by sorting them
     print("Creating gloss tuple pairs")
     # stats_df["path_tuple"] = [tuple(x) for x in np.sort(stats_df[[GLOSS_A_PATH, GLOSS_B_PATH]].values, axis=1)]
-    stats_df["gloss_tuple"] = [tuple(x) for x in np.sort(stats_df[[GLOSS_A, GLOSS_B]].values, axis=1)]
-    stats_by_metric = defaultdict(list)
+    scores_df["gloss_tuple"] = [tuple(x) for x in np.sort(scores_df[[GLOSS_A, GLOSS_B]].values, axis=1)]
 
-    metrics_to_analyze = stats_df[METRIC].unique()
+    metrics_to_analyze = scores_df[METRIC].unique()
+    stats_by_metric = defaultdict(list)
     print(f"We have results for {len(metrics_to_analyze)}")
     # metrics_to_analyze = ["n-dtai-DTW-MJE (fast)", "MJE", "nMJE"]
     for metric_index, metric in enumerate(metrics_to_analyze):
         print("*" * 50)
         print(f"METRIC #{metric_index}/{len(metrics_to_analyze)}: {metric}")
+        metric_df = scores_df[scores_df[METRIC] == metric]
 
-        metric_df = stats_df[stats_df[METRIC] == metric]
-        # print(metric_df.head())
-        # print(metric_df.columns)
-        metric_df[TIME].head()
-        # print(metric_df[TIME].mean())
-        # print(len(metric_df[metric_df[TIME].isna()]))
-
-        # Shuffle to prevent bias in case of score ties
-        metric_df = metric_df.sample(frac=1, random_state=42)  # random_state for reproducibility
-
-        signatures = metric_df[SIGNATURE].str.split("=").str[0].unique()
-        nan_rows = metric_df[metric_df[SIGNATURE].isna()]
-        if len(nan_rows) > 0:
-            print("nan_rows:")
-            print(nan_rows)
-
-        empty_rows = metric_df[metric_df[SIGNATURE] == ""]
-        if len(empty_rows) > 0:
-            print("empty_rows")
-            print(empty_rows)
-            print(signatures)
-
-        # path_tuples = metric_df["path_tuple"].unique()
-        gloss_tuples = metric_df["gloss_tuple"].unique()
-        metric_glosses = metric_df[GLOSS_A].unique().tolist()
-        metric_glosses.extend(metric_df[GLOSS_B].unique().tolist())
-        metric_glosses = set(metric_glosses)
-
-        not_self_score_df = metric_df[metric_df[GLOSS_A] != metric_df[GLOSS_B]]
-
-        ################
-        # Self-scores
-        self_scores_df = metric_df[metric_df[GLOSS_A] == metric_df[GLOSS_B]]
-
-        print(
-            f"{metric} has \n"
-            f"*\t{len(metric_df)} distances,\n"
-            f"*\tcovering {len(metric_glosses)} glosses,\n"
-            f"*\twith {len(metric_df[GLOSS_A].unique())} unique query glosses,\n"
-            f"*\t{len(metric_df[GLOSS_B].unique())} unique ref glosses,\n"
-            f"*\tin {len(gloss_tuples)} combinations,\n"
-            # f"*\twith {len(path_tuples)} file combinations.\n"
-            f"*\tThere are {len(not_self_score_df)} out-of-class-scores,\n"
-            f"*\tand {len(self_scores_df)} in-class scores"
-        )
-
-        ###############################
-        # Add to metric stats
-        # METRIC: [],
-        # SIGNATURE: [],
-        # "unique_gloss_pairs": [],
-        # "total_count": [],
-        # "self_scores_count": [],
-        # "mean": [],
-        # "max": [],
-        # "std": [],
-        # "std_of_gloss_std": [],
-        # "std_of_of_gloss_mean": [],
-        # "mean_of_gloss_mean": [],
-        # metric_stats[METRIC].append(metric)
-
-        ############################################################################
-        # Out of gloss
-        # Rank by "mean" in ascending order (use ascending=False for descending)
-
-        assert len(signatures) == 1, signatures
-        stats_by_metric[METRIC].append(metric)
-        stats_by_metric[SIGNATURE].append(signatures[0])
-        stats_by_metric["unique_gloss_pairs"].append(len(gloss_tuples))
-        stats_by_metric["unique_glosses"].append(len(metric_glosses))
-        stats_by_metric["total_count"].append(len(metric_df))
-
-        stats_by_metric["self_scores_count"].append(len(self_scores_df))
-        stats_by_metric["mean_self_score"].append(self_scores_df[SCORE].mean())
-        stats_by_metric["std_self_score"].append(self_scores_df[SCORE].std())
-
-        stats_by_metric["out_of_class_scores_count"].append(len(not_self_score_df))
-        stats_by_metric["mean_out_of_class_score"].append(not_self_score_df[SCORE].mean())
-        stats_by_metric["std_out_of_class_score"].append(not_self_score_df[SCORE].std())
-
-        stats_by_metric["mean_score_time"].append(metric_df[TIME].mean())
-        stats_by_metric["std_dev_of_score_time"].append(metric_df[TIME].std())
-
-        ##############################
-        # Retrieval Stats
-        # Calculate retrieval stats for each metric
-        print("Calculating retrieval stats")
-
-        retrieval_stats = calculate_retrieval_stats(metric_df, ks=ks)
-
-        # Append global metrics
-        stats_by_metric["mrr_of_same_gloss"].append(retrieval_stats["mean_reciprocal_rank"])
-        stats_by_metric["map_of_same_gloss"].append(retrieval_stats["mean_average_precision"])
-
-        # Append per-k metrics
-        for k in ks:
-            stats_by_metric[f"precision@{k}"].append(retrieval_stats[f"precision@{k}"])
-            stats_by_metric[f"recall@{k}"].append(retrieval_stats[f"recall@{k}"])
-
-        stats_by_metric["mean_out_mean_in_ratio"].append(not_self_score_df[SCORE].mean() / self_scores_df[SCORE].mean())
-        stats_df = stats_df[stats_df[METRIC] != metric] # delete. 
-        print(f"{len(metric_df)} metric rows removed, now stats_df is {len(stats_df)} long")
-        print("#" * 50)
+        metric_stats = analyze_metric(metric, metric_df, ks)
+        for k, v in metric_stats.items():
+            stats_by_metric[k].append(v)
 
     stats_by_metric = pd.DataFrame(stats_by_metric)
     print(stats_by_metric)
 
     stats_by_metric.to_csv(metric_stats_out, index=False)
-
-    fig = px.box(
-        stats_df,
-        x=METRIC,
-        y=TIME,
-        points=None,
-        title="Metric Pairwise Scoring Times (s)",
-        color=METRIC,
-    )
-    # fig.update_layout(xaxis_type="category")
-    # fig.update_layout(xaxis={"categoryorder": "category ascending"})
-    # fig.update_layout(xaxis={"categoryorder": "trace"})
-    # fig.update_layout(xaxis_tickangle=-45)  # Rotate x labels for readability
-    fig.update_layout(xaxis=dict(categoryorder="trace", showticklabels=False, ticks=""))
-
-    fig.write_html(analysis_folder / "metric_pairwise_scoring_time_distributions.html")
 
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py
