@@ -83,7 +83,7 @@ def standardize_path_order(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int]) -> Dict[str, any]:
+def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out_folder=None) -> Dict[str, any]:
     result = {METRIC: metric_name}
 
     # Shuffle to prevent bias in case of score ties
@@ -103,12 +103,41 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int]) -> 
     assert len(signatures) == 1, signatures
     result[SIGNATURE] = signatures[0]
 
-    # Summary metrics
+    # Gloss and gloss-pair stats
     gloss_tuples = metric_df["gloss_tuple"].unique()
     metric_glosses = set(metric_df[GLOSS_A].tolist() + metric_df[GLOSS_B].tolist())
 
+    # Score subsets
     not_self_score_df = metric_df[metric_df[GLOSS_A] != metric_df[GLOSS_B]]
     self_scores_df = metric_df[metric_df[GLOSS_A] == metric_df[GLOSS_B]]
+
+    result["unique_gloss_pairs"] = len(gloss_tuples)
+    result["unique_glosses"] = len(metric_glosses)
+    result["hyp_gloss_count"] = len(metric_df[GLOSS_A].unique())
+    result["ref_gloss_count"] = len(metric_df[GLOSS_B].unique())
+    result["total_count"] = len(metric_df)
+
+    # Self-score stats
+    result["self_scores_count"] = len(self_scores_df)
+    result["mean_self_score"] = self_scores_df[SCORE].mean()
+    result["std_self_score"] = self_scores_df[SCORE].std()
+
+    gloss_stats_self = self_scores_df.groupby(GLOSS_A)[SCORE].agg(["mean", "std"])
+    result["mean_of_gloss_self_score_means"] = gloss_stats_self["mean"].mean()
+    result["std_of_gloss_self_score_means"] = gloss_stats_self["mean"].std()
+
+    # Out-of-class stats
+    result["out_of_class_scores_count"] = len(not_self_score_df)
+    result["mean_out_of_class_score"] = not_self_score_df[SCORE].mean()
+    result["std_out_of_class_score"] = not_self_score_df[SCORE].std()
+
+    out_of_class_gloss_stats = not_self_score_df.groupby(GLOSS_A)[SCORE].agg(["mean", "std"])
+    result["mean_of_out_of_class_score_means"] = out_of_class_gloss_stats["mean"].mean()
+    result["std_of_out_of_class_score_means"] = out_of_class_gloss_stats["mean"].std()
+
+    # Time stats
+    result["mean_score_time"] = metric_df[TIME].mean()
+    result["std_dev_of_score_time"] = metric_df[TIME].std()
 
     print(
         f"{metric_name} has \n"
@@ -121,15 +150,23 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int]) -> 
         f"*\t{len(self_scores_df)} in-class scores"
     )
 
-    result["unique_gloss_pairs"] = len(gloss_tuples)
-    result["unique_glosses"] = len(metric_glosses)
-    result["hyp_gloss_count"] = len(metric_df[GLOSS_A].unique())
-    result["ref_gloss_count"] = len(metric_df[GLOSS_B].unique())
-    result["total_count"] = len(metric_df)
-
     # Retrieval metrics
     retrieval_stats = calculate_retrieval_stats(metric_df, ks=ks)
     result.update(retrieval_stats)
+
+    # mean in-gloss score
+    # mean out-gloss score
+
+    result["mean_out_gloss_score"] = not_self_score_df[SCORE].mean()
+    result["mean_in_gloss_score"] = self_scores_df[SCORE].mean()
+    result["mean_out_mean_in_ratio"] = result["mean_out_gloss_score"] / result["mean_in_gloss_score"]
+
+    out_of_class_gloss_stats = (
+        not_self_score_df.groupby("gloss_tuple")[SCORE].agg(["count", "mean", "max", "min", "std"]).reset_index()
+    )
+    out_of_class_gloss_stats = out_of_class_gloss_stats.sort_values("count", ascending=False)
+    out_of_class_gloss_stats[METRIC] = metric_name
+    out_of_class_gloss_stats.to_csv(out_folder / f"{metric}_out_of_class_scores_by_gloss.csv", index=False)
 
     return result
 
@@ -145,7 +182,7 @@ if __name__ == "__main__":
 
     # TODO: check if the number of CSVs has changed. If not, load deduplicated.
 
-    analysis_folder = stats_folder.parent / "score_analysis"
+    analysis_folder = stats_folder.parent / "score_analysis_foo"
     analysis_folder.mkdir(exist_ok=True)
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
@@ -154,7 +191,7 @@ if __name__ == "__main__":
 
     previous_stats_by_metric = None
 
-    # TODO: check metric against previous stats, and skip calculating if possible
+    # TODO: load from index json below
     if metric_stats_out.is_file():
         print(f"Loaded previous stats from {metric_stats_out}")
         previous_stats_by_metric = pd.read_csv(metric_stats_out)
@@ -163,7 +200,8 @@ if __name__ == "__main__":
         print(previous_stats_by_metric.describe())
 
     csv_stats_dfs = []
-    for csv_file in tqdm(stats_folder.glob("*.csv"), desc="Loading scores csvs"):
+    csv_files = list(stats_folder.glob("*.csv"))
+    for csv_file in tqdm(csv_files, desc="Loading scores csvs"):
         # print(f"Reading {csv_file}")
         # ,METRIC,SCORE,GLOSS_A,GLOSS_B,SIGNATURE,GLOSS_A_PATH,GLOSS_B_PATH,TIME
         scores_csv_df = pd.read_csv(
@@ -197,6 +235,7 @@ if __name__ == "__main__":
     # stats_df["path_tuple"] = [tuple(x) for x in np.sort(stats_df[[GLOSS_A_PATH, GLOSS_B_PATH]].values, axis=1)]
     scores_df["gloss_tuple"] = [tuple(x) for x in np.sort(scores_df[[GLOSS_A, GLOSS_B]].values, axis=1)]
 
+    # TODO: This is where we should load from the index.
     metrics_to_analyze = scores_df[METRIC].unique()
     stats_by_metric = defaultdict(list)
     print(f"We have results for {len(metrics_to_analyze)}")
@@ -206,7 +245,7 @@ if __name__ == "__main__":
         print(f"METRIC #{metric_index}/{len(metrics_to_analyze)}: {metric}")
         metric_df = scores_df[scores_df[METRIC] == metric]
 
-        metric_stats = analyze_metric(metric, metric_df, ks)
+        metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
 
