@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+METRIC_COL = "METRIC"
+SIGNATURE_COL = "SIGNATURE"
+
 # --- Path input ---
 csv_path = st.text_input(
     "Enter path to your CSV file",
@@ -39,7 +42,13 @@ if csv_path:
     # fillmasked0.0,fillmasked1.0,fillmasked10.0,return4 has no pattern I can see
     # defaultdist10.0,defaultdist1.0,defaultdist0.0,return4 has no pattern I can see
 
+    # this is interesting for precision@10 and mean_score_time. Clear bands of performance
+    # dtw,zeropad,hands,removelegsandworld,reduceholistic,return4,nointerp,interp15,interp120
+
+    # dtw,zeropad,return4,nointerp,interp15,interp120 shows the mean_score_time effects well.
+
     df = df.copy()
+    metric_count = len(df[METRIC_COL].unique())
 
     if keyword_input.strip():
         keywords = [k.strip().lower() for k in keyword_input.split(",") if k.strip()]
@@ -51,13 +60,13 @@ if csv_path:
             return "Other"
 
         df["highlight"] = df.apply(
-            lambda row: match_keywords(row["METRIC"]) if pd.notnull(row["METRIC"]) else "Other", axis=1
+            lambda row: match_keywords(row[METRIC_COL]) if pd.notnull(row[METRIC_COL]) else "Other", axis=1
         )
 
         # Check SIGNATURE if METRIC didn't match any
         unmatched_mask = df["highlight"] == "Other"
         df.loc[unmatched_mask, "highlight"] = df.loc[unmatched_mask].apply(
-            lambda row: match_keywords(row["SIGNATURE"]) if pd.notnull(row["SIGNATURE"]) else "Other", axis=1
+            lambda row: match_keywords(row[SIGNATURE_COL]) if pd.notnull(row[SIGNATURE_COL]) else "Other", axis=1
         )
     else:
         df["highlight"] = "All"
@@ -72,9 +81,9 @@ if csv_path:
         x="RANK",  # 👈 x-axis is now rank
         y=sort_col,
         color="highlight",
-        hover_data=["RANK","METRIC", "SIGNATURE"],  # 👈 now shows rank on hover
-        title=f"{sort_col} by Metric",
-        category_orders={"METRIC": df["METRIC"].tolist()},  # 🔥 preserves sorted order
+        hover_data=["RANK", METRIC_COL, SIGNATURE_COL],  # 👈 now shows rank on hover
+        title=f"{sort_col} by Metric ({metric_count} metrics) ",
+        category_orders={METRIC_COL: df[METRIC_COL].tolist()},  # 🔥 preserves sorted order
     )
 
     # fig.update_layout(xaxis_tickangle=45)
@@ -83,5 +92,5 @@ if csv_path:
     st.plotly_chart(fig, use_container_width=True)
 
     # --- Optional table ---
-    if st.checkbox("Show data table"):
+    if st.checkbox(f"Show data table: {len(df)} rows"):
         st.dataframe(df)
