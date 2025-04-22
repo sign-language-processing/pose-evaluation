@@ -15,6 +15,7 @@ from pose_evaluation.utils.pose_utils import (
     pose_fill_masked_or_invalid,
     pose_mask_invalid_values,
     first_frame_pad_shorter_poses,
+    get_youtube_asl_mediapipe_keypoints,
 )
 
 
@@ -83,6 +84,14 @@ class HideLegsPosesProcessor(PoseProcessor):
 
     def process_pose(self, pose: Pose) -> Pose:
         return pose_hide_legs(pose, remove=self.remove)
+
+
+class GetYoutubeASLKeypointsPoseProcessor(PoseProcessor):
+    def __init__(self, name="youtubeasl_keypoints") -> None:
+        super().__init__(name)
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return get_youtube_asl_mediapipe_keypoints(pose)
 
 
 class ReducePosesToCommonComponentsProcessor(PoseProcessor):
