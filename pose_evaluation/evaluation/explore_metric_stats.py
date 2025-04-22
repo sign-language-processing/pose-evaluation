@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 
 METRIC_COL = "METRIC"
@@ -144,3 +145,62 @@ if csv_path:
     # --- Optional table ---
     if st.checkbox(f"Show data table: {len(df)} rows"):
         st.dataframe(df)
+
+    # --- Keyword Presence Effect Estimation (Group Comparison) ---
+    st.markdown("## 🔍 Estimate Effect of a Keyword (Group Comparison)")
+    effect_keyword = st.text_input("Keyword to test effect of (case-insensitive)", key="group_effect_kw")
+
+    if effect_keyword.strip():
+        kw = effect_keyword.strip().lower()
+        df["_metric_lower"] = df[METRIC_COL].str.lower()
+
+        has_kw = df[df["_metric_lower"].str.contains(kw)]
+        no_kw = df[~df["_metric_lower"].str.contains(kw)]
+
+        if len(has_kw) == 0:
+            st.warning(f"No metrics contain keyword '{kw}'")
+        elif len(no_kw) == 0:
+            st.warning(f"All metrics contain keyword '{kw}'")
+        else:
+            avg_with = has_kw[sort_col].mean()
+            avg_without = no_kw[sort_col].mean()
+            delta = avg_with - avg_without
+
+            st.write(f"Compared `{len(has_kw)}` metrics **with** keyword vs `{len(no_kw)}` **without**.")
+            st.write(f"**Average with '{kw}':** `{avg_with:.4f}`")
+            st.write(f"**Average without '{kw}':** `{avg_without:.4f}`")
+            st.write(f"**Estimated effect of '{kw}':** `{delta:+.4f}`")
+
+            if st.checkbox("Show distributions?"):
+
+                fig = go.Figure()
+
+                fig.add_trace(
+                    go.Histogram(
+                        x=has_kw[sort_col],
+                        name=f"Has '{kw}'",
+                        marker_color="blue",
+                        opacity=0.6,
+                        histnorm="probability density",
+                    )
+                )
+
+                fig.add_trace(
+                    go.Histogram(
+                        x=no_kw[sort_col],
+                        name=f"No '{kw}'",
+                        marker_color="orange",
+                        opacity=0.6,
+                        histnorm="probability density",
+                    )
+                )
+
+                fig.update_layout(
+                    barmode="overlay",
+                    title=f"Distribution of '{sort_col}' by presence of '{kw}'",
+                    xaxis_title=sort_col,
+                    yaxis_title="Density",
+                    legend=dict(x=0.7, y=0.95),
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
