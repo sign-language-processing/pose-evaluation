@@ -16,6 +16,7 @@ from pose_evaluation.utils.pose_utils import (
     reduce_poses_to_intersection,
     get_component_names_and_points_dict,
     zero_pad_shorter_poses,
+    first_frame_pad_shorter_poses,
     pose_fill_masked_or_invalid,
 )
 
@@ -264,6 +265,49 @@ def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
             assert old_length == max_len
 
         # does the confidence match?
+        assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
+
+
+def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
+    copies = [pose.copy() for pose in mediapipe_poses_test_data]
+    max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
+
+    padded_poses = first_frame_pad_shorter_poses(mediapipe_poses_test_data)
+
+    for i, padded_pose in enumerate(padded_poses):
+        original_pose = copies[i]
+        assert original_pose != padded_pose, "shouldn't be the same object"
+
+        old_length = len(original_pose.body.data)
+        new_length = len(padded_pose.body.data)
+        assert new_length == max_len
+
+        if old_length < max_len:
+            pad_count = max_len - old_length
+
+            # The first `pad_count` frames should match the original first frame
+            expected_frame = original_pose.body.data[0]
+            expected_conf = original_pose.body.confidence[0]
+
+            padding_frames = padded_pose.body.data[:pad_count]
+            padding_confs = padded_pose.body.confidence[:pad_count]
+
+            for f in padding_frames:
+                assert ma.allclose(f, expected_frame), "Padding frames should match original first frame"
+            for c in padding_confs:
+                assert ma.allclose(c, expected_conf), "Padding confidence should match original first frame"
+
+            # Remaining frames should be the original pose data
+            assert ma.allclose(
+                padded_pose.body.data[pad_count:], original_pose.body.data
+            ), "Original frames should be unchanged after padding"
+            assert ma.allclose(
+                padded_pose.body.confidence[pad_count:], original_pose.body.confidence
+            ), "Original confidence should be unchanged after padding"
+        else:
+            assert old_length == max_len
+
+        # Shape check
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
 
 

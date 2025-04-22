@@ -128,6 +128,31 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
     return poses
 
 
+from typing import Iterable, List
+import numpy.ma as ma
+
+
+def first_frame_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
+    poses = [pose.copy() for pose in poses]
+    max_frame_count = max(len(pose.body.data) for pose in poses)
+
+    for pose in poses:
+        current_len = len(pose.body.data)
+        if current_len < max_frame_count:
+            pad_count = max_frame_count - current_len
+            first_frame = pose.body.data[0:1]  # Keep dims
+            first_conf = pose.body.confidence[0:1]
+
+            padding_tensor = ma.concatenate([first_frame] * pad_count, axis=0)
+            padding_tensor_conf = ma.concatenate([first_conf] * pad_count, axis=0)
+
+            # PAD AT BEGINNING
+            pose.body.data = ma.concatenate([padding_tensor, pose.body.data], axis=0)
+            pose.body.confidence = ma.concatenate([padding_tensor_conf, pose.body.confidence], axis=0)
+
+    return poses
+
+
 def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
     mask = pose.body.confidence <= confidence_threshold
     pose.body.confidence[mask] = 0

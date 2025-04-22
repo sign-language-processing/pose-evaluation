@@ -14,6 +14,7 @@ from pose_evaluation.utils.pose_utils import (
     reduce_poses_to_intersection,
     pose_fill_masked_or_invalid,
     pose_mask_invalid_values,
+    first_frame_pad_shorter_poses,
 )
 
 
@@ -100,10 +101,21 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
         super().__init__(name="zero_pad_shorter_sequence")
 
     def process_pose(self, pose: Pose) -> Pose:
-        return pose  # intersection with itself
+        return pose
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
         return zero_pad_shorter_poses(poses)
+
+
+class FirstFramePadShorterPosesProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="first_frame_pad_shorter")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose
+
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+        return first_frame_pad_shorter_poses(poses)
 
 
 class ReduceHolisticPoseProcessor(PoseProcessor):
