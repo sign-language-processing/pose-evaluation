@@ -18,6 +18,7 @@ from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
     first_frame_pad_shorter_poses,
     pose_fill_masked_or_invalid,
+    get_youtube_asl_mediapipe_keypoints,
 )
 
 
@@ -324,3 +325,20 @@ def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe
         assert np.isnan(filled_pose.body.data).sum() == 0
         assert ma.count_masked(filled_pose.body.data) == 0
         assert filled_pose.body.data.mask.shape == pose.body.data.mask.shape
+
+
+def test_youtube_points(
+    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data, fake_openpose_135_poses
+):
+
+    for pose in mediapipe_poses_test_data_refined:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert processed.body.data.shape[2] == 85
+
+    for pose in mediapipe_poses_test_data:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert processed.body.data.shape[2] == 83
+
+    for pose in fake_openpose_135_poses:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert pose.body.data.shape[2] == processed.body.data.shape[2]

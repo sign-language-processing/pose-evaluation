@@ -5,6 +5,7 @@ from typing import List, Tuple, Dict, Iterable, Union, Set
 import numpy as np
 from numpy import ma
 from pose_format import Pose
+from pose_format.utils.generic import detect_known_pose_format
 from tqdm import tqdm
 
 
@@ -128,10 +129,6 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
     return poses
 
 
-from typing import Iterable, List
-import numpy.ma as ma
-
-
 def first_frame_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
     poses = [pose.copy() for pose in poses]
     max_frame_count = max(len(pose.body.data) for pose in poses)
@@ -151,6 +148,74 @@ def first_frame_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
             pose.body.confidence = ma.concatenate([padding_tensor_conf, pose.body.confidence], axis=0)
 
     return poses
+
+
+def get_youtube_asl_mediapipe_keypoints(pose: Pose):
+    if detect_known_pose_format(pose) != "holistic":
+        return pose
+
+    # https://arxiv.org/pdf/2306.15162
+    # For each hand, we use all 21 landmark points.
+    # Colin: So that's
+    # For the pose, we use 6 landmark points, for the shoulders, elbows and hips
+    # These are indices 11, 12, 13, 14, 23, 24
+    # For the face, we use 37 landmark points, from the eyes, eyebrows, lips, and face outline.
+    # These are indices 0, 4, 13, 14, 17, 33, 37, 39, 46, 52, 55, 61, 64, 81, 82, 93, 133, 151, 152, 159, 172, 178,
+    # 181, 263, 269, 276, 282, 285, 291, 294, 311, 323, 362, 386, 397, 468, 473.
+    # Colin: note that these are with refine_face_landmarks on, and are relative to the component itself. Working it all out the result is:
+    chosen_component_names = ["POSE_LANDMARKS", "FACE_LANDMARKS", "LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"]
+    points_dict = {
+        "POSE_LANDMARKS": ["LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_HIP", "RIGHT_HIP", "LEFT_ELBOW", "RIGHT_ELBOW"],
+        "FACE_LANDMARKS": [
+            "0",
+            "4",
+            "13",
+            "14",
+            "17",
+            "33",
+            "37",
+            "39",
+            "46",
+            "52",
+            "55",
+            "61",
+            "64",
+            "81",
+            "82",
+            "93",
+            "133",
+            "151",
+            "152",
+            "159",
+            "172",
+            "178",
+            "181",
+            "263",
+            "269",
+            "276",
+            "282",
+            "285",
+            "291",
+            "294",
+            "311",
+            "323",
+            "362",
+            "386",
+            "397",
+        ],
+    }
+
+    # check if we have the extra points from refine_face_landmarks
+    additional_face_points = ["468", "473"]
+    for additional_point in additional_face_points:
+        try:
+            point_index = pose.header.get_point_index("FACE_LANDMARKS", additional_point)
+            points_dict["FACE_LANDMARKS"].append(additional_point)
+        except ValueError:
+            # not in the list
+            pass
+    pose = pose.get_components(components=chosen_component_names, points=points_dict)
+    return pose
 
 
 def pose_hide_low_conf(pose: Pose, confidence_threshold: float = 0.2) -> None:
