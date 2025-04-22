@@ -149,8 +149,33 @@ if csv_path:
     # --- Keyword Presence Effect Estimation (Group Comparison) ---
     st.markdown("## 🔍 Estimate Effect of a Keyword (Group Comparison)")
     effect_keyword = st.text_input("Keyword to test effect of (case-insensitive)", key="group_effect_kw")
+    effect_keywords = []
+    if not effect_keyword.strip():
+        effect_keywords = [
+            "dtw",
+            "zeropad",
+            "defaultdist0.0",
+            "defaultdist1.0",
+            "defaultdist10.0",
+            "fillmasked0.0",
+            "fillmasked1.0",
+            "fillmasked10.0",
+            "hands",
+            "reduceholistic",
+            "removelegsandworld",
+            "untrimmed",
+            "unnormalized",
+            "nointerp",
+            "interp15",
+            "interp120",
+            "return4",
+        ]
 
     if effect_keyword.strip():
+        effect_keywords = [effect_keyword]
+
+    summary_data = []
+    for effect_keyword in effect_keywords:
         kw = effect_keyword.strip().lower()
         df["_metric_lower"] = df[METRIC_COL].str.lower()
 
@@ -163,15 +188,44 @@ if csv_path:
             st.warning(f"All metrics contain keyword '{kw}'")
         else:
             avg_with = has_kw[sort_col].mean()
+            max_with = has_kw[sort_col].max()
+            min_with = has_kw[sort_col].min()
+            avg_rank = has_kw["RANK"].mean()
             avg_without = no_kw[sort_col].mean()
+            max_without = no_kw[sort_col].max()
+            min_without = no_kw[sort_col].min()
             delta = avg_with - avg_without
+            top_or_bottom = ""
+            if sort_ascending:
+                top_or_bottom = "bottom"
+            else:
+                top_or_bottom = "top"
 
-            st.write(f"Compared `{len(has_kw)}` metrics **with** keyword vs `{len(no_kw)}` **without**.")
-            st.write(f"**Average with '{kw}':** `{avg_with:.4f}`")
-            st.write(f"**Average without '{kw}':** `{avg_without:.4f}`")
-            st.write(f"**Estimated effect of '{kw}':** `{delta:+.4f}`")
+            summary_data.append(
+                {
+                    "keyword": kw,
+                    f"Δ {sort_col}": round(delta, 4),
+                    f"count within {top_or_bottom} 100": (has_kw["RANK"] <= 100).sum(),
+                    f"count within {top_or_bottom} 10": (has_kw["RANK"] <= 10).sum(),
+                    f"count within {top_or_bottom} 5": (has_kw["RANK"] <= 5).sum(),
+                    "mean (with kw)": round(avg_with, 4),
+                    "mean (without kw)": round(avg_without, 4),
+                    "n (with)": len(has_kw),
+                    "n (without)": len(no_kw),
+                    "mean metric rank": avg_rank,
+                }
+            )
 
-            if st.checkbox("Show distributions?"):
+            st.write(f"#### Effect of `{kw}`")
+            st.write(f"Compared `{len(has_kw)}` metrics **with** '`{kw}`' vs `{len(no_kw)}` **without**.")
+            st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
+            st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
+            st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
+            st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw["RANK"] <= 100).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw["RANK"] <= 10).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw["RANK"] <= 5).sum()}")
+
+            if st.checkbox(f"Show distributions for {kw}?"):
 
                 fig = go.Figure()
 
@@ -204,3 +258,17 @@ if csv_path:
                 )
 
                 st.plotly_chart(fig, use_container_width=True)
+
+    if summary_data:
+        summary_df = pd.DataFrame(summary_data)
+        summary_df = summary_df.sort_values(by=f"Δ {sort_col}", ascending=sort_ascending)
+        st.markdown("### 📋 Summary of Keyword Effects")
+        st.dataframe(summary_df, use_container_width=True)
+        csv_data = summary_df.to_csv(index=False)
+
+        st.download_button(
+            label="Download CSV",
+            data=csv_data,
+            file_name=f"summary_of_keyword_effects_on_{sort_col}.csv",
+            mime="text/csv",
+        )
