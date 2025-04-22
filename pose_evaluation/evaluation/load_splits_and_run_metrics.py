@@ -167,14 +167,6 @@ def run_metrics(
                         print(hyp_pose.body.data.shape)
                         print(ref_pose.body.data.shape)
 
-                        exit()
-
-                        # print(hyp_pose.body.data)
-
-                        # print(ref_pose.body.data)
-
-                        # exit()
-
                     end_time = time.perf_counter()
                     results["METRIC"].append(metric.name)
                     results["SCORE"].append(score.score)
@@ -212,7 +204,9 @@ def main(
             help="Whether to filter out 'gloss' values starting with 'EN:', which are actually English, not ASL."
         ),
     ] = False,
-    out: Path = typer.Option("metric_results", exists=False, file_okay=False, help="Folder to save the results"),
+    out: Path = typer.Option(
+        "metric_results_round_2", exists=False, file_okay=False, help="Folder to save the results"
+    ),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -254,6 +248,9 @@ def main(
 
 if __name__ == "__main__":
     app()
+# with 30 glosses total including really big glosses, BLACK, HOME, HUNGRY, REFRIGERATOR, UNCLE
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
+
+
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
 # cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py

@@ -44,13 +44,13 @@ def construct_metric(
     pose_preprocessors = []
 
     if trim_meaningless_frames:
-        name_pieces.append("trimmed")
+        name_pieces.append("startendtrimmed")
         pose_preprocessors.append(TrimMeaninglessFramesPoseProcessor())
     else:
         name_pieces.append("untrimmed")
 
     if normalize:
-        name_pieces.append("normalized")
+        name_pieces.append("normalizedbyshoulders")
         pose_preprocessors.append(NormalizePosesProcessor())
     else:
         name_pieces.append("unnormalized")
@@ -121,22 +121,71 @@ def get_metrics(measures: List[DistanceMeasure] = None):
             # DTWOptimizedDistanceMeasure(),
             # DTWAggregatedPowerDistanceMeasure(),
             # DTWAggregatedScipyDistanceMeasure(),
-            AggregatedPowerDistance(),
+            # AggregatedPowerDistance(),
         ]
     measure_names = [measure.name for measure in measures]
     assert len(set(measure_names)) == len(measure_names)
 
-    default_distances = [0.0, 1.0, 10.0]
+    default_distances = [
+        0.0,
+        # 1.0, 10.0
+    ]
+
+    # round one precision@10 shows 0.0 seems to win, top 8/10 metrics
+    # but 1.0 could also work.
+    # Estimated effect on 'precision@10' of 'fillmasked0.0': +0.0048
+    # Estimated effect on 'precision@10' of 'fillmasked1.0': +0.0115
+    # fillmasked0.0 count within top 10 by precision@10: 8
+    # fillmasked0.0 count within top 5 by precision@10: 5
+    # fillmasked1.0 count within top 10 by precision@10: 2
+    # fillmasked1.0 count within top 5 by precision@10: 0
+    # but on recall...
+    # Estimated effect on 'recall@10' of 'fillmasked0.0': -0.0028
+    # Estimated effect on 'recall@10' of 'fillmasked1.0': +0.0055
+    # fillmasked0.0 count within top 10 by recall@10: 3
+    # fillmasked0.0 count within top 5 by recall@10: 0
+    # fillmasked1.0 count within top 10 by recall@10: 4
+    # fillmasked1.0 count within top 5 by recall@10: 4
     masked_fill_values = [
         # None,
-        0.0,
-        1.0,
-        10.0,
+        0.0,  # top 8/10 metrics
+        1.0,  #
+        # 10.0,
     ]  # technically could also do None, but that leads to nan values slipping through
-    trim_values = [True, False]
-    normalize_values = [True, False]
-    keypoint_selection_strategies = ["removelegsandworld", "reduceholistic", "hands"]
-    fps_values = [None, 15, 120]
+    # trim_values = [True, False]
+
+    # round one:
+    # Trimming seems to help - Untrimmed generally worse, though not a whole lot:
+    # Estimated effect on 'recall@10' of 'untrimmed': -0.0103
+    # Estimated effect on 'precision@10' of 'untrimmed': -0.0125
+    # Estimated effect on 'mean_score_time' of 'untrimmed': +0.0087
+    # So trimmed is better...but not a whole lot
+    trim_values = [True]
+    # normalize_values = [True, False]
+
+    # round one:
+    # Normalizing seems to be worth it.
+    # Actually improves mean out/mean in if you don't normalize
+    # Estimated effect on 'mean_score_time' of 'unnormalized': -0.0018
+    # Estimated effect on 'precision@10' of 'unnormalized': -0.0020
+    # And none of the top 10 are unnormalized
+    normalize_values = [True]
+
+    # round one precision@10, recall@10 clearly that hands-only seems to work best
+    # improves mean_score_time as well
+    # Estimated effect on 'precision@10' of 'hands': +0.0791
+    # hands count within top 100 by precision@10: 91
+    # hands count within top 10 by precision@10: 10
+    # hands count within top 5 by precision@10: 5
+    # and it's similar for recall
+    keypoint_selection_strategies = [
+        # "removelegsandworld",
+        # "reduceholistic",
+        "hands"
+    ]
+    # fps_values = [None, 15, 120]
+    # round one results suggest interp doesn't help, and takes longer
+    fps_values = [None]
 
     # Create all combinations
     metric_combinations = itertools.product(
@@ -171,13 +220,11 @@ def get_metrics(measures: List[DistanceMeasure] = None):
         )
         metrics.append(metric)
 
-
     # baseline/nonsense measures
     metrics.append(DistanceMetric(name="Return4Metric", distance_measure=Return4Measure(), pose_preprocessors=[]))
 
     metric_names = [metric.name for metric in metrics]
     metric_names_set = set(metric_names)
     assert len(metric_names_set) == len(metric_names)
-
 
     return metrics
