@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -18,15 +19,30 @@ if csv_path:
         st.error(f"Error loading file: {e}")
         st.stop()
 
+    # stats
+    metric_count = len(df[METRIC_COL].unique())
+    total_distances_count = None
+    trials_count = None
+
     # --- Column selection ---
     numeric_cols = df.select_dtypes(include="number").columns.tolist()
     sort_col = st.selectbox("Sort by column", numeric_cols)
     sort_ascending = st.checkbox("Sort ascending?", value=False)
 
-    # --- Keyword filtering + color labeling ---
+    # --- Keyword filtering---
+    exclude = st.text_input("Keywords to exclude? (comma-separated)", value="")
+    if exclude:
+        keywords = [kw.strip().lower() for kw in exclude.split(",") if kw.strip()]
+        pattern = "|".join(map(re.escape, keywords))  # escape special characters
+        df = df[~df[METRIC_COL].str.lower().str.contains(pattern, na=False)]
+
     # --- Multi-keyword matching ---
     keyword_input = st.text_input("Search / highlight by keyword(s) (comma-separated)", value="")
+
     multi_color = st.checkbox("Color bars by individual keyword?", value=True)
+
+    # top N
+
     # hands,reduceholistic,removelegsandworld,return4 # hands gives best precision, removelegsandworld worst
     # zeropad,return4,interp15,interp120
     # return4,interp15,interp120,zeropad # shows clear badness
@@ -47,8 +63,20 @@ if csv_path:
 
     # dtw,zeropad,return4,nointerp,interp15,interp120 shows the mean_score_time effects well.
 
+    # precision@5
+    # dtw,hands,zeropad,return4 shows that dtw+hands is the clear winner
+    # return4,dtw,zeropad,hands,reduceholistic,removelegsandworld,nointerp,interp15,interp120 precision@5: the top are all dtw hands
+
     df = df.copy()
-    metric_count = len(df[METRIC_COL].unique())
+
+    st.write(f"We have {metric_count} metrics")
+    if "hyp_gloss_count" in df.columns:
+        trials_count = df["hyp_gloss_count"].sum()
+        st.write(f"The total number of query-gloss+metric trials is {trials_count:,}")
+
+    if "total_count" in df.columns:
+        total_distances_count = df["total_count"].sum()
+        st.write(f"The total number of pose distances is {total_distances_count:,}")
 
     if keyword_input.strip():
         keywords = [k.strip().lower() for k in keyword_input.split(",") if k.strip()]
@@ -75,6 +103,28 @@ if csv_path:
     df = df.sort_values(by=sort_col, ascending=sort_ascending).reset_index(drop=True)
     df["RANK"] = df.index + 1  # Rank starts at 1
 
+    top_n = st.number_input("Show top N rows (leave as 0 to show all)", min_value=0, value=0, step=1)
+    if top_n > 0:
+        df = df.head(top_n)
+
+    title = f"{sort_col} by Metric"
+
+    if len(df) != metric_count:
+        title = title + f" (top {len(df)}/{metric_count} metrics"
+    else:
+        title = title + f" ({metric_count} metrics"
+
+    if exclude:
+        title = title + f" excluding {exclude}"
+
+    if trials_count is not None:
+        title = title + f" with {trials_count:,} trials"
+
+    if total_distances_count is not None:
+        title = title + f" with {total_distances_count:,} total distances"
+
+    title = title + ")"
+
     # --- Plot ---
     fig = px.bar(
         df,
@@ -82,7 +132,7 @@ if csv_path:
         y=sort_col,
         color="highlight",
         hover_data=["RANK", METRIC_COL, SIGNATURE_COL],  # 👈 now shows rank on hover
-        title=f"{sort_col} by Metric ({metric_count} metrics) ",
+        title=title,
         category_orders={METRIC_COL: df[METRIC_COL].tolist()},  # 🔥 preserves sorted order
     )
 
