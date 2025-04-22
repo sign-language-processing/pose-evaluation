@@ -5,9 +5,14 @@ from pathlib import Path
 import pandas as pd
 
 
-STANDARDIZED_VIDEO_ID_COL_NAME = "VIDEO_ID"
-STANDARDIZED_SPLIT_COL_NAME = "SPLIT"
-STANDARDIZED_GLOSS_COL_NAME = "GLOSS"
+class DatasetDFCol:
+    VIDEO_ID = "VIDEO_ID"
+    SPLIT = "SPLIT"
+    GLOSS = "GLOSS"
+    POSE_FILE_PATH = "POSE_FILE_PATH"
+    VIDEO_FILE_PATH = "VIDEO_FILE_PATH"
+    PARTICIPANT_ID = "PARTICIPANT_ID"
+    DATASET = "DATASET"
 
 
 def file_paths_list_to_df(
@@ -35,8 +40,8 @@ def parse_split_and_gloss_from_file_paths(file_paths: List[Path], gloss_level=0,
         parents = file_path.parents
         split_val = parents[split_level].name
         gloss_val = parents[gloss_level].name
-        columns[STANDARDIZED_GLOSS_COL_NAME].append(gloss_val)
-        columns[STANDARDIZED_SPLIT_COL_NAME].append(split_val)
+        columns[DatasetDFCol.GLOSS].append(gloss_val)
+        columns[DatasetDFCol.SPLIT].append(split_val)
     return columns
 
 
@@ -51,10 +56,10 @@ def df_to_standardized_df(
 
     df = df.rename(
         columns={
-            video_id_col: STANDARDIZED_VIDEO_ID_COL_NAME,
-            split_col: STANDARDIZED_SPLIT_COL_NAME,
-            gloss_col: STANDARDIZED_GLOSS_COL_NAME,
-            signer_id_col: "PARTICIPANT_ID",
+            video_id_col: DatasetDFCol.VIDEO_ID,
+            split_col: DatasetDFCol.SPLIT,
+            gloss_col: DatasetDFCol.GLOSS,
+            signer_id_col: DatasetDFCol.PARTICIPANT_ID,
         }
     )
 
@@ -64,10 +69,10 @@ def df_to_standardized_df(
     df.columns = [col.replace(" ", "_").upper() for col in df.columns]
 
     # capitalize all glosses
-    df[STANDARDIZED_GLOSS_COL_NAME] = df[STANDARDIZED_GLOSS_COL_NAME].str.upper()
+    df[DatasetDFCol.GLOSS] = df[DatasetDFCol.GLOSS].str.upper()
 
     # lowercase all splits
-    df[STANDARDIZED_SPLIT_COL_NAME] = df[STANDARDIZED_SPLIT_COL_NAME].str.lower()
+    df[DatasetDFCol.SPLIT] = df[DatasetDFCol.SPLIT].str.lower()
 
     return df
 
@@ -123,7 +128,7 @@ def convert_eng_to_ase_gloss_translations(df, asl_knowledge_graph_df, translatio
     translation_df.loc[:, "object"] = translation_df["object"].str.upper()
     # translation_df["object"] = translation_df["object"].str.upper()
 
-    matching_translations = translation_df[translation_df["object"].isin(df["GLOSS"])]
+    matching_translations = translation_df[translation_df["object"].isin(df[DatasetDFCol.GLOSS])]
 
     selected_translations = []
     for translated_word in matching_translations["object"].unique():
@@ -144,8 +149,8 @@ def convert_eng_to_ase_gloss_translations(df, asl_knowledge_graph_df, translatio
 
     if translations_only:
         # Filter rows where GLOSS is in the mapping keys
-        df = df[df["GLOSS"].isin(mapping_dict)].copy()
+        df = df[df[DatasetDFCol.GLOSS].isin(mapping_dict)].copy()
 
     # Apply the mapping safely using .loc
-    df.loc[:, "GLOSS"] = df["GLOSS"].map(mapping_dict).fillna(df["GLOSS"])
+    df.loc[:, DatasetDFCol.GLOSS] = df[DatasetDFCol.GLOSS].map(mapping_dict).fillna(df[DatasetDFCol.GLOSS])
     return df

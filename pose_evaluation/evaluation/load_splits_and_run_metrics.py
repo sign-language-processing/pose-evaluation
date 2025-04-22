@@ -12,7 +12,8 @@ import typer
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
 from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.evaluation.dataset_parsing.dataset_utils import STANDARDIZED_GLOSS_COL_NAME
+from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
+from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
 
 app = typer.Typer()
 
@@ -22,32 +23,53 @@ def combine_dataset_dfs(dataset_df_files: List[Path], splits: List[str], filter_
     for file_path in dataset_df_files:
         if file_path.exists():
             typer.echo(f"✅ Found: {file_path}")
-            df = pd.read_csv(file_path, dtype={"GLOSS": str, "SPLIT": str, "VIDEO_ID": str, "POSE_FILE_PATH": str})
+            df = pd.read_csv(
+                file_path,
+                dtype={
+                    DatasetDFCol.GLOSS: str,
+                    DatasetDFCol.SPLIT: str,
+                    DatasetDFCol.VIDEO_ID: str,
+                    DatasetDFCol.POSE_FILE_PATH: str,
+                },
+            )
 
-            df = df[df["SPLIT"].isin(splits)]
-            df["DATASET"] = file_path.stem
+            df = df[df[DatasetDFCol.SPLIT].isin(splits)]
+            df[DatasetDFCol.DATASET] = file_path.stem
             typer.echo(f"Loaded {len(df)} rows from splits: {splits}")
             dfs.append(df)
         else:
             typer.echo(f"❌ Missing: {file_path}")
 
     df = pd.concat(dfs)
-    df = df.drop(columns=["VIDEO_FILE_PATH"])
+    df = df.drop(columns=[DatasetDFCol.VIDEO_FILE_PATH])
 
     df = df.dropna()
 
     if filter_en_vocab:
-        df = df[~df["GLOSS"].str.contains("EN:", na=False)]
+        df = df[~df[DatasetDFCol.GLOSS].str.contains("EN:", na=False)]
 
     return df
 
 
-def load_pose_files(df, path_col="POSE_FILE_PATH"):
+def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH):
     paths = df[path_col].unique()
     return {path: Pose.read(Path(path).read_bytes()) for path in paths}
 
 
-def run_metrics(
+def run_metrics_full_distance_matrix(
+    df: pd.DataFrame,
+    out_path: Path,
+    metrics: List[DistanceMetric],
+):
+    scores_path = out_path / "scores"
+    scores_path.mkdir(exist_ok=True, parents=True)
+    # let's fill this in
+    # for every unique pair of paths in df[DatasetDFCol.POSE_FILE_PATH], we want to do score = metric.score_with_signature(hyp_pose, ref_pose)
+    # and then save results in the same format as run_metrics_in_out_trials
+    pass
+
+
+def run_metrics_in_out_trials(
     df: pd.DataFrame,
     out_path: Path,
     metrics: List[DistanceMetric],
@@ -59,7 +81,7 @@ def run_metrics(
     shuffle_query_glosses=True,
 ):
 
-    query_gloss_vocabulary = df[STANDARDIZED_GLOSS_COL_NAME].unique().tolist()
+    query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
 
     if gloss_count:
         query_gloss_vocabulary = query_gloss_vocabulary[:gloss_count]
@@ -100,19 +122,19 @@ def run_metrics(
         in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
         if in_gloss_df_path.is_file():
             print(f"Reading in-gloss df from {in_gloss_df_path}")
-            in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={STANDARDIZED_GLOSS_COL_NAME: str})
+            in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             print(f"Writing out-gloss df to {in_gloss_df_path}")
-            in_gloss_df = df[df[STANDARDIZED_GLOSS_COL_NAME] == gloss]
+            in_gloss_df = df[df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
 
         out_gloss_df_path = gloss_dfs_folder / f"{gloss}_out.csv"
         if out_gloss_df_path.is_file():
             print(f"Reading in out-gloss-df from {out_gloss_df_path}")
-            out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={STANDARDIZED_GLOSS_COL_NAME: str})
+            out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             print(f"Writing out-gloss df to {out_gloss_df_path}")
-            out_gloss_df = df[df[STANDARDIZED_GLOSS_COL_NAME] != gloss]
+            out_gloss_df = df[df[DatasetDFCol.GLOSS] != gloss]
             other_class_count = len(in_gloss_df) * out_gloss_multiplier
             out_gloss_df = out_gloss_df.sample(n=other_class_count, random_state=42)
             out_gloss_df.to_csv(out_gloss_df_path)
@@ -144,11 +166,11 @@ def run_metrics(
                 total=len(in_gloss_df),
                 desc=f"Calculating all {len(in_gloss_df)*len(ref_df)} distances for gloss #{g_index}/{len(query_gloss_vocabulary)}({gloss}) against all {len(ref_df)} references",
             ):
-                hyp_path = hyp_row["POSE_FILE_PATH"]
+                hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
                 hyp_pose = pose_data[hyp_path].copy()
 
                 for _, ref_row in ref_df.iterrows():
-                    ref_path = ref_row["POSE_FILE_PATH"]
+                    ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
                     ref_pose = pose_data[ref_path].copy()
 
                     start_time = time.perf_counter()
@@ -168,14 +190,14 @@ def run_metrics(
                         print(ref_pose.body.data.shape)
 
                     end_time = time.perf_counter()
-                    results["METRIC"].append(metric.name)
-                    results["SCORE"].append(score.score)
-                    results["GLOSS_A"].append(hyp_row[STANDARDIZED_GLOSS_COL_NAME])
-                    results["GLOSS_B"].append(ref_row[STANDARDIZED_GLOSS_COL_NAME])
-                    results["SIGNATURE"].append(metric.get_signature().format())
-                    results["GLOSS_A_PATH"].append(hyp_path)
-                    results["GLOSS_B_PATH"].append(ref_path)
-                    results["TIME"].append(end_time - start_time)
+                    results[ScoreDFCol.METRIC].append(metric.name)
+                    results[ScoreDFCol.SCORE].append(score.score)
+                    results[ScoreDFCol.GLOSS_A].append(hyp_row[DatasetDFCol.GLOSS])
+                    results[ScoreDFCol.GLOSS_B].append(ref_row[DatasetDFCol.GLOSS])
+                    results[ScoreDFCol.SIGNATURE].append(metric.get_signature().format())
+                    results[ScoreDFCol.GLOSS_A_PATH].append(hyp_path)
+                    results[ScoreDFCol.GLOSS_B_PATH].append(ref_path)
+                    results[ScoreDFCol.TIME].append(end_time - start_time)
 
             results_df = pd.DataFrame.from_dict(results)
             results_df.to_csv(results_path)
@@ -225,8 +247,8 @@ def main(
     typer.echo(df.info())
     typer.echo(df.describe())
 
-    typer.echo(f"* Vocabulary: {len(df['GLOSS'].unique())}")
-    typer.echo(f"* Pose Files: {len(df['POSE_FILE_PATH'].unique())}")
+    typer.echo(f"* Vocabulary: {len(df[DatasetDFCol.GLOSS].unique())}")
+    typer.echo(f"* Pose Files: {len(df[DatasetDFCol.POSE_FILE_PATH].unique())}")
 
     metrics = get_metrics()
     typer.echo(f"Metrics: {[m.name for m in metrics]}")
@@ -234,7 +256,7 @@ def main(
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
-    run_metrics(
+    run_metrics_in_out_trials(
         df,
         out_path=out,
         metrics=metrics,

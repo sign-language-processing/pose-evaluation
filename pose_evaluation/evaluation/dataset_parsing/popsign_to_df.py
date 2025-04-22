@@ -9,9 +9,7 @@ from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_fil
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     file_paths_list_to_df,
     df_to_standardized_df,
-    STANDARDIZED_VIDEO_ID_COL_NAME,
-    STANDARDIZED_GLOSS_COL_NAME,
-    STANDARDIZED_SPLIT_COL_NAME,
+    DatasetDFCol,
     convert_eng_to_ase_gloss_translations,
 )
 
@@ -45,7 +43,7 @@ def collect(
         files_df = file_paths_list_to_df(
             result[f"{prefix}_FILES"], prefix=prefix, parse_metatadata_from_folder_structure=True
         )
-        files_df[STANDARDIZED_VIDEO_ID_COL_NAME] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem)
+        files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem)
 
         files_dfs.append(files_df)
 
@@ -58,24 +56,24 @@ def collect(
 
         # Assert that SPLIT and GLOSS columns match
         assert (
-            merged_check[f"{STANDARDIZED_SPLIT_COL_NAME}_x"] == merged_check[f"{STANDARDIZED_SPLIT_COL_NAME}_y"]
-        ).all(), f"{STANDARDIZED_SPLIT_COL_NAME} values do not match"
+            merged_check[f"{DatasetDFCol.SPLIT}_x"] == merged_check[f"{DatasetDFCol.SPLIT}_y"]
+        ).all(), f"{DatasetDFCol.SPLIT} values do not match"
         assert (
-            merged_check[f"{STANDARDIZED_GLOSS_COL_NAME}_x"] == merged_check[f"{STANDARDIZED_GLOSS_COL_NAME}_y"]
-        ).all(), f"{STANDARDIZED_GLOSS_COL_NAME} values do not match"
+            merged_check[f"{DatasetDFCol.GLOSS}_x"] == merged_check[f"{DatasetDFCol.GLOSS}_y"]
+        ).all(), f"{DatasetDFCol.GLOSS} values do not match"
 
         files_df = files_df.drop(columns=["GLOSS", "SPLIT"])
-        df = df.merge(files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
+        df = df.merge(files_df, on=DatasetDFCol.VIDEO_ID, how="left")
 
     # Popsign ASL uses English, not ASL Glosses
     df["GLOSS"] = "en:" + df["GLOSS"].astype(str)
 
-    print(f"There are {len(df[STANDARDIZED_VIDEO_ID_COL_NAME].unique())} unique video ids")
+    print(f"There are {len(df[DatasetDFCol.VIDEO_ID].unique())} unique video ids")
     df = df_to_standardized_df(
         df,
-        video_id_col=STANDARDIZED_VIDEO_ID_COL_NAME,
-        split_col=STANDARDIZED_SPLIT_COL_NAME,
-        gloss_col=STANDARDIZED_GLOSS_COL_NAME,
+        video_id_col=DatasetDFCol.VIDEO_ID,
+        split_col=DatasetDFCol.SPLIT,
+        gloss_col=DatasetDFCol.GLOSS,
     )
 
     typer.echo(df.info())

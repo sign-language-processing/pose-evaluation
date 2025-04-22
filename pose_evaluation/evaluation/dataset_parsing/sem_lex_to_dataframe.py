@@ -9,9 +9,7 @@ from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     file_paths_list_to_df,
     deduplicate_by_video_id,
     df_to_standardized_df,
-    STANDARDIZED_VIDEO_ID_COL_NAME,
-    STANDARDIZED_GLOSS_COL_NAME,
-    STANDARDIZED_SPLIT_COL_NAME,
+    DatasetDFCol,
 )
 
 
@@ -65,24 +63,24 @@ def collect_semlex(
     for prefix in ["POSE", "VIDEO"]:
 
         files_df = file_paths_list_to_df(result[f"{prefix}_FILES"], prefix=prefix)
-        files_df[STANDARDIZED_VIDEO_ID_COL_NAME] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem)
+        files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem)
         typer.echo(f"Merging {len(files_df)} {prefix} files into df")
-        df = df.merge(files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
+        df = df.merge(files_df, on=DatasetDFCol.VIDEO_ID, how="left")
 
     df = df_to_standardized_df(
         df,
-        video_id_col=STANDARDIZED_VIDEO_ID_COL_NAME,
-        split_col=STANDARDIZED_SPLIT_COL_NAME,
-        gloss_col=STANDARDIZED_GLOSS_COL_NAME,
+        video_id_col=DatasetDFCol.VIDEO_ID,
+        split_col=DatasetDFCol.SPLIT,
+        gloss_col=DatasetDFCol.GLOSS,
     )
 
     df = df[
         [
             col
             for col in [
-                STANDARDIZED_GLOSS_COL_NAME,
-                STANDARDIZED_SPLIT_COL_NAME,
-                STANDARDIZED_VIDEO_ID_COL_NAME,
+                DatasetDFCol.GLOSS,
+                DatasetDFCol.SPLIT,
+                DatasetDFCol.VIDEO_ID,
                 "POSE_FILE_PATH",
                 # "VIDEO_FILE_PATH",
             ]

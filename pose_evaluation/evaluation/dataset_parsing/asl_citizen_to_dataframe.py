@@ -9,9 +9,7 @@ from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     file_paths_list_to_df,
     deduplicate_by_video_id,
     df_to_standardized_df,
-    STANDARDIZED_VIDEO_ID_COL_NAME,
-    STANDARDIZED_GLOSS_COL_NAME,
-    STANDARDIZED_SPLIT_COL_NAME,
+    DatasetDFCol,    
 )
 
 app = typer.Typer()
@@ -51,7 +49,7 @@ def collect(
         df = pd.read_csv(meta_file, index_col=0, header=0)
 
         # 8336197103293617-CHAMP.mp4 becomes 8336197103293617
-        df[STANDARDIZED_VIDEO_ID_COL_NAME] = df["Video file"].apply(lambda x: Path(x).stem.split("-")[0])
+        df[DatasetDFCol.VIDEO_ID] = df["Video file"].apply(lambda x: Path(x).stem.split("-")[0])
 
         typer.echo(f"Found metadata file: {meta_file}")
 
@@ -72,17 +70,17 @@ def collect(
     for prefix in ["POSE", "VIDEO"]:
 
         files_df = file_paths_list_to_df(result[f"{prefix}_FILES"], prefix=prefix)
-        files_df[STANDARDIZED_VIDEO_ID_COL_NAME] = files_df[f"{prefix}_FILE_PATH"].apply(
+        files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(
             lambda x: Path(x).stem.split("-")[0]
         )
         # typer.echo(files_df.head())
         typer.echo(f"Merging {len(files_df)} {prefix} files into df")
-        df = df.merge(files_df, on=STANDARDIZED_VIDEO_ID_COL_NAME, how="left")
+        df = df.merge(files_df, on=DatasetDFCol.VIDEO_ID, how="left")
     df = df_to_standardized_df(
         df,
-        video_id_col=STANDARDIZED_VIDEO_ID_COL_NAME,
-        split_col=STANDARDIZED_SPLIT_COL_NAME,
-        gloss_col=STANDARDIZED_GLOSS_COL_NAME,
+        video_id_col=DatasetDFCol.VIDEO_ID,
+        split_col=DatasetDFCol.SPLIT,
+        gloss_col=DatasetDFCol.GLOSS,
     )
     typer.echo(df.info())
     typer.echo(df.head())
