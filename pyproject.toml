@@ -25,6 +25,7 @@ dependencies = [
     # so that we can have the "trim_pose" preprocessor
     "spoken-to-signed @ git+https://github.com/ZurichNLP/spoken-to-signed-translation.git",
     "typer",
+    "torchmetrics",
 ]
 
 [project.optional-dependencies]
