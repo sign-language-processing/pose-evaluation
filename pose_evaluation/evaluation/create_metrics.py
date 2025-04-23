@@ -24,6 +24,8 @@ from pose_evaluation.metrics.pose_processors import (
     get_standard_pose_processors,
     FillMaskedOrInvalidValuesPoseProcessor,
     MaskInvalidValuesPoseProcessor,
+    GetYoutubeASLKeypointsPoseProcessor,
+    FirstFramePadShorterPosesProcessor,
 )
 
 
@@ -32,8 +34,10 @@ def construct_metric(
     default_distance=0.0,
     trim_meaningless_frames: bool = True,
     normalize: bool = True,
-    sequence_alignment: Literal["zeropad", "dtw"] = "zeropad",
-    keypoint_selection: Literal["removelegsandworld", "reduceholistic", "hands"] = "removelegsandworld",
+    sequence_alignment: Literal["zeropad", "dtw", "padwithfirstframe"] = "padwithfirstframe",
+    keypoint_selection: Literal[
+        "removelegsandworld", "reduceholistic", "hands", "youtubeaslkeypoints"
+    ] = "removelegsandworld",
     masked_fill_value: Optional[float] = None,
     fps: Optional[int] = None,
     name: Optional[str] = None,
@@ -61,6 +65,8 @@ def construct_metric(
         pose_preprocessors.append(GetHandsOnlyHolisticPoseProcessor())
     elif keypoint_selection == "reduceholistic":
         pose_preprocessors.append(ReduceHolisticPoseProcessor())
+    elif keypoint_selection == "youtubeaslkeypoints":
+        pose_preprocessors.append(GetYoutubeASLKeypointsPoseProcessor())
     else:
         pose_preprocessors.append(RemoveWorldLandmarksProcessor())
         pose_preprocessors.append(HideLegsPosesProcessor())
@@ -86,6 +92,8 @@ def construct_metric(
     # if not then it's probably dtw, so do nothing
     if sequence_alignment == "zeropad":
         pose_preprocessors.append(ZeroPadShorterPosesProcessor())
+    elif sequence_alignment == "padwithfirstframe":
+        pose_preprocessors.append(FirstFramePadShorterPosesProcessor())
 
     name_pieces.append(sequence_alignment)
 
@@ -121,7 +129,7 @@ def get_metrics(measures: List[DistanceMeasure] = None):
             # DTWOptimizedDistanceMeasure(),
             # DTWAggregatedPowerDistanceMeasure(),
             # DTWAggregatedScipyDistanceMeasure(),
-            # AggregatedPowerDistance(),
+            AggregatedPowerDistance(),
         ]
     measure_names = [measure.name for measure in measures]
     assert len(set(measure_names)) == len(measure_names)
@@ -160,7 +168,7 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     # Estimated effect on 'precision@10' of 'untrimmed': -0.0125
     # Estimated effect on 'mean_score_time' of 'untrimmed': +0.0087
     # So trimmed is better...but not a whole lot
-    trim_values = [True]
+    trim_values = [True, False]
     # normalize_values = [True, False]
 
     # round one:
@@ -169,7 +177,7 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     # Estimated effect on 'mean_score_time' of 'unnormalized': -0.0018
     # Estimated effect on 'precision@10' of 'unnormalized': -0.0020
     # And none of the top 10 are unnormalized
-    normalize_values = [True]
+    normalize_values = [True, False]
 
     # round one precision@10, recall@10 clearly that hands-only seems to work best
     # improves mean_score_time as well
@@ -181,7 +189,8 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     keypoint_selection_strategies = [
         # "removelegsandworld",
         # "reduceholistic",
-        "hands"
+        "hands",
+        "youtubeaslkeypoints",
     ]
     # fps_values = [None, 15, 120]
     # round one results suggest interp doesn't help, and takes longer
@@ -200,13 +209,15 @@ def get_metrics(measures: List[DistanceMeasure] = None):
 
     # Iterate over them
     for measure, default_distance, trim, normalize, strategy, fps, masked_fill_value in metric_combinations:
-        print(
-            f"Measure: {measure.name}, Default: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}"
-        )
 
-        sequence_alignment = "zeropad"
+        # sequence_alignment = "zeropad"
+        sequence_alignment = "padwithfirstframe"
         if "dtw" in measure.name.lower():
             sequence_alignment = "dtw"
+
+        print(
+            f"Measure: {measure.name}, Default: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, sequence_alignment: {sequence_alignment}"
+        )
 
         metric = construct_metric(
             distance_measure=measure,
