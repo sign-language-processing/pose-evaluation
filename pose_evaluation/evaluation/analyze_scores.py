@@ -91,7 +91,7 @@ def standardize_path_order(df: pd.DataFrame) -> pd.DataFrame:
     mask = df[ScoreDFCol.GLOSS_B_PATH].isin(df[ScoreDFCol.GLOSS_A_PATH])
 
     # Swap columns where the mask is True
-    df.loc[mask, [ScoreDFCol.GLOSS_A_PATH, GLOSS_B_PATH]] = df.loc[
+    df.loc[mask, [ScoreDFCol.GLOSS_A_PATH, ScoreDFCol.GLOSS_B_PATH]] = df.loc[
         mask, [ScoreDFCol.GLOSS_B_PATH, ScoreDFCol.GLOSS_A_PATH]
     ].values
     df.loc[mask, [ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]] = df.loc[
@@ -187,17 +187,12 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
 
 if __name__ == "__main__":
-
-    # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\similar_sign_analysis\scores")
-    # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\similar_sign_analysis_with_times\scores")
-    # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\embedding_analysis\scores")
-    # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\combined_embedding_and_pose_stats\scores")
-    # stats_folder = Path(r"C:\Users\Colin\data\similar_but_not_the_same\what_the_heck_why_pop\scores")
-    stats_folder = Path(r"/opt/home/cleong/projects/pose-evaluation/metric_results/scores")
+    # scores_folder = Path(r"/opt/home/cleong/projects/pose-evaluation/metric_results/scores")
+    scores_folder = Path("/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/scores")
 
     # TODO: check if the number of CSVs has changed. If not, load deduplicated.
 
-    analysis_folder = stats_folder.parent / "4_22_2025_csvcount_17187_score_analysis_with_updated_MAP"
+    analysis_folder = scores_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
@@ -215,7 +210,7 @@ if __name__ == "__main__":
         print(previous_stats_by_metric.describe())
 
     csv_stats_dfs = []
-    csv_files = list(stats_folder.glob("*.csv"))
+    csv_files = list(scores_folder.glob("*.csv"))
     for csv_file in tqdm(csv_files, desc="Loading scores csvs"):
         # print(f"Reading {csv_file}")
         scores_csv_df = load_score_csv(csv_file=csv_file)
@@ -240,7 +235,7 @@ if __name__ == "__main__":
     for metric_index, metric in enumerate(metrics_to_analyze):
         print("*" * 50)
         print(f"METRIC #{metric_index}/{len(metrics_to_analyze)}: {metric}")
-        metric_df = scores_df[scores_df[METRIC] == metric]
+        metric_df = scores_df[scores_df[ScoreDFCol.METRIC] == metric]
 
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
