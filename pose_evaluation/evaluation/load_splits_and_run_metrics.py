@@ -56,17 +56,6 @@ def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH):
     return {path: Pose.read(Path(path).read_bytes()) for path in paths}
 
 
-def run_metrics_full_distance_matrix(
-    df: pd.DataFrame,
-    out_path: Path,
-    metrics: List[DistanceMetric],
-):
-    scores_path = out_path / "scores"
-    scores_path.mkdir(exist_ok=True, parents=True)
-    # let's fill this in
-    # for every unique pair of paths in df[DatasetDFCol.POSE_FILE_PATH], we want to do score = metric.score_with_signature(hyp_pose, ref_pose)
-    # and then save results in the same format as run_metrics_in_out_trials
-    pass
 
 
 def run_metrics_in_out_trials(
@@ -150,9 +139,9 @@ def run_metrics_in_out_trials(
 
         for i, metric in enumerate(metrics):
             typer.echo("*" * 60)
+            typer.echo(f"Gloss #{g_index}/{len(query_gloss_vocabulary)}: {gloss}")
             typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
             typer.echo(f"Metric #{i}/{len(metrics)} Signature: {metric.get_signature().format()}")
-            typer.echo(f"Gloss #{g_index}/{len(query_gloss_vocabulary)}: {gloss}")
             typer.echo(f"Testing with {len(in_gloss_df)} in-gloss files, and {len(out_gloss_df)} out-gloss")
 
             results = defaultdict(list)
@@ -205,6 +194,25 @@ def run_metrics_in_out_trials(
             print("\n")
 
 
+
+def run_metrics_full_distance_matrix(
+    df: pd.DataFrame,
+    out_path: Path,
+    metrics: List[DistanceMetric],
+):
+
+    print(
+        f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET])} datasets, for {len(metrics)} metrics"
+    )
+
+    print(f"Results will be saved to {out_path}")
+
+    scores_path = out_path / "scores"
+    scores_path.mkdir(exist_ok=True, parents=True)
+    # let's fill this in
+    # for every unique pair of paths in df[DatasetDFCol.POSE_FILE_PATH], we want to do score = metric.score_with_signature(hyp_pose, ref_pose)
+    # and then save results in the same format as run_metrics_in_out_trials
+
 @app.command()
 def main(
     dataset_df_files: Annotated[
@@ -213,7 +221,10 @@ def main(
     splits: Optional[str] = typer.Option(
         None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
     ),
-    gloss_count: Optional[int] = typer.Option(12, help="Number of glosses to select"),
+    full: Optional[bool] = typer.Option(
+        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
+    ),
+    gloss_count: Optional[int] = typer.Option(83, help="Number of glosses to select"),
     additional_glosses: Optional[str] = typer.Option(
         None,
         help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
@@ -227,7 +238,7 @@ def main(
         ),
     ] = False,
     out: Path = typer.Option(
-        "metric_results_round_2", exists=False, file_okay=False, help="Folder to save the results"
+        "metric_results_full_matrix", exists=False, file_okay=False, help="Folder to save the results"
     ),
 ):
     """
@@ -254,24 +265,64 @@ def main(
     typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
+    metrics_to_use = [
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "Return4Metric",
+    ]
+    # Get a set of target names for efficient lookup
+    metrics_to_use_set = set(metrics_to_use)
+
+    # Filter metrics based on .name
+    filtered_metrics = [m for m in metrics if m.name in metrics_to_use_set]
+
+    # Find which metrics_to_use were unmatched
+    metric_names = {m.name for m in metrics}
+    unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
+
+    print("Filtered metrics:", [m.name for m in filtered_metrics])
+    print("Unmatched metrics_to_use:", unmatched_metrics)
+    metrics = filtered_metrics
+
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
-    run_metrics_in_out_trials(
-        df,
-        out_path=out,
-        metrics=metrics,
-        gloss_count=gloss_count,
-        out_gloss_multiplier=out_gloss_multiplier,
-        shuffle_metrics=True,
-        metric_count=metric_count,
-        additional_glosses=additional_glosses,
-    )
+    if full:
+        run_metrics_full_distance_matrix(df, out_path=out, metrics=metrics)
+
+    else:
+        run_metrics_in_out_trials(
+            df,
+            out_path=out,
+            metrics=metrics,
+            gloss_count=gloss_count,
+            out_gloss_multiplier=out_gloss_multiplier,
+            shuffle_metrics=True,
+            metric_count=metric_count,
+            additional_glosses=additional_glosses,
+        )
 
 
 if __name__ == "__main__":
     app()
 # with 30 glosses total including really big glosses, BLACK, HOME, HUNGRY, REFRIGERATOR, UNCLE
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
+# results in ['RUSSIA', 'BRAG', 'HOUSE', 'HOME', 'WORM', 'REFRIGERATOR', 'BLACK', 'SUMMER', 'SICK', 'REALSICK', 'WEATHER', 'MEETING', 'COLD', 'WINTER', 'THANKSGIVING', 'THANKYOU', 'HUNGRY', 'FULL', 'LIBRARY', 'CELERY', 'CANDY1', 'CASTLE2', 'GOVERNMENT', 'OPINION1', 'PJS', 'LIVE2', 'WORKSHOP', 'UNCLE', 'EASTER', 'BAG2']
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 12 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
+
+# Add more glosses, 100 total.
+# Results in this list: ['ACCENT', 'ADULT', 'AIRPLANE', 'APPEAR', 'BAG2', 'BANANA2', 'BEAK', 'BERRY', 'BIG', 'BINOCULARS', 'BLACK', 'BRAG', 'BRAINWASH', 'CAFETERIA', 'CALM', 'CANDY1', 'CASTLE2', 'CELERY', 'CHEW1', 'COLD', 'CONVINCE2', 'COUNSELOR', 'DART', 'DEAF2', 'DEAFSCHOOL', 'DECIDE2', 'DIP3', 'DOLPHIN2', 'DRINK2', 'DRIP', 'DRUG', 'EACH', 'EARN', 'EASTER', 'ERASE1', 'EVERYTHING', 'FINGERSPELL', 'FISHING2', 'FORK4', 'FULL', 'GOTHROUGH', 'GOVERNMENT', 'HIDE', 'HOME', 'HOUSE', 'HUNGRY', 'HURRY', 'KNITTING3', 'LEAF1', 'LEND', 'LIBRARY', 'LIVE2', 'MACHINE', 'MAIL1', 'MEETING', 'NECKLACE4', 'NEWSTOME', 'OPINION1', 'ORGANIZATION', 'PAIR', 'PEPSI', 'PERFUME1', 'PIG', 'PILL', 'PIPE2', 'PJS', 'REALSICK', 'RECORDING', 'REFRIGERATOR', 'REPLACE', 'RESTAURANT', 'ROCKINGCHAIR1', 'RUIN', 'RUSSIA', 'SCREWDRIVER3', 'SENATE', 'SHAME', 'SHARK2', 'SHAVE5', 'SICK', 'SNOWSUIT', 'SPECIALIST', 'STADIUM', 'SUMMER', 'TAKEOFF1', 'THANKSGIVING', 'THANKYOU', 'TIE1', 'TOP', 'TOSS', 'TURBAN', 'UNCLE', 'VAMPIRE', 'WASHDISHES', 'WEAR', 'WEATHER', 'WINTER', 'WORKSHOP', 'WORM', 'YESTERDAY']
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
+
+
+# with all the known-similar glosses included:
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 
 
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
