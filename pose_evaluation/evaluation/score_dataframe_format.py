@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 import pandas as pd
 
@@ -27,6 +28,14 @@ def load_score_csv(csv_file: Path):
         },
         float_precision="high",
     )
+
+    # Warn and drop rows missing required columns
+    required_cols = [ScoreDFCol.METRIC, ScoreDFCol.SIGNATURE, ScoreDFCol.SCORE, ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]
+    missing_rows = scores_csv_df[scores_csv_df[required_cols].isnull().any(axis=1)]
+    if not missing_rows.empty:
+        warnings.warn(f"{len(missing_rows)} malformed row(s) dropped from {csv_file}: missing required fields")
+        print(missing_rows)
+        scores_csv_df = scores_csv_df.drop(missing_rows.index)
 
     scores_csv_df[ScoreDFCol.SIGNATURE] = scores_csv_df[ScoreDFCol.SIGNATURE].apply(
         lambda x: x.split("=")[0].strip() if "=" in x else x.strip()
