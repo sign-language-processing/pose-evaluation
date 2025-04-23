@@ -118,7 +118,7 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
 
 class FirstFramePadShorterPosesProcessor(PoseProcessor):
     def __init__(self) -> None:
-        super().__init__(name="first_frame_pad_shorter")
+        super().__init__(name="padwithfirstframe")
 
     def process_pose(self, pose: Pose) -> Pose:
         return pose
