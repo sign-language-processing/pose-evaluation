@@ -1,8 +1,9 @@
+import re
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import re
+
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -221,9 +222,9 @@ if csv_path:
             st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
             st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
             st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
-            st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw["RANK"] <= 100).sum()}")
-            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw["RANK"] <= 10).sum()}")
-            st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw["RANK"] <= 5).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK']<= 10).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
 
             if st.checkbox(f"Show distributions for {kw}?"):
 
