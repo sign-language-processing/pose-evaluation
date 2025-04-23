@@ -7,19 +7,44 @@ import plotly.graph_objects as go
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
-
 # --- Path input ---
-csv_path = st.text_input(
-    "Enter path to your CSV file",
+# "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv,/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv"
+csv_paths_input = st.text_input(
+    "Enter paths to your CSV files (comma-separated)",
     value="/opt/home/cleong/projects/pose-evaluation/metric_results/score_analysis/stats_by_metric.csv",
 )
 
-if csv_path:
+if csv_paths_input:
     try:
-        df = pd.read_csv(csv_path)
+        # Split input by comma and strip whitespace
+        csv_paths = [p.strip() for p in csv_paths_input.split(",")]
+
+        # Load and concatenate all CSVs
+        df_list = []
+        for path in csv_paths:
+            df = pd.read_csv(path)
+            df_list.append(df)
+        df = pd.concat(df_list, ignore_index=True)
     except Exception as e:
-        st.error(f"Error loading file: {e}")
+        st.error(f"Error loading files: {e}")
         st.stop()
+
+    # Find duplicates in the METRIC_COL column
+    duplicate_metrics = df[df.duplicated(METRIC_COL, keep=False)]
+    st.write(f"Loaded {len(df)} metric stats")
+
+    if not duplicate_metrics.empty:
+        st.write(f"{len(duplicate_metrics)} Duplicate metrics found:")
+        st.write(duplicate_metrics)
+    else:
+        st.write("No duplicate metrics found.")
+
+    # Drop duplicates by keeping the one with the highest total_count
+    df_deduped = df.loc[df.groupby(METRIC_COL)["total_count"].idxmax()]
+
+    st.write(f"Deduplicated metrics (kept the one with highest total_count): we now have {len(df_deduped)}")
+    # st.write(df_deduped)
+    df = df_deduped
 
     # stats
     metric_count = len(df[METRIC_COL].unique())
@@ -170,6 +195,8 @@ if csv_path:
             "interp15",
             "interp120",
             "return4",
+            "padwithfirstframe",
+            "youtubeaslkeypoints",
         ]
 
     if effect_keyword.strip():
