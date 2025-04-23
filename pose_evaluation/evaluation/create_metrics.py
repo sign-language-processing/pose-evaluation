@@ -136,7 +136,8 @@ def get_metrics(measures: List[DistanceMeasure] = None):
 
     default_distances = [
         0.0,
-        # 1.0, 10.0
+        1.0,
+        10.0,
     ]
 
     # round one precision@10 shows 0.0 seems to win, top 8/10 metrics
@@ -158,7 +159,7 @@ def get_metrics(measures: List[DistanceMeasure] = None):
         # None,
         0.0,  # top 8/10 metrics
         1.0,  #
-        # 10.0,
+        10.0,
     ]  # technically could also do None, but that leads to nan values slipping through
     # trim_values = [True, False]
 
@@ -169,7 +170,6 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     # Estimated effect on 'mean_score_time' of 'untrimmed': +0.0087
     # So trimmed is better...but not a whole lot
     trim_values = [True, False]
-    # normalize_values = [True, False]
 
     # round one:
     # Normalizing seems to be worth it.
@@ -179,6 +179,8 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     # And none of the top 10 are unnormalized
     normalize_values = [True, False]
 
+    sequence_alignment_strategies = ["zeropad", "padwithfirstframe", "dtw"]
+
     # round one precision@10, recall@10 clearly that hands-only seems to work best
     # improves mean_score_time as well
     # Estimated effect on 'precision@10' of 'hands': +0.0791
@@ -187,14 +189,14 @@ def get_metrics(measures: List[DistanceMeasure] = None):
     # hands count within top 5 by precision@10: 5
     # and it's similar for recall
     keypoint_selection_strategies = [
-        # "removelegsandworld",
-        # "reduceholistic",
+        "removelegsandworld",
+        "reduceholistic",
         "hands",
         "youtubeaslkeypoints",
     ]
-    # fps_values = [None, 15, 120]
+    fps_values = [None, 15, 120]
     # round one results suggest interp doesn't help, and takes longer
-    fps_values = [None]
+    # fps_values = [None]
 
     # Create all combinations
     metric_combinations = itertools.product(
@@ -205,15 +207,26 @@ def get_metrics(measures: List[DistanceMeasure] = None):
         keypoint_selection_strategies,
         fps_values,
         masked_fill_values,
+        sequence_alignment_strategies,
     )
 
     # Iterate over them
-    for measure, default_distance, trim, normalize, strategy, fps, masked_fill_value in metric_combinations:
+    for (
+        measure,
+        default_distance,
+        trim,
+        normalize,
+        strategy,
+        fps,
+        masked_fill_value,
+        sequence_alignment,
+    ) in metric_combinations:
 
         # sequence_alignment = "zeropad"
-        sequence_alignment = "padwithfirstframe"
-        if "dtw" in measure.name.lower():
-            sequence_alignment = "dtw"
+        # sequence_alignment = "padwithfirstframe"
+        if "dtw" in measure.name.lower() and sequence_alignment != "dtw":
+            # we don't want double sequence alignment
+            continue
 
         print(
             f"Measure: {measure.name}, Default: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, sequence_alignment: {sequence_alignment}"
