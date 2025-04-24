@@ -1,3 +1,4 @@
+import concurrent.futures
 from collections import defaultdict
 import time
 from typing import List, Optional, Annotated
@@ -5,6 +6,7 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from itertools import product
 from functools import partial
+import random
 
 from tqdm import tqdm
 from pose_format import Pose
@@ -197,102 +199,16 @@ def run_metrics_in_out_trials(
             print("\n")
 
 
-# def run_metrics_full_distance_matrix_batched(
-#     df: pd.DataFrame,
-#     out_path: Path,
-#     metrics: List[DistanceMetric],
-#     batch_size: int = 500,
-# ):
-#     print(
-#         f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
-#     )
-#     print(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
-#     print(f"Results will be saved to {out_path}")
+def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature):
+    hyp_pose_data = load_pose_files(hyp_chunk)
+    ref_pose_data = load_pose_files(ref_chunk)
+    batch_results = []
 
-#     total_distances_to_calculate = total_pairs = len(df) * len(df)
-#     # total_batches = len(df) // batch_size + (1 if len(df) % batch_size != 0 else 0)
-
-#     scores_path = out_path / "scores"
-#     scores_path.mkdir(exist_ok=True, parents=True)
-
-#     all_info = df[[DatasetDFCol.POSE_FILE_PATH, DatasetDFCol.GLOSS]]
-#     all_paths = all_info[DatasetDFCol.POSE_FILE_PATH].tolist()
-
-#     dataset_names = "+".join(df[DatasetDFCol.DATASET].unique().tolist())
-#     split_names = "+".join(df[DatasetDFCol.SPLIT].unique().tolist())
-
-#     # Outer loop: metrics
-#     for i, metric in tqdm(enumerate(metrics), total=len(metrics), desc="Iterating over metrics"):
-#         typer.echo("*" * 60)
-#         typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
-#         signature = metric.get_signature().format()
-#         typer.echo(f"Metric Signature: {signature}")
-
-#         results_path = scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
-#         if results_path.exists():
-#             print(f"Results for {results_path} already exist. Skipping!")
-#             continue
-
-#         all_results = []
-
-#         # Chunked hyp loading
-#         for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Batching hyps for {metric.name}"):
-#             # typer.echo(f"hyp_start: {hyp_start}")
-#             hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size]
-#             hyp_pose_data = load_pose_files(hyp_chunk)
-
-#             for ref_start in tqdm(range(0, len(df), batch_size), desc=f"Batching refs for {metric.name}"):
-#                 # typer.echo(f"ref_start: {ref_start}")
-#                 ref_chunk = df.iloc[ref_start : ref_start + batch_size]
-#                 ref_pose_data = load_pose_files(ref_chunk)
-
-#                 for _, hyp_row in tqdm(hyp_chunk.iterrows(), desc="hyp rows", disable=True):
-#                     hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
-#                     hyp_pose = hyp_pose_data[hyp_path].copy()
-
-#                     for _, ref_row in ref_chunk.iterrows():
-#                         ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
-#                         ref_pose = ref_pose_data[ref_path].copy()
-
-#                         start_time = time.perf_counter()
-#                         score = metric.score_with_signature(hyp_pose, ref_pose)
-#                         end_time = time.perf_counter()
-
-#                         score_val = score.score if score and score.score is not None else np.nan
-
-#                         all_results.append(
-#                             {
-#                                 ScoreDFCol.METRIC: metric.name,
-#                                 ScoreDFCol.SCORE: score_val,
-#                                 ScoreDFCol.GLOSS_A: hyp_row[DatasetDFCol.GLOSS],
-#                                 ScoreDFCol.GLOSS_B: ref_row[DatasetDFCol.GLOSS],
-#                                 ScoreDFCol.SIGNATURE: signature,
-#                                 ScoreDFCol.GLOSS_A_PATH: hyp_path,
-#                                 ScoreDFCol.GLOSS_B_PATH: ref_path,
-#                                 ScoreDFCol.TIME: end_time - start_time,
-#                             }
-#                         )
-#                         # if len(all_results) % 100_000 == 0:
-#                         #     typer.echo(f"Results: {len(all_results):,}/{total_distances_to_calculate:,}")
-
-#         results_df = pd.DataFrame(all_results)
-#         results_df.to_parquet(results_path, index=False, compression="snappy")
-#         typer.echo(f"Wrote {len(results_df)} scores to {results_path}\n")
-import concurrent.futures
-
-
-def compute_batch_pairs(hyp_chunk_df, ref_chunk_df, metric):
-    hyp_pose_data = load_pose_files(hyp_chunk_df)
-    ref_pose_data = load_pose_files(ref_chunk_df)
-
-    signature = metric.get_signature().format()
-    results = []
-
-    for _, hyp_row in hyp_chunk_df.iterrows():
+    for _, hyp_row in hyp_chunk.iterrows():
         hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
         hyp_pose = hyp_pose_data[hyp_path].copy()
 
-        for _, ref_row in ref_chunk_df.iterrows():
+        for _, ref_row in ref_chunk.iterrows():
             ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
             ref_pose = ref_pose_data[ref_path].copy()
 
@@ -302,7 +218,7 @@ def compute_batch_pairs(hyp_chunk_df, ref_chunk_df, metric):
 
             score_val = score.score if score and score.score is not None else np.nan
 
-            results.append(
+            batch_results.append(
                 {
                     ScoreDFCol.METRIC: metric.name,
                     ScoreDFCol.SCORE: score_val,
@@ -314,21 +230,27 @@ def compute_batch_pairs(hyp_chunk_df, ref_chunk_df, metric):
                     ScoreDFCol.TIME: end_time - start_time,
                 }
             )
-    return results
+    
+    return batch_results
 
 
 def run_metrics_full_distance_matrix_batched_parallel(
     df: pd.DataFrame,
     out_path: Path,
-    metrics: List[DistanceMetric],
+    metrics: list,
     batch_size: int = 500,
     max_workers: int = 4,
 ):
     print(
         f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
+    print(f"Batch size {batch_size}, max workers {max_workers}")
     print(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
     print(f"Results will be saved to {out_path}")
+
+    how_many = 1000
+    print(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
+    df = df.head(how_many)
 
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
@@ -338,35 +260,49 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
     for i, metric in tqdm(enumerate(metrics), total=len(metrics), desc="Iterating over metrics"):
         typer.echo("*" * 60)
-        typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
+        typer.echo(f"Metric #{i + 1}/{len(metrics)}: {metric.name}")
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
+        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
 
-        results_path = scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
-        if results_path.exists():
-            print(f"Results for {results_path} already exist. Skipping!")
-            continue
+        metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
+        metric_results_path.mkdir(parents=True, exist_ok=True)
 
-        all_futures = []
+        futures = {}
+        batch_id = 0
+
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Batching hyps for {metric.name}"):
+            for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Hyp batching for Metric {i}"):
                 hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size]
 
                 for ref_start in range(0, len(df), batch_size):
                     ref_chunk = df.iloc[ref_start : ref_start + batch_size]
+                    batch_filename = metric_results_path / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
 
-                    future = executor.submit(compute_batch_pairs, hyp_chunk, ref_chunk, metric)
-                    all_futures.append(future)
+                    if batch_filename.exists():
+                        typer.echo(f"✅ Skipping batch {batch_id} (already exists)")
+                    else:
+                        future = executor.submit(compute_batch_pairs, hyp_chunk, ref_chunk, metric, signature)
+                        futures[future] = (batch_id, batch_filename)
 
-        all_results = []
-        for future in tqdm(
-            concurrent.futures.as_completed(all_futures), total=len(all_futures), desc="Gathering results"
-        ):
-            all_results.extend(future.result())
+                    batch_id += 1
 
-        results_df = pd.DataFrame(all_results)
-        results_df.to_parquet(results_path, index=False, compression="snappy")
-        typer.echo(f"Wrote {len(results_df)} scores to {results_path}\n")
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Saving batches"):
+            batch_id, batch_filename = futures[future]
+            result_rows = future.result()
+            if result_rows:
+                pd.DataFrame(result_rows).to_parquet(batch_filename, index=False, compression="snappy")
+                typer.echo(f"💾 Saved batch {batch_id} to {batch_filename.name}")
+
+        # Final merge
+        typer.echo("🔄 Merging all batch files...")
+        all_batch_files = sorted(metric_results_path.glob("batch_*.parquet"))
+        all_dfs = [pd.read_parquet(f) for f in all_batch_files]
+        merged_df = pd.concat(all_dfs, ignore_index=True)
+
+        final_path = scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
+        merged_df.to_parquet(final_path, index=False, compression="snappy")
+        typer.echo(f"✅ Final results written to {final_path}\n")
 
 
 @app.command()
@@ -421,18 +357,19 @@ def main(
     # typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
+    # untrimmed on the 48 cpu machine please
     metrics_to_use = [
         "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "Return4Metric",
+        # "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "Return4Metric",
     ]
     # Get a set of target names for efficient lookup
     metrics_to_use_set = set(metrics_to_use)
@@ -447,17 +384,19 @@ def main(
     print("Filtered metrics:", [m.name for m in filtered_metrics])
     print("Unmatched metrics_to_use:", unmatched_metrics)
     metrics = filtered_metrics
+    random.shuffle(metrics)
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
     if full:
         run_metrics_full_distance_matrix_batched_parallel(
             # df, out_path=out, metrics=metrics, batch_size=100, max_workers=10 # 12-cpu machine
+            # df, out_path=out, metrics=metrics, batch_size=20, max_workers=30 # 12-cpu machine
             df,
             out_path=out,
             metrics=metrics,
-            batch_size=20,
-            max_workers=40,
+            batch_size=8,
+            max_workers=30,
         )
 
     else:
