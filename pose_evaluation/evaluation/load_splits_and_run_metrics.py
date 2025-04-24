@@ -1,18 +1,16 @@
 import concurrent.futures
 from collections import defaultdict
+import math
 import time
 from typing import List, Optional, Annotated
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
-from itertools import product
-from functools import partial
 import random
 
 from tqdm import tqdm
 from pose_format import Pose
 import pandas as pd
 import numpy as np
-import random
+
 import typer
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
@@ -174,7 +172,7 @@ def run_metrics_in_out_trials(
 
                         typer.echo(f"⚠️ Got invalid score {score.score} for {hyp_path} vs {ref_path}")
                         if score.score is None:
-                            print(f"None score")
+                            print("None score")
                         elif np.isnan(score.score):
                             print("NaN score")
 
@@ -199,10 +197,11 @@ def run_metrics_in_out_trials(
             print("\n")
 
 
-def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature):
+def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename):
     hyp_pose_data = load_pose_files(hyp_chunk)
     ref_pose_data = load_pose_files(ref_chunk)
-    batch_results = []
+
+    result_rows = []
 
     for _, hyp_row in hyp_chunk.iterrows():
         hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
@@ -212,26 +211,30 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature):
             ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
             ref_pose = ref_pose_data[ref_path].copy()
 
-            start_time = time.perf_counter()
+            start = time.perf_counter()
             score = metric.score_with_signature(hyp_pose, ref_pose)
-            end_time = time.perf_counter()
+            end = time.perf_counter()
 
-            score_val = score.score if score and score.score is not None else np.nan
-
-            batch_results.append(
+            result_rows.append(
                 {
                     ScoreDFCol.METRIC: metric.name,
-                    ScoreDFCol.SCORE: score_val,
+                    ScoreDFCol.SCORE: score.score if score and score.score is not None else np.nan,
                     ScoreDFCol.GLOSS_A: hyp_row[DatasetDFCol.GLOSS],
                     ScoreDFCol.GLOSS_B: ref_row[DatasetDFCol.GLOSS],
                     ScoreDFCol.SIGNATURE: signature,
                     ScoreDFCol.GLOSS_A_PATH: hyp_path,
                     ScoreDFCol.GLOSS_B_PATH: ref_path,
-                    ScoreDFCol.TIME: end_time - start_time,
+                    ScoreDFCol.TIME: end - start,
                 }
             )
-    
-    return batch_results
+
+    pd.DataFrame(result_rows).to_parquet(batch_filename, index=False, compression="snappy")
+    del hyp_pose_data
+    del ref_pose_data
+    del hyp_chunk
+    del ref_chunk
+
+    return batch_filename
 
 
 def run_metrics_full_distance_matrix_batched_parallel(
@@ -244,13 +247,18 @@ def run_metrics_full_distance_matrix_batched_parallel(
     print(
         f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
+    print(f"A full distance matrix is {len(df)*len(df)} distances.")
     print(f"Batch size {batch_size}, max workers {max_workers}")
     print(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
     print(f"Results will be saved to {out_path}")
 
-    how_many = 1000
-    print(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
-    df = df.head(how_many)
+    n = len(df)
+    batches_per_axis = math.ceil(n / batch_size)
+    total_batches = batches_per_axis**2
+
+    # how_many = 1000
+    # print(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
+    # df = df.head(how_many)
 
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
@@ -264,6 +272,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
         typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
+        print(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
         metric_results_path.mkdir(parents=True, exist_ok=True)
@@ -273,26 +282,29 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Hyp batching for Metric {i}"):
-                hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size]
+                hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size].copy()
+
 
                 for ref_start in range(0, len(df), batch_size):
-                    ref_chunk = df.iloc[ref_start : ref_start + batch_size]
+                    ref_chunk = df.iloc[ref_start : ref_start + batch_size].copy()
                     batch_filename = metric_results_path / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
 
                     if batch_filename.exists():
-                        typer.echo(f"✅ Skipping batch {batch_id} (already exists)")
+                        # typer.echo(f"✅ Skipping batch {batch_id} (already exists)")
+                        pass
                     else:
-                        future = executor.submit(compute_batch_pairs, hyp_chunk, ref_chunk, metric, signature)
-                        futures[future] = (batch_id, batch_filename)
+                        future = executor.submit(
+                            compute_batch_pairs, hyp_chunk, ref_chunk, metric, signature, batch_filename
+                        )
+                        futures[future] = batch_filename
 
                     batch_id += 1
 
-        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Saving batches"):
-            batch_id, batch_filename = futures[future]
-            result_rows = future.result()
-            if result_rows:
-                pd.DataFrame(result_rows).to_parquet(batch_filename, index=False, compression="snappy")
-                typer.echo(f"💾 Saved batch {batch_id} to {batch_filename.name}")
+        for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
+            batch_filename = futures.pop(future)
+            result_path = future.result()
+            typer.echo(f"💾 Worker saved: {Path(result_path).name}")
+
 
         # Final merge
         typer.echo("🔄 Merging all batch files...")
@@ -395,8 +407,8 @@ def main(
             df,
             out_path=out,
             metrics=metrics,
-            batch_size=8,
-            max_workers=30,
+            batch_size=16,
+            max_workers=20,
         )
 
     else:
