@@ -1,5 +1,7 @@
 import itertools
 from typing import Literal, Optional, List
+from pathlib import Path
+import pandas as pd
 
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.distance_measure import DistanceMeasure, AggregatedPowerDistance
@@ -119,7 +121,7 @@ def construct_metric(
     return DistanceMetric(name=name, distance_measure=distance_measure, pose_preprocessors=pose_preprocessors)
 
 
-def get_metrics(measures: List[DistanceMeasure] = None):
+def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None):
     metrics = []
 
     if measures is None:
@@ -210,6 +212,8 @@ def get_metrics(measures: List[DistanceMeasure] = None):
         sequence_alignment_strategies,
     )
 
+    constructed = []
+
     # Iterate over them
     for (
         measure,
@@ -229,7 +233,7 @@ def get_metrics(measures: List[DistanceMeasure] = None):
             continue
 
         print(
-            f"Measure: {measure.name}, Default: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, sequence_alignment: {sequence_alignment}"
+            f"Measure: {measure.name}, Default Distance: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, Sequence Alignment: {sequence_alignment}"
         )
 
         metric = construct_metric(
@@ -243,12 +247,43 @@ def get_metrics(measures: List[DistanceMeasure] = None):
             masked_fill_value=masked_fill_value,
         )
         metrics.append(metric)
+        constructed.append(
+            {
+                "measure_name": measure.name,
+                "default_distance": default_distance,
+                "trim": trim,
+                "normalize": normalize,
+                "keypoint_selection_strategy": strategy,
+                "fps": fps or "nointerp",
+                "masked_fill_value": masked_fill_value,
+                "sequence_alignment": sequence_alignment,
+                "metric_name": metric.name,
+                "metric_signature": metric.get_signature().format(),
+            }
+        )
 
     # baseline/nonsense measures
-    metrics.append(DistanceMetric(name="Return4Metric", distance_measure=Return4Measure(), pose_preprocessors=[]))
+    if include_return4:
+        metrics.append(DistanceMetric(name="Return4Metric", distance_measure=Return4Measure(), pose_preprocessors=[]))
 
     metric_names = [metric.name for metric in metrics]
     metric_names_set = set(metric_names)
     assert len(metric_names_set) == len(metric_names)
 
+    if metrics_out:
+        df = pd.DataFrame(constructed)
+        # metrics_out.parent.mkdir(parents=True, exist_ok=True)  # ensure directory exists
+        df.to_csv(metrics_out, index=False)
+        print(f"Saved metric configurations to {metrics_out}")
+
+        for column in df.columns:
+            uniques = df[column].unique()
+            if len(uniques) < 100:
+                print(f"{len(uniques)} values for {column}: {uniques.tolist()}")
+
     return metrics
+
+
+if __name__ == "__main__":
+    metrics = get_metrics(metrics_out="constructed.csv", include_return4=False)
+    print(f"There are {len(metrics)} metrics")
