@@ -1,12 +1,27 @@
+import re
+
 import pandas as pd
 import numpy as np
 
 
+def extract_with_prefix(s: str, prefix: str, cast_fn=float):
+    """Extract value following a prefix ending with an underscore and followed by an underscore."""
+    match = re.search(rf"_{re.escape(prefix)}([0-9.]+)_", s)
+    return cast_fn(match.group(1)) if match else None
+
+
+def extract_flagged_choice(s: str, options: list[str]):
+    """Return the first matching option found as a substring surrounded by underscores."""
+    for opt in options:
+        if f"_{opt}_" in s:
+            return opt
+    return None
+
+
 def interpret_name(metric_name: str):
-
     choices = {}
-    # choices["original"] = metric_name
 
+    # Measure type
     if "dtaiDTWAggregatedDistanceMetricFast" in metric_name:
         choices["measure"] = "dtaiDTWAggregatedDistanceFast"
     elif "AggregatedPowerDistanceMetric" in metric_name:
@@ -14,65 +29,49 @@ def interpret_name(metric_name: str):
     else:
         return None
 
-    if metric_name.startswith("untrimmed_"):
-        choices["trim"] = False
-    if metric_name.startswith("trimmed_"):
-        choices["trim"] = True
-    elif metric_name.startswith("startendtrimmed_"):
-        choices["trim"] = True
-    else:
-        choices["trim"] = False
+    # Trim type
+    choices["trim"] = metric_name.startswith(("startendtrimmed_", "trimmed_"))
 
-    for masked_fill in [0.0, 1.0, 10.0]:
-        if f"_defaultdist{masked_fill}_" in metric_name:
-            choices["default"] = masked_fill
+    # Default distance and fillmasked
+    for key in ["defaultdist", "fillmasked"]:
+        val = extract_with_prefix(metric_name, key)
+        if val is not None:
+            choices["default" if key == "defaultdist" else "fillmasked"] = val
 
-    for masked_fill in [0.0, 1.0, 10.0]:
-        if f"_fillmasked{masked_fill}_" in metric_name:
-            choices["fillmasked"] = masked_fill
-
-    # for interp in ["nointerp", "interp15", "interp120"]:
+    # Interpolation
     if "_nointerp_" in metric_name:
         choices["interp"] = None
     elif "_interp" in metric_name:
-
-        fps = float(metric_name.split("interp")[1].split("_")[0])
-
-        if np.isnan(fps):
-            print(metric_name)
-            exit()
-
-        choices["interp"] = fps
-        # for fps in [15, 120]:
-        # if f"_interp{fps}_" in metric_name:
-        #     choices["interp"] = fps
+        interp_val = extract_with_prefix(metric_name, "interp")
+        choices["interp"] = interp_val
     else:
-        print(metric_name)
-        exit()
+        raise ValueError(f"Invalid interp in: {metric_name}")
 
+    # Normalization
     if "_normalized_" in metric_name or "_normalizedbyshoulders_" in metric_name:
         choices["normalize"] = True
     elif "_unnormalized_" in metric_name:
         choices["normalize"] = False
 
-    for keypoints in [
+    # Keypoints
+    keypoints_opts = [
         "removelegsandworld",
         "reduceholistic",
         "hands",
         "youtubeaslkeypoints",
-    ]:
-        if f"_{keypoints}_" in metric_name:
-            choices["keypoints"] = keypoints
+    ]
+    keypoints_choice = extract_flagged_choice(metric_name, keypoints_opts)
+    if keypoints_choice:
+        choices["keypoints"] = keypoints_choice
 
-    if "_zspeed" in metric_name:
-        zspeed = float(metric_name.split("zspeed")[1].split("_")[0])
-        choices["zspeed"] = zspeed
-    else:
-        choices["zspeed"] = None
+    # Z-speed
+    zspeed = extract_with_prefix(metric_name, "zspeed")
+    choices["zspeed"] = zspeed
 
-    for seq in ["dtw", "padwithfirstframe", "zeropad"]:
-        if f"_{seq}_" in metric_name:
-            choices["seq_align"] = seq
+    # Sequence alignment
+    seq_align = extract_flagged_choice(metric_name, ["dtw", "padwithfirstframe", "zeropad"])
+    if seq_align:
+        choices["seq_align"] = seq_align
 
     return choices
 
@@ -130,14 +129,12 @@ def shorten_metric_name(metric_name: str):
 
 
 if __name__ == "__main__":
-    dfs = [
-        pd.read_csv(
-            "/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv"
-        ),
-        pd.read_csv(
-            "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv"
-        ),
+    METRIC_FILES = [
+        "/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv",
+        "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv",
     ]
+    dfs = [pd.read_csv(f) for f in METRIC_FILES]
+
     df = pd.concat(dfs)
 
     choices = []
@@ -155,15 +152,10 @@ if __name__ == "__main__":
             choices.append(metric_choices)
 
     interpretation = pd.DataFrame(choices)
+    interpretation.sort_values(by="short")
 
     print(interpretation)
     counts = []
-    for col in interpretation.columns:
-        uniques = interpretation[col].unique()
-        print("\\item", col, len(uniques), uniques.tolist())
-        counts.append(len(uniques))
-
-    print(np.prod(counts))
 
     # Find duplicates in the "short" column
     duplicates = interpretation[interpretation.duplicated(subset="short", keep=False)]
@@ -173,3 +165,12 @@ if __name__ == "__main__":
     print(duplicates[["original", "short"]])
     interpretation.to_csv("metric_name_interpretation.csv")
     duplicates.to_csv("metric_name_short_dupes.csv")
+
+    for col in interpretation.columns:
+        uniques = interpretation[col].unique()
+        if col not in ["original", "short"]:
+            print("\\item", col, len(uniques), uniques.tolist())
+        else:
+            print(f"{col}:{len(uniques)}")
+        counts.append(len(uniques))
+    print(np.prod(counts))
