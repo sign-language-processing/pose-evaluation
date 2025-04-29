@@ -28,6 +28,7 @@ from pose_evaluation.metrics.pose_processors import (
     MaskInvalidValuesPoseProcessor,
     GetYoutubeASLKeypointsPoseProcessor,
     FirstFramePadShorterPosesProcessor,
+    AddTOffsetsToZPoseProcessor,
 )
 
 
@@ -43,6 +44,7 @@ def construct_metric(
     masked_fill_value: Optional[float] = None,
     fps: Optional[int] = None,
     name: Optional[str] = None,
+    z_speed: Optional[float] = None,
 ):
     name_pieces = []
     if name is None:
@@ -54,6 +56,10 @@ def construct_metric(
         pose_preprocessors.append(TrimMeaninglessFramesPoseProcessor())
     else:
         name_pieces.append("untrimmed")
+
+    if z_speed is not None:
+        name_pieces.append(f"zspeed{z_speed}")
+        pose_preprocessors.append(AddTOffsetsToZPoseProcessor())
 
     if normalize:
         name_pieces.append("normalizedbyshoulders")
@@ -136,6 +142,8 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
     measure_names = [measure.name for measure in measures]
     assert len(set(measure_names)) == len(measure_names)
 
+    z_speeds = [None, 0.1, 1.0, 4.0]
+
     default_distances = [
         0.0,
         1.0,
@@ -158,7 +166,7 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
     # fillmasked1.0 count within top 10 by recall@10: 4
     # fillmasked1.0 count within top 5 by recall@10: 4
     masked_fill_values = [
-        # None,
+        # None, # leads to nan values
         0.0,  # top 8/10 metrics
         1.0,  #
         10.0,
@@ -196,13 +204,21 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         "hands",
         "youtubeaslkeypoints",
     ]
-    fps_values = [None, 15, 120]
+    fps_values = [
+        None,
+        15,
+        30,
+        45,
+        60,
+        120,
+    ]
     # round one results suggest interp doesn't help, and takes longer
     # fps_values = [None]
 
     # Create all combinations
     metric_combinations = itertools.product(
         measures,
+        z_speeds,
         default_distances,
         trim_values,
         normalize_values,
@@ -217,6 +233,7 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
     # Iterate over them
     for (
         measure,
+        z_speed,
         default_distance,
         trim,
         normalize,
@@ -226,18 +243,26 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         sequence_alignment,
     ) in metric_combinations:
 
-        # sequence_alignment = "zeropad"
-        # sequence_alignment = "padwithfirstframe"
+        #############
+        # DTW vs other sequence alignments
+        # DTW metrics don't use a pose preprocessor, they handle it internally in the DistanceMeasure.
+        # so we need to catch that.
         if "dtw" in measure.name.lower() and sequence_alignment != "dtw":
-            # we don't want double sequence alignment
+            # we don't want double sequence alignment strategies. No need to do zeropad with dtw
             continue
 
-        print(
-            f"Measure: {measure.name}, Default Distance: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, Sequence Alignment: {sequence_alignment}"
-        )
+        if sequence_alignment == "dtw" and "dtw" not in measure.name.lower():
+            # doesn't work, creates "dtw" metrics that just fail with ValueError:
+            # e.g. "operands could not be broadcast together with shapes (620,1,48,3) (440,1,48,3)""
+            continue
+
+        # print(
+        #     f"Measure: {measure.name}, Z Speed:{z_speed}, Default Distance: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, Sequence Alignment: {sequence_alignment}"
+        # )
 
         metric = construct_metric(
             distance_measure=measure,
+            z_speed=z_speed,
             default_distance=default_distance,
             trim_meaningless_frames=trim,
             normalize=normalize,
