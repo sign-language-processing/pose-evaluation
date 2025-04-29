@@ -16,6 +16,7 @@ from pose_evaluation.utils.pose_utils import (
     pose_mask_invalid_values,
     first_frame_pad_shorter_poses,
     get_youtube_asl_mediapipe_keypoints,
+    add_z_offsets_to_pose,
 )
 
 
@@ -194,6 +195,16 @@ class InterpolateAllToSetFPSPoseProcessor(PoseProcessor):
         pose = pose.copy()
         pose = pose.interpolate(new_fps=self.fps, kind=self.kind)
         return pose
+
+
+class AddTOffsetsToZPoseProcessor(PoseProcessor):
+
+    def __init__(self, name="add_z_offsets", speed=1.0) -> None:
+        super().__init__(name)
+        self.speed = speed
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return add_z_offsets_to_pose(pose)
 
 
 def get_standard_pose_processors(

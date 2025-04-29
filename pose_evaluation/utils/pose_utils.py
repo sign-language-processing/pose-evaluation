@@ -251,3 +251,19 @@ def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0, overwrite_confidence=T
         pose.body.confidence = np.ones_like(pose.body.confidence, dtype=pose.body.confidence.dtype)
 
     return pose
+
+
+def add_z_offsets_to_pose(pose: Pose, speed: float = 1.0) -> Pose:
+
+    offset = speed / pose.body.fps
+    # Assuming pose.data is a numpy masked array
+    pose_data = pose.body.data  # Shape: (frames, persons, keypoints, xyz)
+
+    # Create an offset array that only modifies the Z-dimension (index 2)
+    offsets = ma.arange(pose_data.shape[0]).reshape(-1, 1, 1, 1) * offset
+
+    # Apply the offsets only to the Z-axis (index 2), preserving masks
+    pose_data[:, :, :, 2] += offsets[:, :, :, 0]
+
+    pose.body.data = pose_data
+    return pose
