@@ -4,17 +4,23 @@ import argparse
 from pathlib import Path
 from collections import Counter
 from datetime import datetime
+from tqdm import tqdm
 
 
 def main():
     parser = argparse.ArgumentParser(description="Group files by modification hour and count them.")
-    parser.add_argument("--path", default="metric_results/scores", type=Path, help="Path to glob for files, e.g., 'metric_results/scores/*'")
+    parser.add_argument(
+        "path",
+        # default="metric_results/scores",
+        type=Path,
+        help="Path to glob for files, e.g., 'metric_results/scores/*'",
+    )
     args = parser.parse_args()
 
-    path = Path(args.path).glob("*")
+    paths = Path(args.path).rglob("*")
 
     timestamps = []
-    for file in path:
+    for file in tqdm(paths):
         if file.is_file():
             stat = file.stat()
             dt = datetime.fromtimestamp(stat.st_mtime)
