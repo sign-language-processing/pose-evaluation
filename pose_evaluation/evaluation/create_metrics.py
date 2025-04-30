@@ -311,4 +311,4 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
 
 if __name__ == "__main__":
     metrics = get_metrics(metrics_out="constructed.csv", include_return4=False)
-    print(f"There are {len(metrics)} metrics")
+    print(f"Current settings result in the construction of {len(metrics)} metrics")

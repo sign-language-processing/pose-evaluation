@@ -1,6 +1,7 @@
 from typing import Optional, List, Dict
 from collections import defaultdict
 from pathlib import Path
+import json
 
 import pandas as pd
 import numpy as np
@@ -9,6 +10,7 @@ import torch
 from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
+from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
 
 
 tqdm.pandas()
@@ -189,11 +191,17 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 if __name__ == "__main__":
     # scores_folder = Path(r"/opt/home/cleong/projects/pose-evaluation/metric_results/scores")
     scores_folder = Path("/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/scores")
+    
 
     # TODO: check if the number of CSVs has changed. If not, load deduplicated.
 
     analysis_folder = scores_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
+
+
+    score_files_index_path = analysis_folder / "score_files_index.json"
+    
+
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
     metric_by_gloss_stats_folder.mkdir(exist_ok=True)
@@ -209,12 +217,56 @@ if __name__ == "__main__":
         print(previous_stats_by_metric.info())
         print(previous_stats_by_metric.describe())
 
+        print("Columns: ")
+        for column in previous_stats_by_metric.columns:
+            print("*\t", column)
+
+    score_files_index = {}
+    if score_files_index_path.is_file():
+        print(f"Loading Score files index {score_files_index_path}")
+        with score_files_index_path.open("r", encoding="utf-8") as f:
+            score_files_index = json.load(f)
+            print(score_files_index[ScoresIndexDFCol.SUMMARY])
+
+    if score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"] != previous_stats_by_metric["total_count"].sum():
+        print(f"Index and previous analysis score counts differ. Re-analysis needed")
+        print("Index has")
+        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
+        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values")
+        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_b"]:,} unique 'gloss b' (ref) values")
+        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"]:,} scores")
+        
+        print()
+        print("Previous analysis had")
+        print(f"*\t{len(previous_stats_by_metric)} metrics")        
+        print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].max():,} 'gloss a' values (max)")
+        print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].min():,} 'gloss a' values (min)")
+        print(f"*\t{previous_stats_by_metric["ref_gloss_count"].max():,} 'gloss b' values (max)")
+        print(f"*\t{previous_stats_by_metric["ref_gloss_count"].min():,} 'gloss b' values (min)")
+        print(f"*\t{previous_stats_by_metric["total_count"].sum():,} scores")
+        # hyp_gloss_count
+        
+    else:
+        print(f"Score count has not changed, no need to re-analyze. Quitting now.")
+        exit()
+    
     csv_stats_dfs = []
     csv_files = list(scores_folder.glob("*.csv"))
-    for csv_file in tqdm(csv_files, desc="Loading scores csvs"):
-        # print(f"Reading {csv_file}")
-        scores_csv_df = load_score_csv(csv_file=csv_file)
+    # ['ACCENT', 'ADULT', 'AIRPLANE', 'APPEAR', 'BAG2', 'BANANA2', 'BEAK', 'BERRY', 'BIG', 'BINOCULARS', 'BLACK', 'BRAG', 'BRAINWASH', 'CAFETERIA', 'CALM', 'CANDY1', 'CASTLE2', 'CELERY', 'CHEW1', 'COLD', 'CONVINCE2', 'COUNSELOR', 'DART', 'DEAF2', 'DEAFSCHOOL', 'DECIDE2', 'DIP3', 'DOLPHIN2', 'DRINK2', 'DRIP', 'DRUG', 'EACH', 'EARN', 'EASTER', 'ERASE1', 'EVERYTHING', 'FINGERSPELL', 'FISHING2', 'FORK4', 'FULL', 'GOTHROUGH', 'GOVERNMENT', 'HIDE', 'HOME', 'HOUSE', 'HUNGRY', 'HURRY', 'KNITTING3', 'LEAF1', 'LEND', 'LIBRARY', 'LIVE2', 'MACHINE', 'MAIL1', 'MEETING', 'NECKLACE4', 'NEWSTOME', 'OPINION1', 'ORGANIZATION', 'PAIR', 'PEPSI', 'PERFUME1', 'PIG', 'PILL', 'PIPE2', 'PJS', 'REALSICK', 'RECORDING', 'REFRIGERATOR', 'REPLACE', 'RESTAURANT', 'ROCKINGCHAIR1', 'RUIN', 'RUSSIA', 'SCREWDRIVER3', 'SENATE', 'SHAME', 'SHARK2', 'SHAVE5', 'SICK', 'SNOWSUIT', 'SPECIALIST', 'STADIUM', 'SUMMER', 'TAKEOFF1', 'THANKSGIVING', 'THANKYOU', 'TIE1', 'TOP', 'TOSS', 'TURBAN', 'UNCLE', 'VAMPIRE', 'WASHDISHES', 'WEAR', 'WEATHER', 'WINTER', 'WORKSHOP', 'WORM', 'YESTERDAY']
+    # glosses_to_load = ["ACCENT", "VAMPIRE", "RUSSIA", "BRAG", "WEATHER"]
+    glosses_to_load = None
 
+    # metrics_to_load = ["untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_padwithfirstframe_fillmasked1.0_AggregatedPowerDistanceMetric","startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked0.0_AggregatedPowerDistanceMetric"]
+    metrics_to_load = None
+
+    for csv_file in tqdm(csv_files, desc="Loading scores csvs"):
+        if glosses_to_load is not None:
+            if not any(gloss_to_load in csv_file.name for gloss_to_load in glosses_to_load):
+                continue
+        if metrics_to_load is not None:
+            if not any(metric_to_load in csv_file.name for metric_to_load in metrics_to_load):
+                continue
+        scores_csv_df = load_score_csv(csv_file=csv_file)
         csv_stats_dfs.append(scores_csv_df)
 
     scores_df = pd.concat(csv_stats_dfs)
@@ -246,8 +298,9 @@ if __name__ == "__main__":
 
     stats_by_metric = pd.DataFrame(stats_by_metric)
     print(stats_by_metric)
-
     stats_by_metric.to_csv(metric_stats_out, index=False)
+
+
 
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py
