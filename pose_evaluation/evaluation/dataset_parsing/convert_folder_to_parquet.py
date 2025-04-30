@@ -31,7 +31,7 @@ def convert_csvs_to_parquet(
                 df = pd.read_csv(csv_path)
             parquet_path = out_dir / csv_path.with_suffix(".parquet").name
             df.to_parquet(parquet_path, index=False)
-            print(f"Converted: {csv_path.name} → {parquet_path}")
+            # print(f"Converted: {csv_path.name} → {parquet_path}")
             if remove_original:
                 csv_path.unlink()
                 print(f"Deleted original: {csv_path.name}")
@@ -45,16 +45,18 @@ def main():
     parser.add_argument("-o", "--out", type=Path, help="Optional output folder for Parquet files")
     parser.add_argument("--remove", action="store_true", help="Remove original CSV files after conversion")
     parser.add_argument(
-        "--score_files_format", action="store_true", help="Assume they are score csvs, load accordingly"
+        "--not-score-files",
+        action="store_true",
+        help="By default, will load with specific score CSV columns, datatypes. If this is given, will just use pd.read_csv.",
     )
     args = parser.parse_args()
 
     if not args.folder.is_dir():
         print(f"Error: {args.folder} is not a directory.")
         return
-
+    use_score_files_format = not args.not_score_files
     convert_csvs_to_parquet(
-        folder=args.folder, out_dir=args.out, remove_original=args.remove, score_csv_format=args.score_files_format
+        folder=args.folder, out_dir=args.out, remove_original=args.remove, score_csv_format=use_score_files_format
     )
 
 
