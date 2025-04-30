@@ -27,6 +27,9 @@ if __name__ == "__main__":
     # for sockeye, the MT system does not produce the face, so we have <id>.pose (direct system output) and <id>.imputed.pose (the face imputed with an average face). I'd use the imputed one for completeness
     sockeye_folder = Path("/opt/home/cleong/data/zifan_signsuisse/system_outputs/signsuisse_test/sockeye/")
     sign_mt_v2_folder = Path("/opt/home/cleong/data_munging/local_data/zifan_signsuisse/signsuisse_test/sign_mt_v2")
+    sign_mt_folder = Path(
+        "/opt/home/cleong/data_munging/local_data/zifan_signsuisse/system_outputs/signsuisse_test/sign_mt"
+    )
     ref_folder = Path("/opt/home/cleong/data/zifan_signsuisse/system_outputs/signsuisse_test/ref/")
 
     item_count = 1000
@@ -37,12 +40,15 @@ if __name__ == "__main__":
     # use raw for sign_mt_v2
     sign_mt_v2_paths = [sign_mt_v2_folder / f"{i}.raw.pose" for i in range(item_count)]
 
+    sign_mt_paths = [sign_mt_folder / f"{i}.raw.pose" for i in range(item_count)]
+
     # use imputed for sockeye
     sockeye_paths = [sockeye_folder / f"{i}.imputed.pose" for i in range(item_count)]
 
     system_paths = {
-        "sockeye": sockeye_paths,
-        "sign_mt_v2": sign_mt_v2_paths,
+        # "sockeye": sockeye_paths,
+        # "sign_mt_v2": sign_mt_v2_paths,
+        "sign_mt": sign_mt_paths,
     }
 
     system = "pose-eval"
