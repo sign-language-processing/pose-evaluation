@@ -44,7 +44,8 @@ def combine_dataset_dfs(dataset_df_files: List[Path], splits: List[str], filter_
             typer.echo(f"❌ Missing: {file_path}")
 
     df = pd.concat(dfs)
-    df = df.drop(columns=[DatasetDFCol.VIDEO_FILE_PATH])
+    if DatasetDFCol.VIDEO_FILE_PATH in df.columns:
+        df = df.drop(columns=[DatasetDFCol.VIDEO_FILE_PATH])
 
     df = df.dropna()
 
@@ -97,8 +98,13 @@ def run_metrics_in_out_trials(
         typer.echo(f"Selecting {metric_count} of {len(metrics)} metrics")
         metrics = metrics[:metric_count]
 
-    gloss_dfs_folder = out_path / "gloss_dfs"
-    gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
+    # If there's one already one up, use that
+    gloss_dfs_folder = out_path.parent / "gloss_dfs"
+    if gloss_dfs_folder.is_dir():
+        print(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
+    else:
+        gloss_dfs_folder = out_path / "gloss_dfs"
+        gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
 
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
@@ -238,11 +244,7 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
 
 
 def run_metrics_full_distance_matrix_batched_parallel(
-    df: pd.DataFrame,
-    out_path: Path,
-    metrics: list,
-    batch_size: int = 500,
-    max_workers: int = 4,
+    df: pd.DataFrame, out_path: Path, metrics: list, batch_size: int = 100, max_workers: int = 4, merge=False
 ):
     print(
         f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
@@ -261,6 +263,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
     # df = df.head(how_many)
 
     scores_path = out_path / "scores"
+    typer.echo(f"Scores will be saved in batches to {scores_path}")
     scores_path.mkdir(exist_ok=True, parents=True)
 
     dataset_names = "+".join(df[DatasetDFCol.DATASET].unique().tolist())
@@ -272,10 +275,16 @@ def run_metrics_full_distance_matrix_batched_parallel(
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
         typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
-        print(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
+        typer.echo(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis}), looks like")
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
         metric_results_path.mkdir(parents=True, exist_ok=True)
+        typer.echo(f"Saving batches to {metric_results_path}")
+
+        existing_results = list(metric_results_path.glob("*.parquet"))
+        typer.echo(
+            f"Looks like we've got {len(existing_results)} already done, meaning we've got {total_batches-len(existing_results)} left"
+        )
 
         futures = {}
         batch_id = 0
@@ -283,7 +292,6 @@ def run_metrics_full_distance_matrix_batched_parallel(
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Hyp batching for Metric {i}"):
                 hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size].copy()
-
 
                 for ref_start in range(0, len(df), batch_size):
                     ref_chunk = df.iloc[ref_start : ref_start + batch_size].copy()
@@ -300,21 +308,215 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
                     batch_id += 1
 
+        print(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
             batch_filename = futures.pop(future)
             result_path = future.result()
             typer.echo(f"💾 Worker saved: {Path(result_path).name}")
 
-
         # Final merge
-        typer.echo("🔄 Merging all batch files...")
-        all_batch_files = sorted(metric_results_path.glob("batch_*.parquet"))
-        all_dfs = [pd.read_parquet(f) for f in all_batch_files]
-        merged_df = pd.concat(all_dfs, ignore_index=True)
+        if merge:
+            typer.echo("🔄 Merging all batch files...")
+            all_batch_files = sorted(metric_results_path.glob("batch_*.parquet"))
+            all_dfs = [pd.read_parquet(f) for f in all_batch_files]
+            merged_df = pd.concat(all_dfs, ignore_index=True)
 
-        final_path = scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
-        merged_df.to_parquet(final_path, index=False, compression="snappy")
-        typer.echo(f"✅ Final results written to {final_path}\n")
+            final_path = (
+                scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
+            )
+            merged_df.to_parquet(final_path, index=False, compression="snappy")
+            typer.echo(f"✅ Final results written to {final_path}\n")
+
+
+def get_filtered_metrics(
+    metrics,
+    top10=True,
+    top10_nohands_nointerp=True,
+    top10_nohands_nodtw_nointerp=True,
+    top50_nointerp=True,
+    return4=True,
+):
+    # top 10
+    top_10_metrics_by_map = [
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        # "Return4Metric",
+    ]
+
+    # top_10_by_map excluding hands,interp15,interp120
+    top_10_by_map_excluding_hands_interp = [
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+    ]
+
+    # top 10 excluding hands, dtw, interp15,interp120
+    top_10_by_map_excluding_hands_interp_and_dtw = [
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked1.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked0.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_removelegsandworld_defaultdist1.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
+        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
+        "untrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
+    ]
+
+    # top 50 by MAP
+    top_50_by_map = [
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist0.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_interp15_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+    ]
+
+    # top 50 of 677 metrics excluding interp15,interp120
+    top_50_by_map_excluding_interp = [
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_zeropad_fillmasked1.0_AggregatedPowerDistanceMetric",
+        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
+    ]
+    # Get a set of target names for efficient lookup
+    metrics_to_use = []
+
+    if top10:
+        metrics_to_use.extend(top_10_metrics_by_map)
+
+    if top10_nohands_nointerp:
+        metrics_to_use.extend(top_10_by_map_excluding_hands_interp)
+    if top10_nohands_nodtw_nointerp:
+        metrics_to_use.extend(top_10_by_map_excluding_hands_interp_and_dtw)
+
+    if top50_nointerp:
+        metrics_to_use.extend(top_50_by_map_excluding_interp)
+        # +
+
+    if return4:
+        metrics_to_use.append("Return4Metric")
+
+    metrics_to_use_set = set(metrics_to_use)
+
+    # Filter metrics based on .name
+    filtered_metrics = [m for m in metrics if m.name in metrics_to_use_set]
+
+    # Find which metrics_to_use were unmatched
+    metric_names = {m.name for m in metrics}
+    unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
+
+    print(f"{len(filtered_metrics)} Filtered metrics:", [m.name for m in filtered_metrics])
+    print(f"{len(unmatched_metrics)} Unmatched metrics_to_use:", unmatched_metrics)
+    return filtered_metrics
 
 
 @app.command()
@@ -324,9 +526,6 @@ def main(
     ],
     splits: Optional[str] = typer.Option(
         None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
-    ),
-    full: Optional[bool] = typer.Option(
-        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
     ),
     gloss_count: Optional[int] = typer.Option(83, help="Number of glosses to select"),
     additional_glosses: Optional[str] = typer.Option(
@@ -344,6 +543,14 @@ def main(
     out: Path = typer.Option(
         "metric_results_full_matrix", exists=False, file_okay=False, help="Folder to save the results"
     ),
+    full: Optional[bool] = typer.Option(
+        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
+    ),
+    max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
+    batch_size: Optional[int] = typer.Option(
+        100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
+    ),
+    filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -369,33 +576,9 @@ def main(
     # typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
-    # untrimmed on the 48 cpu machine please
-    metrics_to_use = [
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "Return4Metric",
-    ]
-    # Get a set of target names for efficient lookup
-    metrics_to_use_set = set(metrics_to_use)
+    if filter_metrics:
+        metrics = get_filtered_metrics(metrics)
 
-    # Filter metrics based on .name
-    filtered_metrics = [m for m in metrics if m.name in metrics_to_use_set]
-
-    # Find which metrics_to_use were unmatched
-    metric_names = {m.name for m in metrics}
-    unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
-
-    print("Filtered metrics:", [m.name for m in filtered_metrics])
-    print("Unmatched metrics_to_use:", unmatched_metrics)
-    metrics = filtered_metrics
     random.shuffle(metrics)
 
     typer.echo(f"Saving results to {out}")
@@ -407,8 +590,8 @@ def main(
             df,
             out_path=out,
             metrics=metrics,
-            batch_size=16,
-            max_workers=20,
+            batch_size=batch_size,
+            max_workers=max_workers,
         )
 
     else:
@@ -430,14 +613,28 @@ if __name__ == "__main__":
 # results in ['RUSSIA', 'BRAG', 'HOUSE', 'HOME', 'WORM', 'REFRIGERATOR', 'BLACK', 'SUMMER', 'SICK', 'REALSICK', 'WEATHER', 'MEETING', 'COLD', 'WINTER', 'THANKSGIVING', 'THANKYOU', 'HUNGRY', 'FULL', 'LIBRARY', 'CELERY', 'CANDY1', 'CASTLE2', 'GOVERNMENT', 'OPINION1', 'PJS', 'LIVE2', 'WORKSHOP', 'UNCLE', 'EASTER', 'BAG2']
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 12 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 
-# Add more glosses, 100 total.
+# Add more glosses, 250 total.
 # Results in this list: ['ACCENT', 'ADULT', 'AIRPLANE', 'APPEAR', 'BAG2', 'BANANA2', 'BEAK', 'BERRY', 'BIG', 'BINOCULARS', 'BLACK', 'BRAG', 'BRAINWASH', 'CAFETERIA', 'CALM', 'CANDY1', 'CASTLE2', 'CELERY', 'CHEW1', 'COLD', 'CONVINCE2', 'COUNSELOR', 'DART', 'DEAF2', 'DEAFSCHOOL', 'DECIDE2', 'DIP3', 'DOLPHIN2', 'DRINK2', 'DRIP', 'DRUG', 'EACH', 'EARN', 'EASTER', 'ERASE1', 'EVERYTHING', 'FINGERSPELL', 'FISHING2', 'FORK4', 'FULL', 'GOTHROUGH', 'GOVERNMENT', 'HIDE', 'HOME', 'HOUSE', 'HUNGRY', 'HURRY', 'KNITTING3', 'LEAF1', 'LEND', 'LIBRARY', 'LIVE2', 'MACHINE', 'MAIL1', 'MEETING', 'NECKLACE4', 'NEWSTOME', 'OPINION1', 'ORGANIZATION', 'PAIR', 'PEPSI', 'PERFUME1', 'PIG', 'PILL', 'PIPE2', 'PJS', 'REALSICK', 'RECORDING', 'REFRIGERATOR', 'REPLACE', 'RESTAURANT', 'ROCKINGCHAIR1', 'RUIN', 'RUSSIA', 'SCREWDRIVER3', 'SENATE', 'SHAME', 'SHARK2', 'SHAVE5', 'SICK', 'SNOWSUIT', 'SPECIALIST', 'STADIUM', 'SUMMER', 'TAKEOFF1', 'THANKSGIVING', 'THANKYOU', 'TIE1', 'TOP', 'TOSS', 'TURBAN', 'UNCLE', 'VAMPIRE', 'WASHDISHES', 'WEAR', 'WEATHER', 'WINTER', 'WORKSHOP', 'WORM', 'YESTERDAY']
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 
 
-# with all the known-similar glosses included:
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
+# Round 3
+# with all the known-similar glosses included, and saving to metric_results_round_3
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_round_3 2>&1|tee out/$(date +%s).txt
 
 
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
 # cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
+
+
+#######
+# Full Matrix
+# Batch size 100, max workers 8 seems to level off at 8 workers working, 29 GB memory usage
+# Batch size 100, max workers 40 seems to level off at 40 workers working, 62 GB memory usage
+# batch size 50, workers 60 seems to level off at 30 workers working and 11 GB memory usage
+# batch size 80, workers 60 seems to level off at 43 workers working and 15 GB memory usage... creeping up to 44 and 21 after 45 minutes
+# find metric_results_full_matrix/scores/batches_startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_test/ |wc -l
+
+
+# z-stretching
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_z_offsets --no-filter-metrics 2>&1|tee out/$(date +%s).txt
