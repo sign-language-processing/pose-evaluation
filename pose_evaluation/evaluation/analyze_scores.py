@@ -1,4 +1,5 @@
-from typing import Optional, List, Dict
+import argparse
+from typing import Optional, List, Dict, Tuple
 from collections import defaultdict
 from pathlib import Path
 import json
@@ -11,6 +12,7 @@ from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecisio
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
+from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 
 
 tqdm.pandas()
@@ -76,11 +78,26 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
 
         results["mean_average_precision"] = RetrievalMAP()(preds, targets, indexes).item()
         results["mean_reciprocal_rank"] = RetrievalMRR()(preds, targets, indexes).item()
-
-    for k in ks:
+    
+    print(f"Calculating @k-metrics")
+    for k in tqdm(ks, desc="metrics at k"):
         results[f"precision@{k}"] = float(np.mean(per_k_stats[k]["precision"])) if per_k_stats[k]["precision"] else 0.0
         results[f"recall@{k}"] = float(np.mean(per_k_stats[k]["recall"])) if per_k_stats[k]["recall"] else 0.0
         results[f"match_count@{k}"] = per_k_stats[k]["match_count"]
+
+    print(f"Calculating @k-metrics using TorchMetrics")
+    for k in tqdm(ks, desc="torchmetrics at k"):
+        precision_at_k = RetrievalPrecision(top_k=k)
+        recall_at_k = RetrievalRecall(top_k=k)
+
+        results[f"precision@{k}(torch)"] = precision_at_k(preds, targets, indexes).item()
+        results[f"recall@{k}(torch)"] = recall_at_k(preds, targets, indexes).item()
+    
+    # Assertions for comparison
+    # for k in ks:
+        assert np.isclose(results[f"precision@{k}(torch)"], results[f"precision@{k}"], atol=1e-4), f"Precision@{k} mismatch: {results[f'precision@{k}(torch)']:.4f} vs {results[f'precision@{k}']:.4f}"
+        assert np.isclose(results[f"recall@{k}(torch)"], results[f"recall@{k}"], atol=1e-4), f"Recall@{k} mismatch: {results[f'recall@{k}(torch)']:.4f} vs {results[f'recall@{k}']:.4f}"
+
 
     return results
 
@@ -120,10 +137,18 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
         print(metric_df[metric_df[ScoreDFCol.SIGNATURE] == ""])
         print(signatures)
 
+    if len(signatures) > 1:
+        print("Problematic rows:")
+        for sig in signatures:
+            print(f"Rows with signature '{sig}':")
+            print(metric_df[metric_df[ScoreDFCol.SIGNATURE].str.split("=").str[0] == sig])
     assert len(signatures) == 1, signatures
     result[ScoreDFCol.SIGNATURE] = signatures[0]
 
     # Gloss and gloss-pair stats
+    metric_df["gloss_tuple"] = [
+                tuple(x) for x in np.sort(metric_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
+            ]
     gloss_tuples = metric_df["gloss_tuple"].unique()
     metric_glosses = set(metric_df[ScoreDFCol.GLOSS_A].tolist() + metric_df[ScoreDFCol.GLOSS_B].tolist())
 
@@ -187,21 +212,69 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     return result
 
+def load_metric_dfs_from_filenames(scores_folder: Path) -> Tuple[str, pd.DataFrame]:
+    """
+    Parses CSV filenames to extract the metric name and loads/groups the corresponding data.
+
+    Args:
+        scores_folder: Path to the folder containing the score CSV files.
+
+    Yields:
+        A tuple containing the metric name (str) and the combined DataFrame (pd.DataFrame)
+        for that metric.
+    """
+    csv_files = list(scores_folder.glob("*.csv"))
+    metric_files: Dict[str, list[Path]] = defaultdict(list)
+
+    for csv_file in csv_files:
+        filename = csv_file.stem  # Get filename without extension
+        parts = filename.split("_")
+        if len(parts) > 1 and "outgloss" in parts:
+            gloss = parts[0]
+            outgloss_index = parts.index("outgloss")
+            metric_name_parts = parts[1:outgloss_index]
+            metric_name = "_".join(metric_name_parts)
+            metric_files[metric_name].append(csv_file)
+        else:
+            print(f"Warning: Could not parse metric name from filename: {filename}")
+
+    for metric, files in metric_files.items():
+        all_dfs = []
+        for csv_file in tqdm(files, desc=f"Loading CSVs for metric '{metric}'"):
+            try:
+                scores_csv_df = load_score_csv(csv_file=csv_file)
+                all_dfs.append(scores_csv_df)
+            except Exception as e:
+                print(f"Error loading {csv_file}: {e}")
+                continue
+
+        if all_dfs:
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            # Normalize gloss pairs by sorting them
+            combined_df["gloss_tuple"] = [
+                tuple(x) for x in np.sort(combined_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
+            ]
+            yield metric, combined_df
 
 if __name__ == "__main__":
-    # scores_folder = Path(r"/opt/home/cleong/projects/pose-evaluation/metric_results/scores")
-    scores_folder = Path("/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/scores")
-    
-
-    # TODO: check if the number of CSVs has changed. If not, load deduplicated.
+    parser = argparse.ArgumentParser(description="Analyze pose evaluation scores.")
+    parser.add_argument(
+        "scores_folder",
+        type=Path,
+        help="Path to the folder containing the score files, either a pyarrow parquet datset (default) or csv files",
+    )
+    parser.add_argument(
+        "--parse-csvs",
+        action="store_true",
+        help="Path to the folder containing the score CSV files.",
+    )
+    args = parser.parse_args()
+    scores_folder = Path(args.scores_folder)
 
     analysis_folder = scores_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
 
-
     score_files_index_path = analysis_folder / "score_files_index.json"
-    
-
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
     metric_by_gloss_stats_folder.mkdir(exist_ok=True)
@@ -209,7 +282,6 @@ if __name__ == "__main__":
 
     previous_stats_by_metric = None
 
-    # TODO: load from index json below
     if metric_stats_out.is_file():
         print(f"Loaded previous stats from {metric_stats_out}")
         previous_stats_by_metric = pd.read_csv(metric_stats_out)
@@ -228,78 +300,56 @@ if __name__ == "__main__":
             score_files_index = json.load(f)
             print(score_files_index[ScoresIndexDFCol.SUMMARY])
 
-    if score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"] != previous_stats_by_metric["total_count"].sum():
-        print(f"Index and previous analysis score counts differ. Re-analysis needed")
-        print("Index has")
-        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
-        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values")
-        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_b"]:,} unique 'gloss b' (ref) values")
-        print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"]:,} scores")
-        
-        print()
-        print("Previous analysis had")
-        print(f"*\t{len(previous_stats_by_metric)} metrics")        
-        print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].max():,} 'gloss a' values (max)")
-        print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].min():,} 'gloss a' values (min)")
-        print(f"*\t{previous_stats_by_metric["ref_gloss_count"].max():,} 'gloss b' values (max)")
-        print(f"*\t{previous_stats_by_metric["ref_gloss_count"].min():,} 'gloss b' values (min)")
-        print(f"*\t{previous_stats_by_metric["total_count"].sum():,} scores")
-        # hyp_gloss_count
-        
-    else:
+    if previous_stats_by_metric is not None and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores") == previous_stats_by_metric["total_count"].sum():
         print(f"Score count has not changed, no need to re-analyze. Quitting now.")
         exit()
-    
-    csv_stats_dfs = []
-    csv_files = list(scores_folder.glob("*.csv"))
-    # ['ACCENT', 'ADULT', 'AIRPLANE', 'APPEAR', 'BAG2', 'BANANA2', 'BEAK', 'BERRY', 'BIG', 'BINOCULARS', 'BLACK', 'BRAG', 'BRAINWASH', 'CAFETERIA', 'CALM', 'CANDY1', 'CASTLE2', 'CELERY', 'CHEW1', 'COLD', 'CONVINCE2', 'COUNSELOR', 'DART', 'DEAF2', 'DEAFSCHOOL', 'DECIDE2', 'DIP3', 'DOLPHIN2', 'DRINK2', 'DRIP', 'DRUG', 'EACH', 'EARN', 'EASTER', 'ERASE1', 'EVERYTHING', 'FINGERSPELL', 'FISHING2', 'FORK4', 'FULL', 'GOTHROUGH', 'GOVERNMENT', 'HIDE', 'HOME', 'HOUSE', 'HUNGRY', 'HURRY', 'KNITTING3', 'LEAF1', 'LEND', 'LIBRARY', 'LIVE2', 'MACHINE', 'MAIL1', 'MEETING', 'NECKLACE4', 'NEWSTOME', 'OPINION1', 'ORGANIZATION', 'PAIR', 'PEPSI', 'PERFUME1', 'PIG', 'PILL', 'PIPE2', 'PJS', 'REALSICK', 'RECORDING', 'REFRIGERATOR', 'REPLACE', 'RESTAURANT', 'ROCKINGCHAIR1', 'RUIN', 'RUSSIA', 'SCREWDRIVER3', 'SENATE', 'SHAME', 'SHARK2', 'SHAVE5', 'SICK', 'SNOWSUIT', 'SPECIALIST', 'STADIUM', 'SUMMER', 'TAKEOFF1', 'THANKSGIVING', 'THANKYOU', 'TIE1', 'TOP', 'TOSS', 'TURBAN', 'UNCLE', 'VAMPIRE', 'WASHDISHES', 'WEAR', 'WEATHER', 'WINTER', 'WORKSHOP', 'WORM', 'YESTERDAY']
-    # glosses_to_load = ["ACCENT", "VAMPIRE", "RUSSIA", "BRAG", "WEATHER"]
-    glosses_to_load = None
+    else:
+        print(f"Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
+        if score_files_index.get(ScoresIndexDFCol.SUMMARY):
+            print("Index has")
+            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
+            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values")
+            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_b"]:,} unique 'gloss b' (ref) values")
+            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"]:,} scores")
 
-    # metrics_to_load = ["untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_padwithfirstframe_fillmasked1.0_AggregatedPowerDistanceMetric","startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked0.0_AggregatedPowerDistanceMetric"]
-    metrics_to_load = None
+        if previous_stats_by_metric is not None:
+            print()
+            print("Previous analysis had")
+            print(f"*\t{len(previous_stats_by_metric)} metrics")
+            print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].max():,} 'gloss a' values (max)")
+            print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].min():,} 'gloss a' values (min)")
+            print(f"*\t{previous_stats_by_metric["ref_gloss_count"].max():,} 'gloss b' values (max)")
+            print(f"*\t{previous_stats_by_metric["ref_gloss_count"].min():,} 'gloss b' values (min)")
+            print(f"*\t{previous_stats_by_metric["total_count"].sum():,} scores")
 
-    for csv_file in tqdm(csv_files, desc="Loading scores csvs"):
-        if glosses_to_load is not None:
-            if not any(gloss_to_load in csv_file.name for gloss_to_load in glosses_to_load):
-                continue
-        if metrics_to_load is not None:
-            if not any(metric_to_load in csv_file.name for metric_to_load in metrics_to_load):
-                continue
-        scores_csv_df = load_score_csv(csv_file=csv_file)
-        csv_stats_dfs.append(scores_csv_df)
-
-    scores_df = pd.concat(csv_stats_dfs)
-
-    print(f"{scores_df}")
-
-    # Normalize gloss pairs by sorting them
-    print("Creating gloss tuple pairs")
-    # TODO: This is where we should load from the index.
-    scores_df["gloss_tuple"] = [
-        tuple(x) for x in np.sort(scores_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
-    ]
-
-    metrics_to_analyze = scores_df[ScoreDFCol.METRIC].unique()
     stats_by_metric = defaultdict(list)
-    print(f"We have results for {len(metrics_to_analyze)}")
-    # metrics_to_analyze = ["n-dtai-DTW-MJE (fast)", "MJE", "nMJE"]
-    for metric_index, metric in enumerate(metrics_to_analyze):
-        print("*" * 50)
-        print(f"METRIC #{metric_index}/{len(metrics_to_analyze)}: {metric}")
-        metric_df = scores_df[scores_df[ScoreDFCol.METRIC] == metric]
+    metrics_analyzed = set()
 
+    if args.parse_csvs:
+        metric_generator  = load_metric_dfs_from_filenames(args.scores_folder)
+    
+    else:
+        dataset= load_dataset(scores_folder)
+        metric_generator  = load_metric_dfs(dataset)
+
+    for metric, metric_df in tqdm(metric_generator, desc="Analyzing metrics"):
+        if metric in metrics_analyzed:
+            print(f"Skipping already analyzed metric: {metric}")
+            continue
+
+        print("*" * 50)
+        print(f"Analyzing metric: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
+        metrics_analyzed.add(metric)
 
-        scores_df = scores_df[scores_df[ScoreDFCol.METRIC] != metric]  # delete.
-        print(f"{len(metric_df)} metric rows removed, now scores_df is {len(scores_df)} long")
-
-    stats_by_metric = pd.DataFrame(stats_by_metric)
-    print(stats_by_metric)
-    stats_by_metric.to_csv(metric_stats_out, index=False)
-
+    if stats_by_metric:
+        stats_by_metric_df = pd.DataFrame(stats_by_metric)
+        print(stats_by_metric_df)
+        stats_by_metric_df.to_csv(metric_stats_out, index=False)
+    else:
+        print("No metrics were analyzed.")
 
 
 
