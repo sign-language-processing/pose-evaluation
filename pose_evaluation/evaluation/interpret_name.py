@@ -1,7 +1,14 @@
+from pathlib import Path
+import hashlib
 import re
+
+import warnings
 
 import pandas as pd
 import numpy as np
+
+
+from pose_evaluation.evaluation.create_metrics import get_metrics
 
 
 def extract_with_prefix(s: str, prefix: str, cast_fn=float):
@@ -102,6 +109,9 @@ def shorten_metric_name(metric_name: str):
 
     choices_short = []
     choices = interpret_name(metric_name)
+    if choices is None:
+        # e.g. "Return4Metric"
+        return metric_name
     for choice_name, choice in choices.items():
 
         if isinstance(choice, bool):
@@ -109,11 +119,13 @@ def shorten_metric_name(metric_name: str):
                 choice = "y"
             else:
                 choice = "n"
-        print(choice_name, abbrev[choice_name], choice)
+        # print(choice_name, abbrev[choice_name], choice)
 
         if choice is None:
             continue
-        choice_name = abbrev[choice_name]
+
+        if choice_name in abbrev:
+            choice_name = abbrev[choice_name]
 
         if choice in value_abbrev:
             choice = value_abbrev[choice]
@@ -123,8 +135,8 @@ def shorten_metric_name(metric_name: str):
         else:
             choices_short.append(f"{choice_name}:{choice}")
     short = "_".join(choices_short)
-    print(metric_name)
-    print(short)
+    # print(metric_name)
+    # print(short)
     return short
 
 
@@ -139,22 +151,31 @@ if __name__ == "__main__":
 
     choices = []
     shorts = []
-    metrics = df["METRIC"].unique().tolist()
+    historical_metrics = df["METRIC"].unique().tolist()
+    print(f"Loaded {len(historical_metrics):,} metrics we have previously used.")
+    constructed_metrics = [m.name for m in get_metrics()]
+    print(f"Loaded {len(constructed_metrics):,} newly constructed metrics")
+    metrics = historical_metrics + constructed_metrics
+    print(f"The total is {len(metrics):,}.")
+    metrics = list(set(metrics))
+    print(f"After deduplication, the total is {len(metrics)}.")
+
     for metric in metrics:
         metric_choices = interpret_name(metric)
 
         if metric_choices is not None:
             short = shorten_metric_name(metric)
             shorts.append(short)
-            print(short)
+            # print(short)
             metric_choices["original"] = metric
             metric_choices["short"] = short
+            metric_choices["hash"] = hashlib.md5(f"{metric}".encode()).hexdigest()[:8]
             choices.append(metric_choices)
 
     interpretation = pd.DataFrame(choices)
     interpretation.sort_values(by="short")
 
-    print(interpretation)
+    # print(interpretation)
     counts = []
 
     # Find duplicates in the "short" column
@@ -162,15 +183,20 @@ if __name__ == "__main__":
     duplicates = duplicates.sort_values(by="short")
 
     # Display the original and short columns for these duplicates
-    print(duplicates[["original", "short"]])
-    interpretation.to_csv("metric_name_interpretation.csv")
-    duplicates.to_csv("metric_name_short_dupes.csv")
+    # print(duplicates[["original", "short"]])
+
+    interpretation_csv = Path("metric_name_interpretation.csv")
+    dupe_short_names_csv = Path("metric_name_short_dupes.csv")
+    interpretation.to_csv(interpretation_csv)
+    duplicates.to_csv(dupe_short_names_csv)
 
     for col in interpretation.columns:
         uniques = interpretation[col].unique()
-        if col not in ["original", "short"]:
+        if col not in ["original", "short", "hash"]:
             print("\\item", col, len(uniques), uniques.tolist())
         else:
-            print(f"{col}:{len(uniques)}")
+            print(f"Total {col}:{len(interpretation[col]):,}, Unique:{len(uniques):,}")
         counts.append(len(uniques))
-    print(np.prod(counts))
+    print(f"{len(interpretation):,} interpretations written to {interpretation_csv.resolve()}")
+    print(f"{len(duplicates):,} dupes written to {dupe_short_names_csv.resolve()}")
+    print("duplicate short names:", len(duplicates))
