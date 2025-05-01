@@ -1,6 +1,8 @@
 import itertools
 from typing import Literal, Optional, List
 from pathlib import Path
+import copy
+
 import pandas as pd
 
 from pose_evaluation.metrics.distance_metric import DistanceMetric
@@ -46,6 +48,7 @@ def construct_metric(
     name: Optional[str] = None,
     z_speed: Optional[float] = None,
 ):
+    distance_measure = copy.deepcopy(distance_measure)
     name_pieces = []
     if name is None:
         name = ""
@@ -84,7 +87,8 @@ def construct_metric(
     ######################
     # Default Distances
     name_pieces.append(f"defaultdist{default_distance}")
-    distance_measure.default_distance = default_distance
+    distance_measure.set_default_distance(default_distance)
+    assert f"default_distance:{default_distance}" in distance_measure.get_signature().format(), f"{distance_measure.default_distance}, {default_distance}"
 
     ##########################################
     # FPS Strategy
@@ -271,6 +275,13 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
             fps=fps,
             masked_fill_value=masked_fill_value,
         )
+
+        n, s = metric.name, metric.get_signature().format()
+
+        if "defaultdist0.0" in n: 
+            assert "default_distance:0.0" in s,f"{n}\n{s}\n{measure}"
+
+
         metrics.append(metric)
         constructed.append(
             {
@@ -292,8 +303,11 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         metrics.append(DistanceMetric(name="Return4Metric", distance_measure=Return4Measure(), pose_preprocessors=[]))
 
     metric_names = [metric.name for metric in metrics]
+    metric_sigs = [metric.get_signature().format() for metric in metrics]
     metric_names_set = set(metric_names)
+    metric_sigs_set = set(metric_sigs)
     assert len(metric_names_set) == len(metric_names)
+    assert len(metric_sigs_set) == len(metric_sigs)
 
     if metrics_out:
         df = pd.DataFrame(constructed)
@@ -311,4 +325,13 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
 
 if __name__ == "__main__":
     metrics = get_metrics(metrics_out="constructed.csv", include_return4=False)
+    metric_names = [m.name for m in metrics]
+    metric_sigs = [m.get_signature().format() for m in metrics]
+    
     print(f"Current settings result in the construction of {len(metrics)} metrics")
+    print(f"{len(set(metric_names))} unique metric names")
+    print(f"{len(set(metric_sigs))} unique metric signatures")
+
+    for n, s in zip(metric_names, metric_sigs):
+        if "defaultdist0.0" in n: 
+            assert "default_distance:0.0" in s,f"{n}\n{s}"

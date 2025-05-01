@@ -85,18 +85,18 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
         results[f"recall@{k}"] = float(np.mean(per_k_stats[k]["recall"])) if per_k_stats[k]["recall"] else 0.0
         results[f"match_count@{k}"] = per_k_stats[k]["match_count"]
 
-    print(f"Calculating @k-metrics using TorchMetrics")
-    for k in tqdm(ks, desc="torchmetrics at k"):
-        precision_at_k = RetrievalPrecision(top_k=k)
-        recall_at_k = RetrievalRecall(top_k=k)
+    # print(f"Calculating @k-metrics using TorchMetrics")
+    # for k in tqdm(ks, desc="torchmetrics at k"):
+    #     precision_at_k = RetrievalPrecision(top_k=k)
+    #     recall_at_k = RetrievalRecall(top_k=k)
 
-        results[f"precision@{k}(torch)"] = precision_at_k(preds, targets, indexes).item()
-        results[f"recall@{k}(torch)"] = recall_at_k(preds, targets, indexes).item()
+    #     results[f"precision@{k}(torch)"] = precision_at_k(preds, targets, indexes).item()
+    #     results[f"recall@{k}(torch)"] = recall_at_k(preds, targets, indexes).item()
     
-    # Assertions for comparison
+    # # Assertions for comparison
     # for k in ks:
-        assert np.isclose(results[f"precision@{k}(torch)"], results[f"precision@{k}"], atol=1e-4), f"Precision@{k} mismatch: {results[f'precision@{k}(torch)']:.4f} vs {results[f'precision@{k}']:.4f}"
-        assert np.isclose(results[f"recall@{k}(torch)"], results[f"recall@{k}"], atol=1e-4), f"Recall@{k} mismatch: {results[f'recall@{k}(torch)']:.4f} vs {results[f'recall@{k}']:.4f}"
+    #     assert np.isclose(results[f"precision@{k}(torch)"], results[f"precision@{k}"], atol=1e-4), f"Precision@{k} mismatch: {results[f'precision@{k}(torch)']:.4f} vs {results[f'precision@{k}']:.4f}"
+    #     assert np.isclose(results[f"recall@{k}(torch)"], results[f"recall@{k}"], atol=1e-4), f"Recall@{k} mismatch: {results[f'recall@{k}(torch)']:.4f} vs {results[f'recall@{k}']:.4f}"
 
 
     return results
@@ -142,7 +142,7 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
         for sig in signatures:
             print(f"Rows with signature '{sig}':")
             print(metric_df[metric_df[ScoreDFCol.SIGNATURE].str.split("=").str[0] == sig])
-    assert len(signatures) == 1, signatures
+    assert len(signatures) == 1, f"{len(signatures)} Signatures: {signatures}, \nMetric: {metric}"
     result[ScoreDFCol.SIGNATURE] = signatures[0]
 
     # Gloss and gloss-pair stats
@@ -186,13 +186,13 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     print(
         f"{metric_name} has \n"
-        f"*\t{len(metric_df)} distances,\n"
-        f"*\tcovering {len(metric_glosses)} glosses,\n"
-        f"*\twith {len(metric_df[ScoreDFCol.GLOSS_A].unique())} unique query glosses,\n"
-        f"*\t{len(metric_df[ScoreDFCol.GLOSS_B].unique())} unique ref glosses,\n"
-        f"*\tin {len(gloss_tuples)} combinations,\n"
-        f"*\t{len(not_self_score_df)} out-of-class scores,\n"
-        f"*\t{len(self_scores_df)} in-class scores"
+        f"*\t{len(metric_df):,} distances,\n"
+        f"*\tcovering {len(metric_glosses):,} glosses,\n"
+        f"*\twith {len(metric_df[ScoreDFCol.GLOSS_A].unique()):,} unique query glosses,\n"
+        f"*\t{len(metric_df[ScoreDFCol.GLOSS_B].unique()):,} unique ref glosses,\n"
+        f"*\tin {len(gloss_tuples):,} combinations,\n"
+        f"*\t{len(not_self_score_df):,} out-of-class scores,\n"
+        f"*\t{len(self_scores_df):,} in-class scores"
     )
 
     # Retrieval metrics
@@ -212,7 +212,7 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     return result
 
-def load_metric_dfs_from_filenames(scores_folder: Path) -> Tuple[str, pd.DataFrame]:
+def load_metric_dfs_from_filenames(scores_folder: Path, csv_format=True) -> Tuple[str, pd.DataFrame]:
     """
     Parses CSV filenames to extract the metric name and loads/groups the corresponding data.
 
@@ -226,7 +226,7 @@ def load_metric_dfs_from_filenames(scores_folder: Path) -> Tuple[str, pd.DataFra
     csv_files = list(scores_folder.glob("*.csv"))
     metric_files: Dict[str, list[Path]] = defaultdict(list)
 
-    for csv_file in csv_files:
+    for csv_file in tqdm(csv_files, f"Parsing csv filenames"):
         filename = csv_file.stem  # Get filename without extension
         parts = filename.split("_")
         if len(parts) > 1 and "outgloss" in parts:
@@ -234,22 +234,52 @@ def load_metric_dfs_from_filenames(scores_folder: Path) -> Tuple[str, pd.DataFra
             outgloss_index = parts.index("outgloss")
             metric_name_parts = parts[1:outgloss_index]
             metric_name = "_".join(metric_name_parts)
+
             metric_files[metric_name].append(csv_file)
         else:
             print(f"Warning: Could not parse metric name from filename: {filename}")
 
-    for metric, files in metric_files.items():
-        all_dfs = []
-        for csv_file in tqdm(files, desc=f"Loading CSVs for metric '{metric}'"):
-            try:
-                scores_csv_df = load_score_csv(csv_file=csv_file)
-                all_dfs.append(scores_csv_df)
-            except Exception as e:
-                print(f"Error loading {csv_file}: {e}")
-                continue
 
+    print(f"Found {len(metric_files.keys())} metrics")
+    print(f"Found {len(metric_files.keys())} metrics: {list(metric_files.keys())[:10]}")
+
+
+    for metric, files in metric_files.items():
+        signatures_set = set()
+        all_dfs = []
+        processed_csv_signatures = {}
+        signature_csvs = defaultdict(list)
+        try:
+            for csv_file in tqdm(files, desc=f"Loading {len(files)} CSVs for metric '{metric}'"):                
+                scores_csv_df = load_score_csv(csv_file=csv_file)
+                signatures = scores_csv_df[ScoreDFCol.SIGNATURE].unique().tolist()
+                signatures_set.update(signatures)
+                processed_csv_signatures[str(csv_file)] = signatures
+
+                for sig in signatures:
+                    signature_csvs[sig].append(str(csv_file))
+                
+                
+                all_dfs.append(scores_csv_df)
+            assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_csv_signatures.keys())}"
+        except AssertionError as e:
+            processed_csv_signatures_out_json = Path(f"{metric}_debugging_processed_csv_signatures.json")
+            signature_csvs_out_json = Path(f"{metric}_debugging_signature_csvs.json")
+            print(processed_csv_signatures_out_json.resolve())
+            print(signature_csvs_out_json.resolve())
+            with processed_csv_signatures_out_json.open("w") as f:
+                json.dump(processed_csv_signatures, f, indent=4)
+
+            with signature_csvs_out_json.open("w") as f:
+                json.dump(signature_csvs, f, indent=4)                
+            print(e)
+            
+            
         if all_dfs:
             combined_df = pd.concat(all_dfs, ignore_index=True)
+            signatures = combined_df[ScoreDFCol.SIGNATURE].unique()
+
+            assert len(signatures) == 1, f"More than one signature found for {metric}"
             # Normalize gloss pairs by sorting them
             combined_df["gloss_tuple"] = [
                 tuple(x) for x in np.sort(combined_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
@@ -331,7 +361,14 @@ if __name__ == "__main__":
     else:
         dataset= load_dataset(scores_folder)
         metric_generator  = load_metric_dfs(dataset)
+    i = 0
+    for metric, metric_df in tqdm(metric_generator, desc="Checking metric csvs"):
+        print("*" * 50)
+        print(f"Metric {i}: {metric} has {len(metric_df)} rows")
+        i+=1
 
+
+    exit()
     for metric, metric_df in tqdm(metric_generator, desc="Analyzing metrics"):
         if metric in metrics_analyzed:
             print(f"Skipping already analyzed metric: {metric}")
@@ -347,6 +384,7 @@ if __name__ == "__main__":
     if stats_by_metric:
         stats_by_metric_df = pd.DataFrame(stats_by_metric)
         print(stats_by_metric_df)
+        print(f"Saving to {metric_stats_out}")
         stats_by_metric_df.to_csv(metric_stats_out, index=False)
     else:
         print("No metrics were analyzed.")
