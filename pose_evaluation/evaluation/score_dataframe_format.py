@@ -1,6 +1,7 @@
 import warnings
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 
 class ScoreDFCol:
@@ -25,6 +26,7 @@ def load_score_csv(csv_file: Path):
             ScoreDFCol.SIGNATURE: str,
             ScoreDFCol.GLOSS_A_PATH: str,
             ScoreDFCol.GLOSS_B_PATH: str,
+            ScoreDFCol.SCORE: np.float64,
         },
         float_precision="high",
     )
