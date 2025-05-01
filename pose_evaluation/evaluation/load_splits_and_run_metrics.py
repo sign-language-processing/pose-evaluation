@@ -81,12 +81,12 @@ def run_metrics_in_out_trials(
 
     if additional_glosses:
         # prepend them
-        print(f"Prepending additional query glosses {additional_glosses}")
+        typer.echo(f"Prepending additional query glosses {additional_glosses}")
         combined = additional_glosses + query_gloss_vocabulary
         # Use dict.fromkeys() to remove duplicates while keeping order
         query_gloss_vocabulary = list(dict.fromkeys(combined))
-        print(f"Query gloss vocabulary is now length {len(query_gloss_vocabulary)}")
-        print(f"Query gloss vocabulary: {query_gloss_vocabulary}")
+        typer.echo(f"Query gloss vocabulary is now length {len(query_gloss_vocabulary)}")
+        typer.echo(f"Query gloss vocabulary: {query_gloss_vocabulary}")
 
     if shuffle_query_glosses:
         random.shuffle(query_gloss_vocabulary)
@@ -101,7 +101,7 @@ def run_metrics_in_out_trials(
     # If there's one already one up, use that
     gloss_dfs_folder = out_path.parent / "gloss_dfs"
     if gloss_dfs_folder.is_dir():
-        print(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
+        typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
     else:
         gloss_dfs_folder = out_path / "gloss_dfs"
         gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
@@ -119,19 +119,19 @@ def run_metrics_in_out_trials(
 
         in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
         if in_gloss_df_path.is_file():
-            print(f"Reading in-gloss df from {in_gloss_df_path}")
+            typer.echo(f"Reading in-gloss df from {in_gloss_df_path}")
             in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
-            print(f"Writing out-gloss df to {in_gloss_df_path}")
+            typer.echo(f"Writing out-gloss df to {in_gloss_df_path}")
             in_gloss_df = df[df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
 
         out_gloss_df_path = gloss_dfs_folder / f"{gloss}_out.csv"
         if out_gloss_df_path.is_file():
-            print(f"Reading in out-gloss-df from {out_gloss_df_path}")
+            typer.echo(f"Reading in out-gloss-df from {out_gloss_df_path}")
             out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
-            print(f"Writing out-gloss df to {out_gloss_df_path}")
+            typer.echo(f"Writing out-gloss df to {out_gloss_df_path}")
             out_gloss_df = df[df[DatasetDFCol.GLOSS] != gloss]
             other_class_count = len(in_gloss_df) * out_gloss_multiplier
             out_gloss_df = out_gloss_df.sample(n=other_class_count, random_state=42)
@@ -156,7 +156,7 @@ def run_metrics_in_out_trials(
             results = defaultdict(list)
             results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.csv"
             if results_path.exists():
-                print(f"Results for {results_path} already exist. Skipping!")
+                typer.echo(f"Results for {results_path} already exist. Skipping!")
                 continue
 
             for _, hyp_row in tqdm(
@@ -178,14 +178,14 @@ def run_metrics_in_out_trials(
 
                         typer.echo(f"⚠️ Got invalid score {score.score} for {hyp_path} vs {ref_path}")
                         if score.score is None:
-                            print("None score")
+                            typer.echo("None score")
                         elif np.isnan(score.score):
-                            print("NaN score")
+                            typer.echo("NaN score")
 
-                        print(metric.get_signature().format())
-                        print(metric.pose_preprocessors)
-                        print(hyp_pose.body.data.shape)
-                        print(ref_pose.body.data.shape)
+                        typer.echo(metric.get_signature().format())
+                        typer.echo(metric.pose_preprocessors)
+                        typer.echo(hyp_pose.body.data.shape)
+                        typer.echo(ref_pose.body.data.shape)
 
                     end_time = time.perf_counter()
                     results[ScoreDFCol.METRIC].append(metric.name)
@@ -199,8 +199,8 @@ def run_metrics_in_out_trials(
 
             results_df = pd.DataFrame.from_dict(results)
             results_df.to_csv(results_path)
-            print(f"Wrote {len(results_df)} scores to {results_path}")
-            print("\n")
+            typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
+            typer.echo("\n")
 
 
 def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename):
@@ -246,20 +246,20 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
 def run_metrics_full_distance_matrix_batched_parallel(
     df: pd.DataFrame, out_path: Path, metrics: list, batch_size: int = 100, max_workers: int = 4, merge=False
 ):
-    print(
+    typer.echo(
         f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
-    print(f"A full distance matrix is {len(df)*len(df)} distances.")
-    print(f"Batch size {batch_size}, max workers {max_workers}")
-    print(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
-    print(f"Results will be saved to {out_path}")
+    typer.echo(f"A full distance matrix is {len(df)*len(df)} distances.")
+    typer.echo(f"Batch size {batch_size}, max workers {max_workers}")
+    typer.echo(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
+    typer.echo(f"Results will be saved to {out_path}")
 
     n = len(df)
     batches_per_axis = math.ceil(n / batch_size)
     total_batches = batches_per_axis**2
 
     # how_many = 1000
-    # print(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
+    # typer.echo(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
     # df = df.head(how_many)
 
     scores_path = out_path / "scores"
@@ -308,7 +308,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
                     batch_id += 1
 
-        print(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
+        typer.echo(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
             batch_filename = futures.pop(future)
             result_path = future.result()
@@ -334,8 +334,12 @@ def get_filtered_metrics(
     top10_nohands_nointerp=True,
     top10_nohands_nodtw_nointerp=True,
     top50_nointerp=True,
+    get_top_10_nointerp_default10_fillmasked10=False,
     return4=True,
+    specific_metrics: str | list[str] | None = None,
 ):
+    if isinstance(specific_metrics, str):
+        specific_metrics = [specific_metrics]
     # top 10
     top_10_metrics_by_map = [
         "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
@@ -487,8 +491,25 @@ def get_filtered_metrics(
         "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
         "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
     ]
+
+    # top 10 from round 1 and 2 by MAP, with the same default and fillmasked as the top metric and without interp
+    # aka excluding defaultdist1.0,defaultdist0.0,fillmasked1.0,fillmasked0.0,interp120,interp15,
+    top_10_nointerp_default10_fillmasked10 = [
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
+        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
+        "untrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "untrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+        "startendtrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
+    ]
     # Get a set of target names for efficient lookup
     metrics_to_use = []
+    if specific_metrics is not None:
+        metrics_to_use.extend(specific_metrics)
 
     if top10:
         metrics_to_use.extend(top_10_metrics_by_map)
@@ -500,7 +521,9 @@ def get_filtered_metrics(
 
     if top50_nointerp:
         metrics_to_use.extend(top_50_by_map_excluding_interp)
-        # +
+
+    if get_top_10_nointerp_default10_fillmasked10:
+        metrics_to_use.extend(top_10_nointerp_default10_fillmasked10)
 
     if return4:
         metrics_to_use.append("Return4Metric")
@@ -514,8 +537,9 @@ def get_filtered_metrics(
     metric_names = {m.name for m in metrics}
     unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
 
-    print(f"{len(filtered_metrics)} Filtered metrics:", [m.name for m in filtered_metrics])
-    print(f"{len(unmatched_metrics)} Unmatched metrics_to_use:", unmatched_metrics)
+    typer.echo(specific_metrics)
+    typer.echo(f"{len(filtered_metrics)} Filtered metrics:", [m.name for m in filtered_metrics])
+    typer.echo(f"{len(unmatched_metrics)} Unmatched metrics_to_use:", unmatched_metrics)
     return filtered_metrics
 
 
@@ -551,6 +575,7 @@ def main(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
     ),
     filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
+    specific_metrics: List[str] = typer.Option(None, help="If specified, will use these metrics only"),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -576,8 +601,24 @@ def main(
     # typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
-    if filter_metrics:
-        metrics = get_filtered_metrics(metrics)
+    if specific_metrics is not None:
+        typer.echo(specific_metrics)
+        metrics = get_filtered_metrics(
+            metrics,
+            top10=False,
+            top10_nohands_nointerp=False,
+            top10_nohands_nodtw_nointerp=False,
+            top50_nointerp=False,
+            return4=False,
+            specific_metrics=specific_metrics,
+        )
+    else:
+
+        if filter_metrics:
+
+            metrics = get_filtered_metrics(
+                metrics,
+            )
 
     random.shuffle(metrics)
 
@@ -622,12 +663,13 @@ if __name__ == "__main__":
 # with all the known-similar glosses included, and saving to metric_results_round_3
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_round_3 2>&1|tee out/$(date +%s).txt
 
+# Round 4
 
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
 # cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
 
 
-#######
+###############################
 # Full Matrix
 # Batch size 100, max workers 8 seems to level off at 8 workers working, 29 GB memory usage
 # Batch size 100, max workers 40 seems to level off at 40 workers working, 62 GB memory usage
@@ -635,6 +677,24 @@ if __name__ == "__main__":
 # batch size 80, workers 60 seems to level off at 43 workers working and 15 GB memory usage... creeping up to 44 and 21 after 45 minutes
 # find metric_results_full_matrix/scores/batches_startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_test/ |wc -l
 
+# run with 40 workers, 100 batch size, and do specific metric on asl citizen test set, specifying some specific metrics
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 40 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --specific-metrics "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
 
+# same as above, but instead just the "filtered" metrics with ends up being 58 + return4
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 40 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --specific-metrics "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
+
+# Top metric that isn't just a defaultdistance difference
+# untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 40 --batch-size 100 --specific-metrics "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
+# same, but training set
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 40 --batch-size 100 --specific-metrics "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
+
+# #2 metric, on asl citizen test, with only 2 workers
+# startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 2 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
+# same, on train
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 2 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
+
+###############################
 # z-stretching
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_z_offsets --no-filter-metrics 2>&1|tee out/$(date +%s).txt
