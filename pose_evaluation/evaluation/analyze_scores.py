@@ -142,7 +142,7 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
         for sig in signatures:
             print(f"Rows with signature '{sig}':")
             print(metric_df[metric_df[ScoreDFCol.SIGNATURE].str.split("=").str[0] == sig])
-    assert len(signatures) == 1, f"{len(signatures)} Signatures: {signatures}, \nMetric: {metric}"
+    assert len(signatures) == 1, f"{len(signatures)} Signatures: {signatures}, \nMetric: {metric_name}"
     result[ScoreDFCol.SIGNATURE] = signatures[0]
 
     # Gloss and gloss-pair stats
@@ -212,69 +212,86 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     return result
 
-def load_metric_dfs_from_filenames(scores_folder: Path, csv_format=True) -> Tuple[str, pd.DataFrame]:
+def load_score_parquet(parquet_file: Path) -> pd.DataFrame:
+    """Loads a score Parquet file into a Pandas DataFrame."""
+    return pd.read_parquet(parquet_file)
+
+def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv") -> Tuple[str, pd.DataFrame]:
     """
-    Parses CSV filenames to extract the metric name and loads/groups the corresponding data.
+    Parses filenames to extract the metric name and loads/groups the corresponding data.
 
     Args:
-        scores_folder: Path to the folder containing the score CSV files.
+        scores_folder: Path to the folder containing the score files.
+        file_format: The format of the score files. Must be either "csv" or "parquet".
+                     Defaults to "csv".
 
     Yields:
         A tuple containing the metric name (str) and the combined DataFrame (pd.DataFrame)
         for that metric.
     """
-    csv_files = list(scores_folder.glob("*.csv"))
+    if file_format not in ["csv", "parquet"]:
+        raise ValueError(f"Invalid file_format: {file_format}. Must be 'csv' or 'parquet'.")
+
+    file_extension = f"*.{file_format}"
+    score_files = list(scores_folder.glob(file_extension))
     metric_files: Dict[str, list[Path]] = defaultdict(list)
 
-    for csv_file in tqdm(csv_files, f"Parsing csv filenames"):
-        filename = csv_file.stem  # Get filename without extension
+    for score_file in tqdm(score_files, f"Parsing {file_format} filenames"):
+        filename = score_file.stem  # Get filename without extension
         parts = filename.split("_")
         if len(parts) > 1 and "outgloss" in parts:
             gloss = parts[0]
             outgloss_index = parts.index("outgloss")
             metric_name_parts = parts[1:outgloss_index]
             metric_name = "_".join(metric_name_parts)
-
-            metric_files[metric_name].append(csv_file)
+            metric_files[metric_name].append(score_file)
         else:
             print(f"Warning: Could not parse metric name from filename: {filename}")
-
 
     print(f"Found {len(metric_files.keys())} metrics")
     print(f"Found {len(metric_files.keys())} metrics: {list(metric_files.keys())[:10]}")
 
-
     for metric, files in metric_files.items():
         signatures_set = set()
         all_dfs = []
-        processed_csv_signatures = {}
-        signature_csvs = defaultdict(list)
+        processed_file_signatures = {}
+        signature_files = defaultdict(list)
         try:
-            for csv_file in tqdm(files, desc=f"Loading {len(files)} CSVs for metric '{metric}'"):                
-                scores_csv_df = load_score_csv(csv_file=csv_file)
-                signatures = scores_csv_df[ScoreDFCol.SIGNATURE].unique().tolist()
+            for score_file in tqdm(files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric}'"):
+                if file_format == "csv":
+                    scores_df = load_score_csv(csv_file=score_file)
+                elif file_format == "parquet":
+                    scores_df = load_score_parquet(parquet_file=score_file)
+                else:
+                    raise ValueError("Unexpected file format")
+
+                signatures = scores_df[ScoreDFCol.SIGNATURE].unique().tolist()
+                assert len(signatures) == 1, f"{score_file} has more than one signature!: \n{signatures}"
                 signatures_set.update(signatures)
-                processed_csv_signatures[str(csv_file)] = signatures
+                processed_file_signatures[str(score_file)] = signatures
+
+
+                # Had a bug where the default distance wasn't being set correctly
+                if "defaultdist" in metric_name:
+                    default_distance = float(metric_name.split("defaultdist")[1].split("_")[0])                    
+                    assert f"default_distance:{default_distance}" in signatures[0], f"default_distance:{default_distance} not in in signatures[0]: \nNAME:\n{metric_name}\nSIGNATURE:\n{signatures[0]}" 
 
                 for sig in signatures:
-                    signature_csvs[sig].append(str(csv_file))
-                
-                
-                all_dfs.append(scores_csv_df)
-            assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_csv_signatures.keys())}"
-        except AssertionError as e:
-            processed_csv_signatures_out_json = Path(f"{metric}_debugging_processed_csv_signatures.json")
-            signature_csvs_out_json = Path(f"{metric}_debugging_signature_csvs.json")
-            print(processed_csv_signatures_out_json.resolve())
-            print(signature_csvs_out_json.resolve())
-            with processed_csv_signatures_out_json.open("w") as f:
-                json.dump(processed_csv_signatures, f, indent=4)
+                    signature_files[sig].append(str(score_file))
 
-            with signature_csvs_out_json.open("w") as f:
-                json.dump(signature_csvs, f, indent=4)                
-            print(e)
-            
-            
+            assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_file_signatures.keys())}"
+        except AssertionError as e:
+            processed_file_signatures_out_json = Path.cwd()/"debug_jsons"/f"{metric}_debugging_processed_{file_format}_signatures.json"
+            signature_files_out_json = Path.cwd()/"debug_jsons"/f"{metric}_debugging_signature_{file_format}_files.json"
+            print(processed_file_signatures_out_json.resolve())
+            print(signature_files_out_json.resolve())
+            with processed_file_signatures_out_json.open("w") as f:
+                json.dump(processed_file_signatures, f, indent=4)
+
+            with signature_files_out_json.open("w") as f:
+                json.dump(signature_files, f, indent=4)
+            raise e
+
         if all_dfs:
             combined_df = pd.concat(all_dfs, ignore_index=True)
             signatures = combined_df[ScoreDFCol.SIGNATURE].unique()
@@ -294,10 +311,12 @@ if __name__ == "__main__":
         help="Path to the folder containing the score files, either a pyarrow parquet datset (default) or csv files",
     )
     parser.add_argument(
-        "--parse-csvs",
-        action="store_true",
-        help="Path to the folder containing the score CSV files.",
-    )
+    "--file-format",
+    type=str,
+    choices=["pyarrow", "parquet", "csv"],
+    default="pyarrow",
+    help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.",
+)
     args = parser.parse_args()
     scores_folder = Path(args.scores_folder)
 
@@ -355,20 +374,20 @@ if __name__ == "__main__":
     stats_by_metric = defaultdict(list)
     metrics_analyzed = set()
 
-    if args.parse_csvs:
-        metric_generator  = load_metric_dfs_from_filenames(args.scores_folder)
+    if args.file_format != "pyarrow":
+        metric_generator  = load_metric_dfs_from_filenames(args.scores_folder, file_format=args.file_format)
     
     else:
         dataset= load_dataset(scores_folder)
         metric_generator  = load_metric_dfs(dataset)
-    i = 0
-    for metric, metric_df in tqdm(metric_generator, desc="Checking metric csvs"):
-        print("*" * 50)
-        print(f"Metric {i}: {metric} has {len(metric_df)} rows")
-        i+=1
+    # i = 0
+    # for metric, metric_df in tqdm(metric_generator, desc="Checking metric csvs"):
+    #     print("*" * 50)
+    #     print(f"Metric {i}: {metric} has {len(metric_df)} rows")
+    #     i+=1
 
 
-    exit()
+    # exit()
     for metric, metric_df in tqdm(metric_generator, desc="Analyzing metrics"):
         if metric in metrics_analyzed:
             print(f"Skipping already analyzed metric: {metric}")
