@@ -1,20 +1,38 @@
 #!/usr/bin/env python3
 import argparse
+from collections import defaultdict
 from typing import List, Optional, Union
 from pathlib import Path
 import random
 
 import pandas as pd
 from tqdm import tqdm
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pyarrow.dataset as ds
 import pyarrow.compute as pc
+
+
+from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
+
+
+def parse_dataset_split(folder_name: str):
+    parts = folder_name.split("_")
+    if len(parts) >= 2:
+        split = parts[-1]
+        dataset = parts[-2]
+        # dataset = "_".join(parts[:-1])
+    else:
+        dataset = folder_name
+        split = "unknown"
+    return dataset, split
 
 
 def merge_parquet_files(
     input_paths: Union[str, Path, List[Union[str, Path]]],
     output_dir: Union[str, Path],
     partition_columns: Optional[List[str]] = None,
+    parse_parent_for_datasets_and_splits: bool = True,
 ) -> None:
     """
     Merge one or more Parquet files into a new dataset directory,
@@ -27,30 +45,60 @@ def merge_parquet_files(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Merging {len(input_paths)} to {output_dir} with partitions: {partition_columns}")
 
+    # Normalize input paths
     if isinstance(input_paths, (str, Path)):
         input_path = Path(input_paths)
         if input_path.is_dir():
-            dataset = ds.dataset(str(input_path), format="parquet")
+            input_paths = list(input_path.rglob("*.parquet"))
         else:
-            dataset = ds.dataset([str(input_path)], format="parquet")
+            input_paths = [input_path]
     else:
-        input_paths = [str(Path(p)) for p in input_paths]
+        input_paths = [Path(p) for p in input_paths]
 
-        dataset = ds.dataset(input_paths, format="parquet")
+    print(f"Merging {len(input_paths)} files to {output_dir} with partitions: {partition_columns}")
 
-    # pull the splits out
+    # Group by dataset/split if enabled
+    grouped_paths = defaultdict(list)
+    for path in input_paths:
+        if parse_parent_for_datasets_and_splits:
+            parent = path.parent.name
+            dataset, split = parse_dataset_split(parent)
+        else:
+            dataset, split = "unknown", "unknown"
+        grouped_paths[(dataset, split)].append(path)
 
-    ds.write_dataset(
-        data=dataset,
-        base_dir=str(output_dir),
-        format="parquet",
-        partitioning=partition_columns or None,
-        existing_data_behavior="overwrite_or_ignore",
-    )
+    # Iterate over grouped splits and write each
+    for (dataset, split), files in grouped_paths.items():
 
-    print(f"Merged {len(dataset.files)} files into {output_dir.resolve()}")
+        print(f"Preparing dataset object for dataset={dataset}, split={split}, ({len(files)} files...)")
+        dataset_obj = ds.dataset(files, format="parquet")
+
+        target_dir = output_dir / f"{dataset}" / f"{split}"
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"Writing {len(files)} files for dataset={dataset}, split={split}")
+        if partition_columns:
+            for col in partition_columns:
+                if col not in dataset_obj.schema.names:
+                    raise ValueError(f"Partition column '{col}' missing from dataset.")
+
+            partition_schema = pa.schema([(col, dataset_obj.schema.field(col).type) for col in partition_columns])
+            partitioning = ds.partitioning(partition_schema, flavor="hive")
+            # partitioning = ds.partitioning(pa.schema([("METRIC", pa.string())]), flavor="hive")
+        else:
+            partitioning = None
+
+        ds.write_dataset(
+            data=dataset_obj,
+            base_dir=target_dir,
+            format="parquet",
+            partitioning=partitioning,
+            existing_data_behavior="overwrite_or_ignore",
+            file_options=ds.ParquetFileFormat().make_write_options(compression="snappy"),
+        )
+
+        print(f"✓ Wrote {len(files)} files to {target_dir.resolve()}")
 
 
 def count_rows(parquets: list[Path]):
@@ -60,40 +108,61 @@ def count_rows(parquets: list[Path]):
         if (i + 1) % 1000 == 0 and i > 0:
             print(f"Read {i+1:,} files, counted {row_count:,} rows so far, or {row_count/(i+1):,} on average")
 
-    print(f"Total row count: {row_count:,}, or on average {row_count/len(parquets)}")
+    print(f"Total row count: {row_count:,}, or on average {row_count/len(parquets):,} across {len(parquets)} files")
 
 
-def load_and_summarize(df):
-    # print("\nDataFrame Info:")
-    # df.info()
+def load_and_merge(
+    parquets: List[Path],
+    dedupe: bool = True,
+    output_path: Optional[Path] = None,
+) -> pa.Table:
+    """
+    Load and merge multiple Parquet files into a single in-memory pyarrow Table.
+    Optionally deduplicate the rows and save the result to a Parquet file.
 
-    # print("\nDataFrame Describe:")
-    # print(df.describe(include="all"))
+    Args:
+        parquets (List[Path]): List of Parquet file paths.
+        dedupe (bool): Whether to deduplicate rows after merging.
+        output_path (Optional[Path]): If provided, saves the merged table to this path.
 
-    print("\nDataFrame Head:")
-    print(df.head())
+    Returns:
+        pyarrow.Table: Merged (and optionally deduplicated) in-memory table.
+    """
+    print(f"[INFO] Loading {len(parquets)} parquet file(s)...")
+    tables = []
 
-    unique_metrics = df["METRIC"].unique()
-    print(f"{len(unique_metrics)} METRICS: {unique_metrics}")
-    print(f"METRICS: {len(df['METRIC'].unique())}")
-    out_folder = Path("metric_distances_partial")
-    out_folder.mkdir(exist_ok=True)
+    for i, path in tqdm(enumerate(parquets), desc="Reading parquet files", total=len(parquets)):
+        table = pq.read_table(path)
+        tables.append(table)
 
-    for metric in unique_metrics:
-        metric_df = df[df["METRIC"] == metric]
-        print(f"{metric}")
-        print(f"*\tSCORES: {len(metric_df['SCORE']):,}")
+    merged_table = pa.concat_tables(tables, promote_options="default")
+    print(f"[INFO] Merged table has {merged_table.num_rows:,} rows before deduplication")
 
-        print(f"*\tQUERY GLOSSES: {len(metric_df['GLOSS_A'].unique())}")
-        # print(df["GLOSS_A"].unique())
+    if dedupe:
+        df = merged_table.to_pandas()
+        before = len(df)
+        df = df.drop_duplicates(subset=[ScoreDFCol.METRIC, ScoreDFCol.GLOSS_A_PATH, ScoreDFCol.GLOSS_B_PATH])
+        after = len(df)
+        print(f"[INFO] Dropped {before - after:,} duplicate rows")
+        merged_table = pa.Table.from_pandas(df)
+        print(f"[INFO] Table has {merged_table.num_rows:,} rows after deduplication")
 
-        print(f"*\tREF GLOSSES: {len(metric_df['GLOSS_B'].unique())}")
+    if output_path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        partition_schema = pa.schema([("METRIC", pa.string())])
 
-        # print(df["GLOSS_B"].unique())
+        ds.write_dataset(
+            data=merged_table,
+            base_dir=output_path,
+            format="parquet",
+            partitioning=ds.partitioning(partition_schema, flavor="hive"),
+            existing_data_behavior="overwrite_or_ignore",
+            file_options=ds.ParquetFileFormat().make_write_options(compression="snappy"),
+        )
+        print(f"[INFO] Saved merged table to {output_path.resolve()}")
 
-        # print(f"LOWEST SCORES")
-        # metric_df = metric_df.sort_values(by="SCORE", ascending=True)
-        # print(metric_df[["SCORE","GLOSS_A","GLOSS_B"]].head())
+    return merged_table
 
 
 def get_unique_values(input_paths: List[Union[str, Path]], column_names: List[str]) -> dict:
@@ -118,12 +187,16 @@ def get_unique_values(input_paths: List[Union[str, Path]], column_names: List[st
     return {k: sorted(v) for k, v in unique_values.items()}
 
 
-def summarize_columns(input_paths):
+def summarize_columns(input_paths, sample_count=10):
 
-    unique_values = get_unique_values(input_paths, ["METRIC", "GLOSS_A", "GLOSS_A_PATH", "GLOSS_B", "GLOSS_B_PATH"])
+    unique_values = get_unique_values(
+        input_paths,
+        [ScoreDFCol.METRIC, ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_A_PATH, ScoreDFCol.GLOSS_B, ScoreDFCol.GLOSS_B_PATH],
+    )
     for column, values in unique_values.items():
-        print(f"{column} has {len(values)} unique values")
-        for value in values[:10]:
+        random.shuffle(values)
+        print(f"{column} has {len(values)} unique values, here are a few at random")
+        for value in values[:sample_count]:
             print(f"*\t{value}")
 
 
@@ -157,6 +230,13 @@ def main():
 
     parser.add_argument(
         "--merge-dir",
+        type=Path,
+        default=None,
+        help="If given, will merge parquets and put them here",
+    )
+
+    parser.add_argument(
+        "--load-and-merge",
         type=Path,
         default=None,
         help="If given, will merge parquets and put them here",
@@ -196,7 +276,11 @@ def main():
     if args.merge_dir is not None:
         merge_dir = args.merge_dir
         merge_dir.mkdir(exist_ok=True, parents=True)
-        merge_parquet_files(parquets, merge_dir, ["METRIC", "GLOSS_A"])
+        # don't do GLOSS_A, results in millions of files.
+        merge_parquet_files(parquets, merge_dir, [ScoreDFCol.METRIC])
+
+    if args.load_and_merge is not None:
+        load_and_merge(parquets, dedupe=True, output_path=args.load_and_merge)
 
 
 if __name__ == "__main__":
