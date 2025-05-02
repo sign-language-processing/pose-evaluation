@@ -3,6 +3,7 @@ from typing import Optional, List, Dict, Tuple
 from collections import defaultdict
 from pathlib import Path
 import json
+import re 
 
 import pandas as pd
 import numpy as np
@@ -14,9 +15,17 @@ from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_s
 from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
 from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 
+_SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 
 tqdm.pandas()
 
+def extract_signature_distance(signature: str) -> Optional[str]:
+    """
+    From a signature string, extract the float following 'default_distance:'.
+    Returns None if not found.
+    """
+    m = _SIGNATURE_RE.search(signature)
+    return float(m.group(1)) if m else None
 
 def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) -> dict:
     if ks is None:
@@ -273,8 +282,9 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
                 # Had a bug where the default distance wasn't being set correctly
                 if "defaultdist" in metric_name:
-                    default_distance = float(metric_name.split("defaultdist")[1].split("_")[0])                    
-                    assert f"default_distance:{default_distance}" in signatures[0], f"default_distance:{default_distance} not in in signatures[0]: \nNAME:\n{metric_name}\nSIGNATURE:\n{signatures[0]}" 
+                    default_distance = float(metric_name.split("defaultdist")[1].split("_")[0])
+                    sig_distance = float(extract_signature_distance(signatures[0]))                    
+                    assert default_distance == sig_distance, f"default_distance:{default_distance} does not match distance in signatures[0]: \nNAME:\n{metric_name}\nSIGNATURE:\n{signatures[0]}" 
 
                 for sig in signatures:
                     signature_files[sig].append(str(score_file))
@@ -283,8 +293,10 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
             assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_file_signatures.keys())}"
         except AssertionError as e:
-            processed_file_signatures_out_json = Path.cwd()/"debug_jsons"/f"{metric}_debugging_processed_{file_format}_signatures.json"
-            signature_files_out_json = Path.cwd()/"debug_jsons"/f"{metric}_debugging_signature_{file_format}_files.json"
+            debug_path = Path.cwd()/"debug_jsons"
+            debug_path.mkdir(exist_ok=True)
+            processed_file_signatures_out_json = debug_path/f"{metric}_debugging_processed_{file_format}_signatures.json"
+            signature_files_out_json = debug_path/f"{metric}_debugging_signature_{file_format}_files.json"
             print(processed_file_signatures_out_json.resolve())
             print(signature_files_out_json.resolve())
             with processed_file_signatures_out_json.open("w") as f:

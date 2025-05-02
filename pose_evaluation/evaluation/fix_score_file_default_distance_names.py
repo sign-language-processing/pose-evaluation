@@ -201,7 +201,7 @@ def main():
     parser = argparse.ArgumentParser(description="Normalize metric names and fix defaultdist mismatches")
     parser.add_argument("scores_folder", type=Path, help="Directory containing GLOSS_*_outgloss_*.{csv,parquet} files")
     parser.add_argument("--out", "-o", type=Path, required=True, help="Output directory")
-    parser.add_argument("--ext", choices=["csv", "parquet"], default="csv", help="File extension to process")
+    parser.add_argument("--ext", choices=["csv", "parquet"], default="parquet", help="File extension to process")
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
