@@ -38,18 +38,20 @@ def extract_signature_distance(signature: str) -> Optional[str]:
     Returns None if not found.
     """
     m = _SIGNATURE_RE.search(signature)
-    return m.group(1) if m else None
+    return float(m.group(1)) if m else None
+    # d = float(signature.split("default_distance:")[1].split("|")[0])
+    # return d
 
 
-def build_new_metric_name(old_metric: str, signature_dist: str) -> str:
+def build_new_metric_name(old_metric: str, signature_dist: Optional[str]) -> str:
     """
-    Normalize prefixes and substrings, then align 'defaultdist' to signature:
-      1) If starts with 'trimmed', replace that prefix with 'startendtrimmed'.
-         (leave 'untrimmed' unchanged)
+    Always apply normalization, and align 'defaultdist' if signature_dist is given:
+      1) If starts with 'trimmed', replace that prefix with 'startendtrimmed'
       2) Replace any '_normalized_' with '_normalizedbyshoulders_'
-         (exact match; '_unnormalized_' is unaffected)
-      3) Replace existing 'defaultdist<old>' with 'defaultdist<signature_dist>'
-         or append '_defaultdist<signature_dist>' if missing.
+      3) If signature_dist provided:
+           a) Replace existing 'defaultdist<old>' with 'defaultdist<signature_dist>'
+           b) Or append '_defaultdist<signature_dist>' if missing
+         Otherwise leave any defaultdist untouched
     """
     metric = old_metric
     # 1) trimmed -> startendtrimmed
@@ -57,21 +59,21 @@ def build_new_metric_name(old_metric: str, signature_dist: str) -> str:
         metric = "startendtrimmed" + metric[len("trimmed") :]
     # 2) exact replace normalized
     metric = metric.replace("_normalized_", "_normalizedbyshoulders_")
-    # 3) defaultdist replacement or append
-    if _DEFAULTDIST_RE.search(metric):
-        metric = _DEFAULTDIST_RE.sub(f"defaultdist{signature_dist}", metric)
-    else:
-        metric = f"{metric}_defaultdist{signature_dist}"
+    # 3) defaultdist logic only if signature provided
+    if signature_dist is not None:
+        if _DEFAULTDIST_RE.search(metric):
+            metric = _DEFAULTDIST_RE.sub(f"defaultdist{signature_dist}", metric)
+        else:
+            metric = f"{metric}_defaultdist{signature_dist}"
     return metric
 
 
 def build_new_filename(old_stem: str, new_metric: str) -> str:
     """
-    Replace the metric segment of old_stem with new_metric, preserving everything before the first '_'
-    and after '_outgloss_'.
+    Replace the metric segment of old_stem with new_metric, preserving everything
+    before the first '_' and after '_outgloss_'.
     """
     prefix, _, rest = old_stem.partition("_")
-    # rest = old_metric + '_outgloss_' + suffix
     _, _, suffix = rest.partition("_outgloss_")
     return f"{prefix}_{new_metric}_outgloss_{suffix}"
 
@@ -88,6 +90,8 @@ def dedupe_and_append(out_path: Path, df_new: pd.DataFrame, ext: str) -> None:
 
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     df_combined = df_combined.drop_duplicates().reset_index(drop=True)
+    assert len(df_combined["SIGNATURE"].unique()) == 1
+    assert len(df_combined["METRIC"].unique()) == 1
 
     if ext == "csv":
         df_combined.to_csv(out_path, index=False)
@@ -95,24 +99,29 @@ def dedupe_and_append(out_path: Path, df_new: pd.DataFrame, ext: str) -> None:
         df_combined.to_parquet(out_path, index=False)
 
 
+def update_signature_with_new_metric_name(signature: str, new_metric_name: str) -> str:
+    """Replace the prefix of the signature (up to the first '|') with the new metric name."""
+    parts = signature.split("|", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Malformed signature, expected a '|' separator: {signature}")
+    return f"{new_metric_name}|{parts[1]}"
+
+
 # --- Core Processing ----------------------------------------------------
 
 
 def process_scores(scores_dir: Path, out_dir: Path, ext: str = "csv") -> Dict[str, int]:
     """
-    Process all *.{ext} files in scores_dir, enforcing that
-    METRIC and filename defaultdist match the signature default_distance.
-
-    Special case: if old_metric does not contain 'defaultdist' or
-    signature lacks 'default_distance:', simply copy unchanged.
-    Skip files with multiple distinct signatures.
+    Process all *.{ext} files in scores_dir, enforcing normalization of metric names
+    and alignment of 'defaultdist' with signature 'default_distance' when available.
+    Files with multiple distinct signatures are skipped.
     """
     stats = {
         "total_inputs": 0,
-        "copied_unchanged": 0,
+        "normalized_only": 0,
         "renamed": 0,
         "skipped_multi_signature": 0,
-        "skipped_copy_special": 0,
+        "signatures_changed": 0,
         "deduplicated": 0,
     }
 
@@ -129,54 +138,57 @@ def process_scores(scores_dir: Path, out_dir: Path, ext: str = "csv") -> Dict[st
 
         sigs = df[ScoreDFCol.SIGNATURE].unique()
         if len(sigs) != 1:
-            logging.warning(
-                "%s has %d distinct signatures; skipping.",
-                infile.name,
-                len(sigs),
-            )
+            logging.warning("%s has %d distinct signatures; skipping.", infile.name, len(sigs))
             stats["skipped_multi_signature"] += 1
             continue
 
         signature = sigs[0]
         sig_dist = extract_signature_distance(signature)
+        print(infile)
 
         stem = infile.stem
         old_metric = extract_metric_name_from_filename(stem) or ""
 
-        # Special case: no defaultdist in metric OR no default_distance: in signature
-        if "defaultdist" not in old_metric or sig_dist is None:
-            # copy file as-is
-            out_path = out_dir / infile.name
-            # ensure METRIC dtype preserved
-            if ext == "csv":
-                df.to_csv(out_path, index=False)
-            else:
-                df.to_parquet(out_path, index=False)
-            stats["copied_unchanged"] += 1
-            stats["skipped_copy_special"] += 1
-            logging.info("Copied without processing: %s", infile.name)
-            continue
-
-        # Build corrected metric name & filename
+        # Always normalize + conditional defaultdist-update
         new_metric = build_new_metric_name(old_metric, sig_dist)
+        # Determine new filename
         new_stem = build_new_filename(stem, new_metric)
-        out_path = out_dir / f"{new_stem}.{ext}"
+        out_name = f"{new_stem}.{ext}" if new_stem != stem else infile.name
+        out_path = out_dir / out_name
 
         # Update METRIC column
         df = df.copy()
         df[ScoreDFCol.METRIC] = new_metric
 
-        # Save or dedupe-as-needed
+        # update SIGNATURE with new name
+        df[ScoreDFCol.SIGNATURE] = df[ScoreDFCol.SIGNATURE].apply(
+            lambda sig: update_signature_with_new_metric_name(sig, new_metric)
+        )
+
+        assert len(df[ScoreDFCol.SIGNATURE].unique()) == 1
+        assert len(df[ScoreDFCol.METRIC].unique()) == 1
+        new_sig = df[ScoreDFCol.SIGNATURE].unique()[0]
+        if new_sig != signature:
+            stats["signatures_changed"] += 1
+            # logging.info("OLD Signature: %s", signature)
+            # logging.info("NEW Signature: %s", df[ScoreDFCol.SIGNATURE].unique()[0])
+            # logging.info(f"Signature distance: %s", sig_dist)
+
+        # Write or dedupe
         if out_path.exists():
             dedupe_and_append(out_path, df, ext)
             stats["deduplicated"] += 1
-            logging.info("Deduplicated into: %s", out_path.name)
+            # logging.info("Deduplicated into: %s", out_path.name)
         else:
             if ext == "csv":
                 df.to_csv(out_path, index=False)
             else:
                 df.to_parquet(out_path, index=False)
-            stats["renamed"] += 1
+            # Count as rename if metric changed, else normalization-only
+            if new_metric != old_metric:
+                stats["renamed"] += 1
+            else:
+                stats["normalized_only"] += 1
             logging.info("Written: %s", out_path.name)
 
     return stats
@@ -186,9 +198,7 @@ def process_scores(scores_dir: Path, out_dir: Path, ext: str = "csv") -> Dict[st
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fix defaultdist mismatches between filename and SIGNATURE in score files"
-    )
+    parser = argparse.ArgumentParser(description="Normalize metric names and fix defaultdist mismatches")
     parser.add_argument("scores_folder", type=Path, help="Directory containing GLOSS_*_outgloss_*.{csv,parquet} files")
     parser.add_argument("--out", "-o", type=Path, required=True, help="Output directory")
     parser.add_argument("--ext", choices=["csv", "parquet"], default="csv", help="File extension to process")
@@ -203,11 +213,10 @@ def main():
     # Summary
     summary = (
         f"Processed: {stats['total_inputs']} inputs\n"
-        f"  • Copied unchanged:       {stats['copied_unchanged']}\n"
+        f"  • Normalized only:        {stats['normalized_only']}\n"
         f"  • Renamed/corrected:      {stats['renamed']}\n"
         f"  • Deduplicated:           {stats['deduplicated']}\n"
-        f"  • Skipped multi-signature:{stats['skipped_multi_signature']}\n"
-        f"  • Skipped special-copy:   {stats['skipped_copy_special']}"
+        f"  • Skipped multi-signature:{stats['skipped_multi_signature']}"
     )
     print("\n=== Summary ===")
     print(summary)
