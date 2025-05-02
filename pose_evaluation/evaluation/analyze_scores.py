@@ -279,6 +279,8 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
                 for sig in signatures:
                     signature_files[sig].append(str(score_file))
 
+                all_dfs.append(scores_df)
+
             assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_file_signatures.keys())}"
         except AssertionError as e:
             processed_file_signatures_out_json = Path.cwd()/"debug_jsons"/f"{metric}_debugging_processed_{file_format}_signatures.json"
@@ -293,6 +295,7 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
             raise e
 
         if all_dfs:
+
             combined_df = pd.concat(all_dfs, ignore_index=True)
             signatures = combined_df[ScoreDFCol.SIGNATURE].unique()
 
