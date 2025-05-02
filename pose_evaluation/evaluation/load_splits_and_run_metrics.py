@@ -1,5 +1,6 @@
 import concurrent.futures
 from collections import defaultdict
+from itertools import product
 import math
 import time
 from typing import List, Optional, Annotated
@@ -65,7 +66,7 @@ def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH, progress=False):
 def run_metrics_in_out_trials(
     df: pd.DataFrame,
     out_path: Path,
-    metrics: List[DistanceMetric],
+    metrics: List["DistanceMetric"],
     gloss_count: Optional[int] = 5,
     out_gloss_multiplier=4,
     shuffle_metrics=True,
@@ -73,32 +74,34 @@ def run_metrics_in_out_trials(
     additional_glosses: Optional[List[str]] = None,
     shuffle_query_glosses=True,
 ):
-
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
 
     if gloss_count:
         query_gloss_vocabulary = query_gloss_vocabulary[:gloss_count]
 
     if additional_glosses:
-        # prepend them
         typer.echo(f"Prepending additional query glosses {additional_glosses}")
         combined = additional_glosses + query_gloss_vocabulary
-        # Use dict.fromkeys() to remove duplicates while keeping order
         query_gloss_vocabulary = list(dict.fromkeys(combined))
         typer.echo(f"Query gloss vocabulary is now length {len(query_gloss_vocabulary)}")
         typer.echo(f"Query gloss vocabulary: {query_gloss_vocabulary}")
 
-    if shuffle_query_glosses:
-        random.shuffle(query_gloss_vocabulary)
-
     if shuffle_metrics:
         random.shuffle(metrics)
 
-    if metric_count is not None:
-        typer.echo(f"Selecting {metric_count} of {len(metrics)} metrics")
-        metrics = metrics[:metric_count]
+    if shuffle_query_glosses:
+        random.shuffle(query_gloss_vocabulary)
 
-    # If there's one already one up, use that
+    # All gloss–metric combinations
+    gloss_metric_combos = list(product(query_gloss_vocabulary, metrics))
+
+    if shuffle_metrics and shuffle_query_glosses:
+        random.shuffle(gloss_metric_combos)
+
+    if metric_count is not None:
+        typer.echo(f"Selecting {metric_count} of {len(gloss_metric_combos)} gloss-metric combinations")
+        gloss_metric_combos = gloss_metric_combos[:metric_count]
+
     gloss_dfs_folder = out_path.parent / "gloss_dfs"
     if gloss_dfs_folder.is_dir():
         typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
@@ -109,26 +112,21 @@ def run_metrics_in_out_trials(
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
 
-    for g_index, gloss in enumerate(
-        tqdm(
-            query_gloss_vocabulary,
-            total=len(query_gloss_vocabulary),
-            desc=f"Running evaluations for all {len(query_gloss_vocabulary)} glosses",
-        )
+    for g_index, (gloss, metric) in enumerate(
+        tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
     ):
-
         in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
         if in_gloss_df_path.is_file():
             typer.echo(f"Reading in-gloss df from {in_gloss_df_path}")
             in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
-            typer.echo(f"Writing out-gloss df to {in_gloss_df_path}")
+            typer.echo(f"Writing in-gloss df to {in_gloss_df_path}")
             in_gloss_df = df[df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
 
         out_gloss_df_path = gloss_dfs_folder / f"{gloss}_out.csv"
         if out_gloss_df_path.is_file():
-            typer.echo(f"Reading in out-gloss-df from {out_gloss_df_path}")
+            typer.echo(f"Reading out-gloss df from {out_gloss_df_path}")
             out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             typer.echo(f"Writing out-gloss df to {out_gloss_df_path}")
@@ -143,64 +141,53 @@ def run_metrics_in_out_trials(
         pose_data.update(load_pose_files(out_gloss_df))
 
         typer.echo(
-            f"For gloss {gloss} We have {len(in_gloss_df)} in, {len(out_gloss_df)} out, and we have loaded {len(pose_data.keys())} poses total"
+            f"For gloss {gloss} with metric {metric.name}, we have {len(in_gloss_df)} in, "
+            f"{len(out_gloss_df)} out, and {len(pose_data.keys())} poses total"
         )
 
-        for i, metric in enumerate(metrics):
-            typer.echo("*" * 60)
-            typer.echo(f"Gloss #{g_index}/{len(query_gloss_vocabulary)}: {gloss}")
-            typer.echo(f"Metric #{i}/{len(metrics)}: {metric.name}")
-            typer.echo(f"Metric #{i}/{len(metrics)} Signature: {metric.get_signature().format()}")
-            typer.echo(f"Testing with {len(in_gloss_df)} in-gloss files, and {len(out_gloss_df)} out-gloss")
+        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.csv"
+        if results_path.exists():
+            typer.echo(f"Results for {results_path} already exist. Skipping!")
+            continue
 
-            results = defaultdict(list)
-            results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.csv"
-            if results_path.exists():
-                typer.echo(f"Results for {results_path} already exist. Skipping!")
-                continue
+        results = defaultdict(list)
 
-            for _, hyp_row in tqdm(
-                in_gloss_df.iterrows(),
-                total=len(in_gloss_df),
-                desc=f"Calculating all {len(in_gloss_df)*len(ref_df)} distances for gloss #{g_index}/{len(query_gloss_vocabulary)}({gloss}) against all {len(ref_df)} references",
-            ):
-                hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
-                hyp_pose = pose_data[hyp_path].copy()
+        for _, hyp_row in tqdm(
+            in_gloss_df.iterrows(),
+            total=len(in_gloss_df),
+            desc=f"Calculating distances for gloss {gloss} with metric {metric.name}",
+        ):
+            hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
+            hyp_pose = pose_data[hyp_path].copy()
 
-                for _, ref_row in ref_df.iterrows():
-                    ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
-                    ref_pose = pose_data[ref_path].copy()
+            for _, ref_row in ref_df.iterrows():
+                ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
+                ref_pose = pose_data[ref_path].copy()
 
-                    start_time = time.perf_counter()
-                    score = metric.score_with_signature(hyp_pose, ref_pose)
+                start_time = time.perf_counter()
+                score = metric.score_with_signature(hyp_pose, ref_pose)
 
-                    if score is None or score.score is None or np.isnan(score.score):
+                if score is None or score.score is None or np.isnan(score.score):
+                    typer.echo(f"⚠️ Invalid score for {hyp_path} vs {ref_path}: {score.score}")
+                    typer.echo(metric.get_signature().format())
+                    typer.echo(metric.pose_preprocessors)
+                    typer.echo(hyp_pose.body.data.shape)
+                    typer.echo(ref_pose.body.data.shape)
 
-                        typer.echo(f"⚠️ Got invalid score {score.score} for {hyp_path} vs {ref_path}")
-                        if score.score is None:
-                            typer.echo("None score")
-                        elif np.isnan(score.score):
-                            typer.echo("NaN score")
+                end_time = time.perf_counter()
+                results[ScoreDFCol.METRIC].append(metric.name)
+                results[ScoreDFCol.SCORE].append(score.score)
+                results[ScoreDFCol.GLOSS_A].append(hyp_row[DatasetDFCol.GLOSS])
+                results[ScoreDFCol.GLOSS_B].append(ref_row[DatasetDFCol.GLOSS])
+                results[ScoreDFCol.SIGNATURE].append(metric.get_signature().format())
+                results[ScoreDFCol.GLOSS_A_PATH].append(hyp_path)
+                results[ScoreDFCol.GLOSS_B_PATH].append(ref_path)
+                results[ScoreDFCol.TIME].append(end_time - start_time)
 
-                        typer.echo(metric.get_signature().format())
-                        typer.echo(metric.pose_preprocessors)
-                        typer.echo(hyp_pose.body.data.shape)
-                        typer.echo(ref_pose.body.data.shape)
-
-                    end_time = time.perf_counter()
-                    results[ScoreDFCol.METRIC].append(metric.name)
-                    results[ScoreDFCol.SCORE].append(score.score)
-                    results[ScoreDFCol.GLOSS_A].append(hyp_row[DatasetDFCol.GLOSS])
-                    results[ScoreDFCol.GLOSS_B].append(ref_row[DatasetDFCol.GLOSS])
-                    results[ScoreDFCol.SIGNATURE].append(metric.get_signature().format())
-                    results[ScoreDFCol.GLOSS_A_PATH].append(hyp_path)
-                    results[ScoreDFCol.GLOSS_B_PATH].append(ref_path)
-                    results[ScoreDFCol.TIME].append(end_time - start_time)
-
-            results_df = pd.DataFrame.from_dict(results)
-            results_df.to_csv(results_path)
-            typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
-            typer.echo("\n")
+        results_df = pd.DataFrame.from_dict(results)
+        results_df.to_csv(results_path)
+        typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
+        typer.echo("\n")
 
 
 def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename):
