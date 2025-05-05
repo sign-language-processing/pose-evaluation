@@ -77,7 +77,7 @@ def merge_parquet_files(
         target_dir = output_dir / f"{dataset}" / f"{split}"
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Writing {len(files)} files for dataset={dataset}, split={split}")
+        print(f"Writing data from {len(files)} files for dataset={dataset}, split={split}")
         if partition_columns:
             for col in partition_columns:
                 if col not in dataset_obj.schema.names:
@@ -85,7 +85,7 @@ def merge_parquet_files(
 
             partition_schema = pa.schema([(col, dataset_obj.schema.field(col).type) for col in partition_columns])
             partitioning = ds.partitioning(partition_schema, flavor="hive")
-            # partitioning = ds.partitioning(pa.schema([("METRIC", pa.string())]), flavor="hive")
+            # partitioning = ds.partitioning(pa.schema([(ScoreDFCol.METRIC, pa.string())]), flavor="hive")
         else:
             partitioning = None
 
@@ -98,7 +98,11 @@ def merge_parquet_files(
             file_options=ds.ParquetFileFormat().make_write_options(compression="snappy"),
         )
 
-        print(f"✓ Wrote {len(files)} files to {target_dir.resolve()}")
+        print(f"✓ Wrote data from {len(files)} files to {target_dir.resolve()}")
+        parquet_files = list(Path(target_dir).rglob("*.parquet"))
+        print(f"Number of Parquet files written: {len(parquet_files)}")
+        partition_dirs = [p for p in Path(target_dir).rglob("*") if p.is_dir()]
+        print(f"Number of partition directories: {len(partition_dirs)}")
 
 
 def count_rows(parquets: list[Path]):
@@ -128,11 +132,19 @@ def load_and_merge(
     Returns:
         pyarrow.Table: Merged (and optionally deduplicated) in-memory table.
     """
+    # NOTE: dies if you do 6k parquet files...
     print(f"[INFO] Loading {len(parquets)} parquet file(s)...")
     tables = []
 
     for i, path in tqdm(enumerate(parquets), desc="Reading parquet files", total=len(parquets)):
         table = pq.read_table(path)
+        # cast to float for consistency
+        if ScoreDFCol.SCORE in table.column_names:
+            table = table.set_column(
+                table.schema.get_field_index(ScoreDFCol.SCORE),
+                ScoreDFCol.SCORE,
+                table.column(ScoreDFCol.SCORE).cast(pa.float64()),
+            )
         tables.append(table)
 
     merged_table = pa.concat_tables(tables, promote_options="default")
@@ -150,7 +162,7 @@ def load_and_merge(
     if output_path:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        partition_schema = pa.schema([("METRIC", pa.string())])
+        partition_schema = pa.schema([(ScoreDFCol.METRIC, pa.string())])
 
         ds.write_dataset(
             data=merged_table,
@@ -191,7 +203,14 @@ def summarize_columns(input_paths, sample_count=10):
 
     unique_values = get_unique_values(
         input_paths,
-        [ScoreDFCol.METRIC, ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_A_PATH, ScoreDFCol.GLOSS_B, ScoreDFCol.GLOSS_B_PATH],
+        [
+            ScoreDFCol.METRIC,
+            ScoreDFCol.SIGNATURE,
+            ScoreDFCol.GLOSS_A,
+            ScoreDFCol.GLOSS_A_PATH,
+            ScoreDFCol.GLOSS_B,
+            ScoreDFCol.GLOSS_B_PATH,
+        ],
     )
     for column, values in unique_values.items():
         random.shuffle(values)
