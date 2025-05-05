@@ -72,7 +72,7 @@ def run_metrics_in_out_trials(
     shuffle_metrics=True,
     metric_count: Optional[int] = 10,
     additional_glosses: Optional[List[str]] = None,
-    shuffle_query_glosses=True,
+    shuffle_query_glosses=False,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
 
@@ -141,14 +141,9 @@ def run_metrics_in_out_trials(
         pose_data.update(load_pose_files(out_gloss_df))
 
         typer.echo(
-            f"For gloss {gloss} with metric {metric.name}, we have {len(in_gloss_df)} in, "
+            f"For trial #{g_index}/{len(gloss_metric_combos)} {gloss} with metric {metric.name}, we have {len(in_gloss_df)} in, "
             f"{len(out_gloss_df)} out, and {len(pose_data.keys())} poses total"
         )
-
-        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.csv"
-        if results_path.exists():
-            typer.echo(f"Results for {results_path} already exist. Skipping!")
-            continue
 
         results = defaultdict(list)
 
@@ -184,8 +179,12 @@ def run_metrics_in_out_trials(
                 results[ScoreDFCol.GLOSS_B_PATH].append(ref_path)
                 results[ScoreDFCol.TIME].append(end_time - start_time)
 
+        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
+        if results_path.exists():
+            typer.echo(f"Results for {results_path} already exist. Skipping!")
+            continue
         results_df = pd.DataFrame.from_dict(results)
-        results_df.to_csv(results_path)
+        results_df.to_parquet(results_path, index=False, compression="snappy")
         typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
         typer.echo("\n")
 
@@ -317,13 +316,14 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
 def get_filtered_metrics(
     metrics,
-    top10=True,
-    top10_nohands_nointerp=True,
-    top10_nohands_nodtw_nointerp=True,
-    top50_nointerp=True,
+    top10=False,
+    top10_nohands_nointerp=False,
+    top10_nohands_nodtw_nointerp=False,
+    top50_nointerp=False,
     get_top_10_nointerp_default10_fillmasked10=False,
-    return4=True,
+    return4=False,
     specific_metrics: str | list[str] | None = None,
+    csv_path: Path | None = None,
 ):
     if isinstance(specific_metrics, str):
         specific_metrics = [specific_metrics]
@@ -493,6 +493,7 @@ def get_filtered_metrics(
         "untrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
         "startendtrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
     ]
+
     # Get a set of target names for efficient lookup
     metrics_to_use = []
     if specific_metrics is not None:
@@ -513,7 +514,12 @@ def get_filtered_metrics(
         metrics_to_use.extend(top_10_nointerp_default10_fillmasked10)
 
     if return4:
-        metrics_to_use.append("Return4Metric")
+        metrics_to_use.append("Return4Metric_defaultdist4.0")
+
+    if csv_path is not None:
+        df = pd.read_csv(csv_path)
+        csv_metrics = df["METRIC"].unique().tolist()
+        metrics_to_use.extend(csv_metrics)
 
     metrics_to_use_set = set(metrics_to_use)
 
@@ -525,8 +531,8 @@ def get_filtered_metrics(
     unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
 
     typer.echo(specific_metrics)
-    typer.echo(f"{len(filtered_metrics)} Filtered metrics:", [m.name for m in filtered_metrics])
-    typer.echo(f"{len(unmatched_metrics)} Unmatched metrics_to_use:", unmatched_metrics)
+    typer.echo(f"{len(filtered_metrics)} Filtered metrics: {[m.name for m in filtered_metrics]}")
+    typer.echo(f"{len(unmatched_metrics)} Unmatched metrics_to_use: {unmatched_metrics}")
     return filtered_metrics
 
 
@@ -562,7 +568,12 @@ def main(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
     ),
     filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
-    specific_metrics: List[str] = typer.Option(None, help="If specified, will use these metrics only"),
+    specific_metrics: List[str] = typer.Option(
+        None, help="If specified, will add these metrics to the list of filtered metrics"
+    ),
+    specific_metrics_csv: Path = typer.Option(
+        None, help="If specified, will read the metrics from this CSV and add those"
+    ),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -588,7 +599,7 @@ def main(
     # typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
-    if specific_metrics is not None:
+    if specific_metrics is not None or specific_metrics_csv is not None:
         typer.echo(specific_metrics)
         metrics = get_filtered_metrics(
             metrics,
@@ -598,6 +609,7 @@ def main(
             top50_nointerp=False,
             return4=False,
             specific_metrics=specific_metrics,
+            csv_path=specific_metrics_csv,
         )
     else:
 
@@ -605,9 +617,15 @@ def main(
 
             metrics = get_filtered_metrics(
                 metrics,
+                top10=False,
+                top10_nohands_nointerp=False,
+                top10_nohands_nodtw_nointerp=False,
+                top50_nointerp=False,
+                return4=False,
             )
 
     random.shuffle(metrics)
+    print(f"{len(metrics)} metrics after filtering")
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
@@ -632,6 +650,7 @@ def main(
             shuffle_metrics=True,
             metric_count=metric_count,
             additional_glosses=additional_glosses,
+            shuffle_query_glosses=True,
         )
 
 
@@ -641,7 +660,8 @@ if __name__ == "__main__":
 # results in ['RUSSIA', 'BRAG', 'HOUSE', 'HOME', 'WORM', 'REFRIGERATOR', 'BLACK', 'SUMMER', 'SICK', 'REALSICK', 'WEATHER', 'MEETING', 'COLD', 'WINTER', 'THANKSGIVING', 'THANKYOU', 'HUNGRY', 'FULL', 'LIBRARY', 'CELERY', 'CANDY1', 'CASTLE2', 'GOVERNMENT', 'OPINION1', 'PJS', 'LIVE2', 'WORKSHOP', 'UNCLE', 'EASTER', 'BAG2']
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 12 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 
-# Add more glosses, 250 total.
+# round 2
+# Add more glosses, 100 total.
 # Results in this list: ['ACCENT', 'ADULT', 'AIRPLANE', 'APPEAR', 'BAG2', 'BANANA2', 'BEAK', 'BERRY', 'BIG', 'BINOCULARS', 'BLACK', 'BRAG', 'BRAINWASH', 'CAFETERIA', 'CALM', 'CANDY1', 'CASTLE2', 'CELERY', 'CHEW1', 'COLD', 'CONVINCE2', 'COUNSELOR', 'DART', 'DEAF2', 'DEAFSCHOOL', 'DECIDE2', 'DIP3', 'DOLPHIN2', 'DRINK2', 'DRIP', 'DRUG', 'EACH', 'EARN', 'EASTER', 'ERASE1', 'EVERYTHING', 'FINGERSPELL', 'FISHING2', 'FORK4', 'FULL', 'GOTHROUGH', 'GOVERNMENT', 'HIDE', 'HOME', 'HOUSE', 'HUNGRY', 'HURRY', 'KNITTING3', 'LEAF1', 'LEND', 'LIBRARY', 'LIVE2', 'MACHINE', 'MAIL1', 'MEETING', 'NECKLACE4', 'NEWSTOME', 'OPINION1', 'ORGANIZATION', 'PAIR', 'PEPSI', 'PERFUME1', 'PIG', 'PILL', 'PIPE2', 'PJS', 'REALSICK', 'RECORDING', 'REFRIGERATOR', 'REPLACE', 'RESTAURANT', 'ROCKINGCHAIR1', 'RUIN', 'RUSSIA', 'SCREWDRIVER3', 'SENATE', 'SHAME', 'SHARK2', 'SHAVE5', 'SICK', 'SNOWSUIT', 'SPECIALIST', 'STADIUM', 'SUMMER', 'TAKEOFF1', 'THANKSGIVING', 'THANKYOU', 'TIE1', 'TOP', 'TOSS', 'TURBAN', 'UNCLE', 'VAMPIRE', 'WASHDISHES', 'WEAR', 'WEATHER', 'WINTER', 'WORKSHOP', 'WORM', 'YESTERDAY']
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" 2>&1|tee out/$(date +%s).txt
 
@@ -650,7 +670,18 @@ if __name__ == "__main__":
 # with all the known-similar glosses included, and saving to metric_results_round_3
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_round_3 2>&1|tee out/$(date +%s).txt
 
-# Round 4
+# Use round-2 metrics and glosses, put results in scores
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" --out foo --specific-metrics-csv metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv 2>&1|tee out/$(date +%s).txt
+
+# round 4: 250 glosses, random metrics, both shuffled
+# so we get a lot of single-gloss metrics
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --no-filter-metrics --out metric_results_round_4 2>&1|tee out/$(date +%s).txt
+
+# Backfilling after default_dist issue: metric_results_1_2_z_combined_818_metrics/
+# using 250 gloss vocabulary
+# and the specific 818 metrics from before
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_1_2_z_combined_818_metrics/ --specific-metrics-csv metric_results_1_2_z_combined_818_metrics/round1_2_z_combined_metric_stats_with_default_distance_issue.csv 2>&1|tee out/in_out_trials_$(date +%s).txt
+
 
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
 # cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
