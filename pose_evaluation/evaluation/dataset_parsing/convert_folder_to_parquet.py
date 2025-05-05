@@ -24,19 +24,17 @@ def convert_csvs_to_parquet(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for csv_path in tqdm(csv_files, desc="Converting CSV files to Parquet"):
-        try:
-            if score_csv_format:
-                df = load_score_csv(csv_path)
-            else:
-                df = pd.read_csv(csv_path)
-            parquet_path = out_dir / csv_path.with_suffix(".parquet").name
-            df.to_parquet(parquet_path, index=False)
-            # print(f"Converted: {csv_path.name} → {parquet_path}")
-            if remove_original:
-                csv_path.unlink()
-                print(f"Deleted original: {csv_path.name}")
-        except Exception as e:
-            print(f"Failed to convert {csv_path.name}: {e}")
+
+        if score_csv_format:
+            df = load_score_csv(csv_path)
+        else:
+            df = pd.read_csv(csv_path)
+        parquet_path = out_dir / csv_path.with_suffix(".parquet").name
+        df.to_parquet(parquet_path, index=False)
+        # print(f"Converted: {csv_path.name} → {parquet_path}")
+        if remove_original:
+            csv_path.unlink()
+            print(f"Deleted original: {csv_path.name}")
 
 
 def main():
