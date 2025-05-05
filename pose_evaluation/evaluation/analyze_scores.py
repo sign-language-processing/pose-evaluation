@@ -16,8 +16,33 @@ from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index
 from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
+_DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
+
+
 
 tqdm.pandas()
+
+
+def extract_metric_name_from_filename(stem: str) -> Optional[str]:
+    """
+    Extract everything between the first underscore and '_outgloss_' in the file stem.
+    e.g., 'GLOSS_trimmed_normalized_defaultdist10.0_extra_outgloss_4x_score_results'
+    returns 'trimmed_normalized_defaultdist10.0_extra'
+    """
+    if "_outgloss_" not in stem or "_" not in stem:
+        return None
+    _, rest = stem.split("_", 1)
+    metric, _ = rest.split("_outgloss_", 1)
+    return metric
+
+def extract_filename_dist(filename: str) -> Optional[float]:
+    """
+    From a filename, extract the float following 'defaultdist'.
+    Returns None if not found.
+    """
+    m = _DEFAULTDIST_RE.search(filename)
+    return float(m.group(1)) if m else None
+
 
 def extract_signature_distance(signature: str) -> Optional[str]:
     """
@@ -225,98 +250,96 @@ def load_score_parquet(parquet_file: Path) -> pd.DataFrame:
     """Loads a score Parquet file into a Pandas DataFrame."""
     return pd.read_parquet(parquet_file)
 
-def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv") -> Tuple[str, pd.DataFrame]:
+
+
+def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"):
     """
     Parses filenames to extract the metric name and loads/groups the corresponding data.
 
     Args:
         scores_folder: Path to the folder containing the score files.
         file_format: The format of the score files. Must be either "csv" or "parquet".
-                     Defaults to "csv".
 
     Yields:
-        A tuple containing the metric name (str) and the combined DataFrame (pd.DataFrame)
-        for that metric.
+        A tuple containing the metric name and the combined DataFrame for that metric.
     """
     if file_format not in ["csv", "parquet"]:
         raise ValueError(f"Invalid file_format: {file_format}. Must be 'csv' or 'parquet'.")
 
-    file_extension = f"*.{file_format}"
-    score_files = list(scores_folder.glob(file_extension))
-    metric_files: Dict[str, list[Path]] = defaultdict(list)
+    score_files = list(scores_folder.glob(f"*.{file_format}"))
+    metric_files: Dict[str, List[Path]] = defaultdict(list)
 
     for score_file in tqdm(score_files, f"Parsing {file_format} filenames"):
-        filename = score_file.stem  # Get filename without extension
-        parts = filename.split("_")
-        if len(parts) > 1 and "outgloss" in parts:
-            gloss = parts[0]
-            outgloss_index = parts.index("outgloss")
-            metric_name_parts = parts[1:outgloss_index]
-            metric_name = "_".join(metric_name_parts)
+        metric_name = extract_metric_name_from_filename(score_file.stem)
+        if metric_name:
             metric_files[metric_name].append(score_file)
         else:
-            print(f"Warning: Could not parse metric name from filename: {filename}")
+            print(f"Warning: Could not parse metric name from filename: {score_file.name}")
 
-    print(f"Found {len(metric_files.keys())} metrics")
-    print(f"Found {len(metric_files.keys())} metrics: {list(metric_files.keys())[:10]}")
+    print(f"Found {len(metric_files)} metrics: {list(metric_files.keys())[:10]}")
 
-    for metric, files in metric_files.items():
+    for metric_name, files in metric_files.items():
         signatures_set = set()
         all_dfs = []
         processed_file_signatures = {}
         signature_files = defaultdict(list)
+
         try:
-            for score_file in tqdm(files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric}'"):
+            for score_file in tqdm(files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric_name}'"):
                 if file_format == "csv":
                     scores_df = load_score_csv(csv_file=score_file)
-                elif file_format == "parquet":
-                    scores_df = load_score_parquet(parquet_file=score_file)
                 else:
-                    raise ValueError("Unexpected file format")
+                    scores_df = load_score_parquet(parquet_file=score_file)
 
                 signatures = scores_df[ScoreDFCol.SIGNATURE].unique().tolist()
-                assert len(signatures) == 1, f"{score_file} has more than one signature!: \n{signatures}"
+                assert len(signatures) == 1, f"{score_file} has multiple signatures: {signatures}"
+
                 signatures_set.update(signatures)
                 processed_file_signatures[str(score_file)] = signatures
 
-
-                # Had a bug where the default distance wasn't being set correctly
                 if "defaultdist" in metric_name:
-                    default_distance = float(metric_name.split("defaultdist")[1].split("_")[0])
-                    sig_distance = float(extract_signature_distance(signatures[0]))                    
-                    assert default_distance == sig_distance, f"default_distance:{default_distance} does not match distance in signatures[0]: \nNAME:\n{metric_name}\nSIGNATURE:\n{signatures[0]}" 
+                    default_distance = extract_filename_dist(metric_name)
+                    if default_distance is None:
+                        raise ValueError(f"Could not extract default distance from metric name: {metric_name}")
+
+                    sig_distance = float(extract_signature_distance(signatures[0]))
+
+                    # print("%" * 99)
+                    # print(f"metric_name: {metric_name}")
+                    # print(f"default_distance extracted: {default_distance}")
+                    # print(f"signature distance: {sig_distance}")
+
+                    assert default_distance == sig_distance, (
+                        f"default_distance:{default_distance} does not match distance in signatures[0]:\n"
+                        f"NAME:\n{metric_name}\nSIGNATURE:\n{signatures[0]}\nFile:{score_file}"
+                    )
 
                 for sig in signatures:
                     signature_files[sig].append(str(score_file))
 
                 all_dfs.append(scores_df)
 
-            assert len(signatures_set) == 1, f"More than one signature found for {metric}, previously processed {len(processed_file_signatures.keys())}"
-        except AssertionError as e:
-            debug_path = Path.cwd()/"debug_jsons"
-            debug_path.mkdir(exist_ok=True)
-            processed_file_signatures_out_json = debug_path/f"{metric}_debugging_processed_{file_format}_signatures.json"
-            signature_files_out_json = debug_path/f"{metric}_debugging_signature_{file_format}_files.json"
-            print(processed_file_signatures_out_json.resolve())
-            print(signature_files_out_json.resolve())
-            with processed_file_signatures_out_json.open("w") as f:
-                json.dump(processed_file_signatures, f, indent=4)
+            assert len(signatures_set) == 1, f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
 
-            with signature_files_out_json.open("w") as f:
+        except AssertionError as e:
+            debug_path = Path.cwd() / "debug_jsons"
+            debug_path.mkdir(exist_ok=True)
+            with (debug_path / f"{metric_name}_debugging_processed_{file_format}_signatures.json").open("w") as f:
+                json.dump(processed_file_signatures, f, indent=4)
+            with (debug_path / f"{metric_name}_debugging_signature_{file_format}_files.json").open("w") as f:
                 json.dump(signature_files, f, indent=4)
             raise e
 
         if all_dfs:
-
             combined_df = pd.concat(all_dfs, ignore_index=True)
-            signatures = combined_df[ScoreDFCol.SIGNATURE].unique()
+            unique_sigs = combined_df[ScoreDFCol.SIGNATURE].unique()
+            assert len(unique_sigs) == 1, f"More than one signature found for {metric_name}"
 
-            assert len(signatures) == 1, f"More than one signature found for {metric}"
-            # Normalize gloss pairs by sorting them
             combined_df["gloss_tuple"] = [
                 tuple(x) for x in np.sort(combined_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
             ]
-            yield metric, combined_df
+            yield metric_name, combined_df
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze pose evaluation scores.")
