@@ -73,6 +73,7 @@ def run_metrics_in_out_trials(
     metric_count: Optional[int] = 10,
     additional_glosses: Optional[List[str]] = None,
     shuffle_query_glosses=False,
+    skip_glosses_with_more_than_this_many: Optional[int] = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
 
@@ -115,6 +116,12 @@ def run_metrics_in_out_trials(
     for g_index, (gloss, metric) in enumerate(
         tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
     ):
+        results = defaultdict(list)
+        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
+        if results_path.exists():
+            typer.echo(f"*** Results for {results_path} already exist. Skipping! ***")
+            continue
+
         in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
         if in_gloss_df_path.is_file():
             typer.echo(f"Reading in-gloss df from {in_gloss_df_path}")
@@ -123,6 +130,15 @@ def run_metrics_in_out_trials(
             typer.echo(f"Writing in-gloss df to {in_gloss_df_path}")
             in_gloss_df = df[df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
+
+        if (
+            skip_glosses_with_more_than_this_many is not None
+            and len(in_gloss_df) > skip_glosses_with_more_than_this_many
+        ):
+            typer.echo(
+                f"*** {gloss} has {len(in_gloss_df)} items, greater than the max: {skip_glosses_with_more_than_this_many}, skipping! ***"
+            )
+            continue
 
         out_gloss_df_path = gloss_dfs_folder / f"{gloss}_out.csv"
         if out_gloss_df_path.is_file():
@@ -141,16 +157,14 @@ def run_metrics_in_out_trials(
         pose_data.update(load_pose_files(out_gloss_df))
 
         typer.echo(
-            f"For trial #{g_index}/{len(gloss_metric_combos)} {gloss} with metric {metric.name}, we have {len(in_gloss_df)} in, "
+            f"For trial #{g_index}/{len(gloss_metric_combos)} ({len(query_gloss_vocabulary)}gX{len(metrics)}m) {gloss}+{metric.name}, we have {len(in_gloss_df)} in, "
             f"{len(out_gloss_df)} out, and {len(pose_data.keys())} poses total"
         )
-
-        results = defaultdict(list)
 
         for _, hyp_row in tqdm(
             in_gloss_df.iterrows(),
             total=len(in_gloss_df),
-            desc=f"Calculating distances for gloss {gloss} with metric {metric.name}",
+            desc=f"{gloss}/{metric.name}",
         ):
             hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
             hyp_pose = pose_data[hyp_path].copy()
@@ -179,10 +193,6 @@ def run_metrics_in_out_trials(
                 results[ScoreDFCol.GLOSS_B_PATH].append(ref_path)
                 results[ScoreDFCol.TIME].append(end_time - start_time)
 
-        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
-        if results_path.exists():
-            typer.echo(f"Results for {results_path} already exist. Skipping!")
-            continue
         results_df = pd.DataFrame.from_dict(results)
         results_df.to_parquet(results_path, index=False, compression="snappy")
         typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
@@ -574,6 +584,9 @@ def main(
     specific_metrics_csv: Path = typer.Option(
         None, help="If specified, will read the metrics from this CSV and add those"
     ),
+    skip_glosses_with_more_than_this_many: int = typer.Option(
+        None, help="skip long glosses with more than this many items/samples"
+    ),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -651,6 +664,7 @@ def main(
             metric_count=metric_count,
             additional_glosses=additional_glosses,
             shuffle_query_glosses=True,
+            skip_glosses_with_more_than_this_many=skip_glosses_with_more_than_this_many,
         )
 
 
