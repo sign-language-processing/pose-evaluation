@@ -418,30 +418,47 @@ if __name__ == "__main__":
     else:
         dataset= load_dataset(scores_folder)
         metric_generator  = load_metric_dfs(dataset)
-    # i = 0
-    # for metric, metric_df in tqdm(metric_generator, desc="Checking metric csvs"):
-    #     print("*" * 50)
-    #     print(f"Metric {i}: {metric} has {len(metric_df)} rows")
-    #     i+=1
 
-
-    # exit()
+    analyzed=0
     for metric, metric_df in tqdm(metric_generator, desc="Analyzing metrics"):
+        print("*" * 50)
         if metric in metrics_analyzed:
             print(f"Skipping already analyzed metric: {metric}")
             continue
 
-        print("*" * 50)
+        reused_old = False
+
+        # Check against previous stats
+        if previous_stats_by_metric is not None:
+            prev_rows = previous_stats_by_metric[previous_stats_by_metric[ScoreDFCol.METRIC] == metric]
+            if not prev_rows.empty:
+                previous_total = prev_rows["total_count"].iloc[0]
+                current_total = len(metric_df)
+                if current_total == previous_total:
+                    print(f"Skipping re-analysis of {metric}: total_count unchanged ({current_total}). Reusing previous stats.")
+                    for col in previous_stats_by_metric.columns:
+                        stats_by_metric[col].append(prev_rows[col].iloc[0])
+                    metrics_analyzed.add(metric)
+                    reused_old = True
+                else:
+                    print(f"Reanalyzing {metric}: total_count changed (was {previous_total}, now {current_total})")
+
+        if reused_old:
+            continue  # Skip actual re-analysis
+
+        
         print(f"Analyzing metric: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
         metrics_analyzed.add(metric)
+        analyzed +=1
+        print("*" * 50)
 
     if stats_by_metric:
         stats_by_metric_df = pd.DataFrame(stats_by_metric)
         print(stats_by_metric_df)
-        print(f"Saving to {metric_stats_out}")
+        print(f"Saving {len(stats_by_metric_df)} to {metric_stats_out}, of which {len(stats_by_metric_df) - analyzed} are reused")
         stats_by_metric_df.to_csv(metric_stats_out, index=False)
     else:
         print("No metrics were analyzed.")
