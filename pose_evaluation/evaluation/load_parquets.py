@@ -43,6 +43,7 @@ def merge_parquet_files(
         output_dir (str | Path): Output directory for merged dataset.
         partition_columns (list, optional): Column names to partition by.
     """
+    print(f"** MERGE TO PYARROW DATASET **")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -77,7 +78,7 @@ def merge_parquet_files(
         target_dir = output_dir / f"{dataset}" / f"{split}"
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Writing data from {len(files)} files for dataset={dataset}, split={split}")
+        print(f"Writing data from {len(files):,} files for dataset={dataset}, split={split}")
         if partition_columns:
             for col in partition_columns:
                 if col not in dataset_obj.schema.names:
@@ -106,6 +107,7 @@ def merge_parquet_files(
 
 
 def count_rows(parquets: list[Path]):
+    print(f"** COUNTING ROWS **")
     row_count = 0
     for i, p in enumerate(tqdm(parquets, desc="loading files")):
         row_count += pq.ParquetFile(p).metadata.num_rows
@@ -133,6 +135,7 @@ def load_and_merge(
         pyarrow.Table: Merged (and optionally deduplicated) in-memory table.
     """
     # NOTE: dies if you do 6k parquet files...
+    print(f"** LOAD AND MERGE **")
     print(f"[INFO] Loading {len(parquets)} parquet file(s)...")
     tables = []
 
@@ -200,7 +203,7 @@ def get_unique_values(input_paths: List[Union[str, Path]], column_names: List[st
 
 
 def summarize_columns(input_paths, sample_count=10):
-
+    print("** COUNT UNIQUES BY COLUMN **")
     unique_values = get_unique_values(
         input_paths,
         [
@@ -210,6 +213,7 @@ def summarize_columns(input_paths, sample_count=10):
             ScoreDFCol.GLOSS_A_PATH,
             ScoreDFCol.GLOSS_B,
             ScoreDFCol.GLOSS_B_PATH,
+            ScoreDFCol.SCORE,
         ],
     )
     for column, values in unique_values.items():
@@ -217,6 +221,45 @@ def summarize_columns(input_paths, sample_count=10):
         print(f"{column} has {len(values)} unique values, here are a few at random")
         for value in values[:sample_count]:
             print(f"*\t{value}")
+
+
+def print_sampled_preview(table, num_rows=5, max_val_len=100):
+    print("Sampled rows preview:")
+    for i in range(min(num_rows, table.num_rows)):
+        row = table.slice(i, 1)
+        row_dict = {col: row.column(col_idx)[0].as_py() for col_idx, col in enumerate(table.column_names)}
+        print(f"\nRow {i}:")
+        for key, val in row_dict.items():
+            val_str = str(val)
+            if len(val_str) > max_val_len:
+                val_str = val_str[: max_val_len - 3] + "..."
+            print(f"  {key:<20} : {val_str}")
+
+
+# https://medium.com/pythoneers/dipping-into-data-streams-the-magic-of-reservoir-sampling-762f41b78781
+def sample_rows(input_paths, sample_count=100, column_names=None):
+    print("** Sample Rows **")
+    random.shuffle(input_paths)
+    dataset = ds.dataset([str(p) for p in input_paths], format="parquet")
+
+    reservoir = []
+    total_seen = 0
+
+    for batch in tqdm(dataset.to_batches(columns=column_names), desc="Sampling rows"):
+        for i in range(batch.num_rows):
+            row_batch = batch.slice(i, 1)
+            row_table = pa.Table.from_batches([row_batch])
+            total_seen += 1
+            if len(reservoir) < sample_count:
+                reservoir.append(row_table)
+            else:
+                j = random.randint(0, total_seen - 1)
+                if j < sample_count:
+                    reservoir[j] = row_table
+
+    sampled_table = pa.concat_tables(reservoir)
+
+    return sampled_table
 
 
 def main():
@@ -245,6 +288,12 @@ def main():
         "--count-unique",
         action="store_true",
         help="whether to count unique values for the columns",
+    )
+
+    parser.add_argument(
+        "--sample-rows",
+        action="store_true",
+        help="Whether to print a few random rows",
     )
 
     parser.add_argument(
@@ -292,6 +341,10 @@ def main():
     if args.count_unique:
         summarize_columns(parquets)
 
+    if args.sample_rows:
+        sampled_table = sample_rows(parquets)
+        print_sampled_preview(sampled_table)
+
     if args.merge_dir is not None:
         merge_dir = args.merge_dir
         merge_dir.mkdir(exist_ok=True, parents=True)
@@ -305,3 +358,6 @@ def main():
 if __name__ == "__main__":
     main()
 # python pose_evaluation/evaluation/load_parquets.py metric_results_full_matrix/scores/batches_untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_test/
+
+# merge full_matrix_scores to datasets
+# cd /opt/home/cleong/projects/pose-evaluation/ && conda activate /opt/home/cleong/envs/pose_eval_src && python pose_evaluation/evaluation/load_parquets.py /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/scores/ --merge-dir /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/pyarrow_dataset
