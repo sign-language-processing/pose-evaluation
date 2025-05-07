@@ -296,7 +296,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
     batch_size: int = 100,
     max_workers: int = 4,
     merge=False,
-    intersplit: bool = True,  
+    intersplit: bool = True,
 ):
     typer.echo(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
@@ -307,6 +307,9 @@ def run_metrics_full_distance_matrix_batched_parallel(
         splits = df[DatasetDFCol.SPLIT].unique().tolist()
         if len(splits) != 2:
             raise ValueError(f"Expected exactly two splits for intersplit comparison, got: {splits}")
+        else:
+            typer.echo(f"Using {splits} from {df[DatasetDFCol.DATASET].unique()} datasets")
+
         split_a, split_b = splits
         df_a = df[df[DatasetDFCol.SPLIT] == split_a].reset_index(drop=True)
         df_b = df[df[DatasetDFCol.SPLIT] == split_b].reset_index(drop=True)
@@ -319,7 +322,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
         df_a = df_b = df.reset_index(drop=True)
         n = len(df)
         batches_hyp = batches_ref = math.ceil(n / batch_size)
-    
+
     total_batches = batches_hyp * batches_ref
     typer.echo(f"Batch size {batch_size}, max workers {max_workers}")
     typer.echo(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
@@ -386,7 +389,6 @@ def run_metrics_full_distance_matrix_batched_parallel(
             )
             merged_df.to_parquet(final_path, index=False, compression="snappy")
             typer.echo(f"✅ Final results written to {final_path}\n")
-
 
 
 def get_filtered_metrics(
@@ -638,6 +640,9 @@ def main(
     full: Optional[bool] = typer.Option(
         False, help="Whether to run FULL distance matrix with the specified dataset dfs"
     ),
+    full_intersplit: Optional[bool] = typer.Option(
+        True, help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits"
+    ),
     max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
     batch_size: Optional[int] = typer.Option(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
@@ -725,6 +730,7 @@ def main(
             metrics=metrics,
             batch_size=batch_size,
             max_workers=max_workers,
+            intersplit=full_intersplit,
         )
 
     else:
@@ -820,8 +826,8 @@ if __name__ == "__main__":
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 # test (TODO)
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
-# train+test
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+# train+test intersplit
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --full-intersplit --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 
 # monitor progress:
 # watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
