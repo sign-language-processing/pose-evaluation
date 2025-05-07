@@ -9,6 +9,11 @@ from tqdm import tqdm
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 
+class ScoresIndexDFCol:
+    PATHS = "PATHS"
+    SUMMARY = "SUMMARY"
+
+
 def index_scores(
     scores_folder: Path,
     filter_metric: Optional[str] = None,
@@ -23,7 +28,7 @@ def index_scores(
     print(f"We have {len(score_files)} score files")
     total_count = 0
     index_dict = {
-        "PATHS": {},
+        ScoresIndexDFCol.PATHS: {},
         ScoreDFCol.METRIC: defaultdict(list),
         ScoreDFCol.GLOSS_A: defaultdict(list),
         ScoreDFCol.GLOSS_B: defaultdict(list),
@@ -52,7 +57,7 @@ def index_scores(
         if filter_gloss_a and gloss_a != filter_gloss_a:
             continue
 
-        index_dict["PATHS"][score_file_name] = str(score_file)
+        index_dict[ScoresIndexDFCol.PATHS][score_file_name] = str(score_file)
         index_dict[ScoreDFCol.METRIC][metric].append(score_file_name)
         index_dict[ScoreDFCol.GLOSS_A][gloss_a].append(score_file_name)
         total_count += len(scores_csv_df)
@@ -80,7 +85,7 @@ def index_scores(
         f"\n  • {total_count:,} total distance scores"
     )
 
-    index_dict["SUMMARY"] = {
+    index_dict[ScoresIndexDFCol.SUMMARY] = {
         "total_score_files": len(score_files),
         "total_scores": total_count,
         "unique_metrics": len(index_dict[ScoreDFCol.METRIC]),
