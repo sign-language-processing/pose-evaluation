@@ -13,7 +13,7 @@ app = typer.Typer()
 
 @app.command()
 def evaluate(
-    csv_path: Path = typer.Argument(..., help="CSV file containing intra-split distances."),
+    dataset_path: Path = typer.Argument(..., help="Path to a Parquet/Arrow dataset."),
     k: int = typer.Option(1, help="Number of neighbors to use."),
     score_col: str = typer.Option("SCORE", help="Name of the distance/score column."),
     query_path_col: str = typer.Option("GLOSS_A_PATH", help="Column for query sample path."),
@@ -23,24 +23,26 @@ def evaluate(
     verbose: bool = typer.Option(False, help="Print classification report and confusion matrix."),
 ):
     """
-    Perform KNN classification using precomputed intra-split distances.
+    Perform KNN classification using precomputed intra-split distances from a PyArrow dataset.
     """
-    if not csv_path.exists():
-        typer.echo(f"Error: File {csv_path} not found.", err=True)
+    if not dataset_path.exists():
+        typer.echo(f"❌ Error: Dataset {dataset_path} not found.", err=True)
         raise typer.Exit(1)
 
-    df = pd.read_csv(csv_path)
+    # Load dataset efficiently
+    dataset = ds.dataset(dataset_path, format="parquet")
+    typer.echo("📥 Scanning Arrow dataset...")
+    table = dataset.to_table()
+    df = table.to_pandas()
 
     # Ensure only distances between unique sample pairs (symmetric matrix assumed)
     unique_paths = sorted(df[query_path_col].unique())
+    typer.echo(f"✅ Loaded {len(df)} distance rows between {len(unique_paths)} unique samples...")
 
-    typer.echo(f"Loaded {len(df)} distance rows between {len(unique_paths)} unique samples...")
-
-    # Pivot to create distance matrix
+    # Pivot to create distance matrix (dense)
+    typer.echo("🔧 Creating full distance matrix...")
     dist_matrix = df.pivot(index=query_path_col, columns=neighbor_path_col, values=score_col)
-
-    # Fill missing distances with a large value (e.g., inf)
-    dist_matrix = dist_matrix.loc[unique_paths, unique_paths].fillna(np.inf).values
+    dist_matrix = dist_matrix.loc[unique_paths, unique_paths].values
 
     # Replace self-distances with inf
     np.fill_diagonal(dist_matrix, np.inf)
