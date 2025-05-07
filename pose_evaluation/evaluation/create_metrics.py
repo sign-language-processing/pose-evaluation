@@ -8,6 +8,7 @@ import pandas as pd
 
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.distance_measure import DistanceMeasure, AggregatedPowerDistance
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 from pose_evaluation.metrics.nonsense_measures import Return4Measure
 from pose_evaluation.metrics.dtw_metric import (
     DTWDTAIImplementationDistanceMeasure,
@@ -33,6 +34,8 @@ from pose_evaluation.metrics.pose_processors import (
     FirstFramePadShorterPosesProcessor,
     AddTOffsetsToZPoseProcessor,
 )
+from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
+
 
 # --- Constants & Regexes ------------------------------------------------
 # Signature: default_distance:<float>
@@ -156,6 +159,15 @@ def construct_metric(
     name = "_".join(name_pieces) + "_" + name
 
     return DistanceMetric(name=name, distance_measure=distance_measure, pose_preprocessors=pose_preprocessors)
+
+
+def get_embedding_metrics(df: pd.DataFrame) -> List:
+    print(f"Getting embedding_metrics from df with {df.columns}")
+    if DatasetDFCol.EMBEDDING_MODEL in df:
+        for model in df[DatasetDFCol.EMBEDDING_MODEL].unique().tolist():
+            yield EmbeddingDistanceMetric(model=f"{model}")
+    else:
+        raise ValueError(f"No {DatasetDFCol.EMBEDDING_MODEL}")
 
 
 def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None):
@@ -379,6 +391,18 @@ if __name__ == "__main__":
         if "defaultdist0.0" in n:
             assert "default_distance:0.0" in s, f"{n}\n{s}"
 
-
         if "return4" in n.lower():
             print(n)
+
+    tiny_csv_for_testing = Path("/opt/home/cleong/projects/pose-evaluation/tiny_csv_for_testing/asl-citizen.csv")
+    # tiny_csv_for_testing = Path(
+    #     "/opt/home/cleong/projects/pose-evaluation/tiny_csv_for_testing/asl-citizen-no-embeddings.csv"
+    # )
+    df = pd.read_csv(tiny_csv_for_testing)
+    try:
+        embedding_metrics = list(get_embedding_metrics(df))
+        for embedding_metric in embedding_metrics:
+            print(embedding_metric)
+            print(embedding_metric.name)
+    except ValueError as e:
+        print(e)
