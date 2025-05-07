@@ -38,7 +38,9 @@ def evaluate(
 
     # Pivot to create distance matrix
     dist_matrix = df.pivot(index=query_path_col, columns=neighbor_path_col, values=score_col)
-    dist_matrix = dist_matrix.loc[unique_paths, unique_paths].values
+
+    # Fill missing distances with a large value (e.g., inf)
+    dist_matrix = dist_matrix.loc[unique_paths, unique_paths].fillna(np.inf).values
 
     # Replace self-distances with inf
     np.fill_diagonal(dist_matrix, np.inf)
