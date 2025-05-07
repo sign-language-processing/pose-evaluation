@@ -335,7 +335,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
     dataset_names = "+".join(df[DatasetDFCol.DATASET].unique().tolist())
     if intersplit:
-        split_names = "_vs_".join(df[DatasetDFCol.SPLIT].unique().tolist())
+        split_names = "vs".join(df[DatasetDFCol.SPLIT].unique().tolist())
     else:
         split_names = "+".join(df[DatasetDFCol.SPLIT].unique().tolist())
 
@@ -830,4 +830,5 @@ if __name__ == "__main__":
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --full-intersplit --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 
 # monitor progress:
-# watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_testvstrain --target-count 132660
