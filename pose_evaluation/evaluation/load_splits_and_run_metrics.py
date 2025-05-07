@@ -14,10 +14,11 @@ import numpy as np
 
 import typer
 
-from pose_evaluation.evaluation.create_metrics import get_metrics
+from pose_evaluation.evaluation.create_metrics import get_metrics, get_embedding_metrics
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 app = typer.Typer()
 
@@ -63,6 +64,30 @@ def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH, progress=False):
     }
 
 
+def load_embedding(file_path: Path) -> np.ndarray:
+    """
+    Load a SignCLIP embedding from a .npy file, ensuring it has the correct shape.
+
+    Args:
+        file_path (Path): Path to the .npy file.
+
+    Returns:
+        np.ndarray: The embedding with shape (768,).
+    """
+    embedding = np.load(file_path)
+    if embedding.ndim == 2 and embedding.shape[0] == 1:
+        embedding = embedding[0]  # Reduce shape from (1, 768) to (768,)
+    return embedding
+
+
+def load_embedding_for_pose(df, model, pose_file_path):
+    row = df[(df[DatasetDFCol.POSE_FILE_PATH] == pose_file_path) & (df[DatasetDFCol.EMBEDDING_MODEL] == model)]
+    if len(row) != 1:
+        raise ValueError(f"Expected exactly one match for {pose_file_path}, model{model}: found {len(row)} rows.")
+    embedding_path = row.iloc[0][DatasetDFCol.EMBEDDING_FILE_PATH]
+    return load_embedding(embedding_path)
+
+
 def run_metrics_in_out_trials(
     df: pd.DataFrame,
     out_path: Path,
@@ -74,6 +99,7 @@ def run_metrics_in_out_trials(
     additional_glosses: Optional[List[str]] = None,
     shuffle_query_glosses=False,
     skip_glosses_with_more_than_this_many: Optional[int] = None,
+    gloss_dfs_folder: Optional[Path] = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
 
@@ -103,12 +129,13 @@ def run_metrics_in_out_trials(
         typer.echo(f"Selecting {metric_count} of {len(gloss_metric_combos)} gloss-metric combinations")
         gloss_metric_combos = gloss_metric_combos[:metric_count]
 
-    gloss_dfs_folder = out_path.parent / "gloss_dfs"
-    if gloss_dfs_folder.is_dir():
-        typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
-    else:
-        gloss_dfs_folder = out_path / "gloss_dfs"
-        gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
+    if gloss_dfs_folder is None:
+        gloss_dfs_folder = out_path.parent / "gloss_dfs"
+        if gloss_dfs_folder.is_dir():
+            typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
+        else:
+            gloss_dfs_folder = out_path / "gloss_dfs"
+            gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
 
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
@@ -116,6 +143,20 @@ def run_metrics_in_out_trials(
     for g_index, (gloss, metric) in enumerate(
         tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
     ):
+        if isinstance(metric, EmbeddingDistanceMetric):
+            typer.echo(f"{metric} is an Embedding Metric")
+            if DatasetDFCol.EMBEDDING_MODEL in df.columns:
+                metric_inputs_df = df[df[DatasetDFCol.EMBEDDING_MODEL] == metric.model]
+                typer.echo(f"Found {len(metric_inputs_df)} embedding rows matching model {metric.model}")
+            else:
+                typer.echo(f"No {DatasetDFCol.EMBEDDING_MODEL} in dataframe. Skipping!")
+                continue
+        else:
+            if any(col in df.columns for col in [DatasetDFCol.EMBEDDING_MODEL, DatasetDFCol.EMBEDDING_FILE_PATH]):
+                metric_inputs_df = df.drop(
+                    columns=[DatasetDFCol.EMBEDDING_MODEL, DatasetDFCol.EMBEDDING_FILE_PATH]
+                ).drop_duplicates()
+
         results = defaultdict(list)
         results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
         if results_path.exists():
@@ -128,7 +169,7 @@ def run_metrics_in_out_trials(
             in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             typer.echo(f"Writing in-gloss df to {in_gloss_df_path}")
-            in_gloss_df = df[df[DatasetDFCol.GLOSS] == gloss]
+            in_gloss_df = metric_inputs_df[metric_inputs_df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
 
         if (
@@ -146,7 +187,7 @@ def run_metrics_in_out_trials(
             out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             typer.echo(f"Writing out-gloss df to {out_gloss_df_path}")
-            out_gloss_df = df[df[DatasetDFCol.GLOSS] != gloss]
+            out_gloss_df = metric_inputs_df[metric_inputs_df[DatasetDFCol.GLOSS] != gloss]
             other_class_count = len(in_gloss_df) * out_gloss_multiplier
             out_gloss_df = out_gloss_df.sample(n=other_class_count, random_state=42)
             out_gloss_df.to_csv(out_gloss_df_path)
@@ -167,23 +208,31 @@ def run_metrics_in_out_trials(
             desc=f"{gloss}/{metric.name}",
         ):
             hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
-            hyp_pose = pose_data[hyp_path].copy()
 
             for _, ref_row in ref_df.iterrows():
                 ref_path = ref_row[DatasetDFCol.POSE_FILE_PATH]
-                ref_pose = pose_data[ref_path].copy()
+
+                if isinstance(metric, EmbeddingDistanceMetric):
+                    try:
+                        hyp = load_embedding_for_pose(metric_inputs_df, model=metric.model, pose_file_path=hyp_path)
+                        ref = load_embedding_for_pose(metric_inputs_df, model=metric.model, pose_file_path=ref_path)
+                    except ValueError as e:
+                        # typer.echo(f"ValueError on hyp_path {hyp_path}, ref_path {ref_path}: {e}")
+                        continue
+
+                else:
+                    hyp = pose_data[hyp_path].copy()
+                    ref = pose_data[ref_path].copy()
 
                 start_time = time.perf_counter()
-                score = metric.score_with_signature(hyp_pose, ref_pose)
+                score = metric.score_with_signature(hyp, ref)
+                end_time = time.perf_counter()
 
                 if score is None or score.score is None or np.isnan(score.score):
                     typer.echo(f"⚠️ Invalid score for {hyp_path} vs {ref_path}: {score.score}")
                     typer.echo(metric.get_signature().format())
                     typer.echo(metric.pose_preprocessors)
-                    typer.echo(hyp_pose.body.data.shape)
-                    typer.echo(ref_pose.body.data.shape)
 
-                end_time = time.perf_counter()
                 results[ScoreDFCol.METRIC].append(metric.name)
                 results[ScoreDFCol.SCORE].append(score.score)
                 results[ScoreDFCol.GLOSS_A].append(hyp_row[DatasetDFCol.GLOSS])
@@ -197,6 +246,7 @@ def run_metrics_in_out_trials(
         results_df.to_parquet(results_path, index=False, compression="snappy")
         typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
         typer.echo("\n")
+        typer.echo("*" * 50)
 
 
 def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename):
@@ -578,6 +628,7 @@ def main(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
     ),
     filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
+    embedding_metrics: bool = typer.Option(False, help="whether to add in embedding metric"),
     specific_metrics: List[str] = typer.Option(
         None, help="If specified, will add these metrics to the list of filtered metrics"
     ),
@@ -637,8 +688,18 @@ def main(
                 return4=False,
             )
 
+    if embedding_metrics:
+        try:
+            embed_metrics = list(get_embedding_metrics(df))
+            # typer.echo(f"Created embedding_metrics:{embed_metrics}")
+            metrics.extend(embed_metrics)
+        except ValueError as e:
+            typer.echo(f"Unable to add embedding metrics due to ValueError: {e}")
+
     random.shuffle(metrics)
-    print(f"{len(metrics)} metrics after filtering")
+    print(f"{len(metrics)} metrics after filtering:")
+    for metric in metrics:
+        typer.echo(metric.name)
 
     typer.echo(f"Saving results to {out}")
     out.mkdir(parents=True, exist_ok=True)
@@ -687,6 +748,9 @@ if __name__ == "__main__":
 # Use round-2 metrics and glosses, put results in scores
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 83 dataset_dfs/*.csv --additional-glosses "RUSSIA,BRAG,HOUSE,HOME,WORM,REFRIGERATOR,BLACK,SUMMER,SICK,REALSICK,WEATHER,MEETING,COLD,WINTER,THANKSGIVING,THANKYOU,HUNGRY,FULL" --out foo --specific-metrics-csv metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv 2>&1|tee out/$(date +%s).txt
 
+# z-stretching (before I added it to create_metrics)
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_z_offsets --no-filter-metrics 2>&1|tee out/$(date +%s).txt
+
 # round 4: 250 glosses, random metrics, both shuffled
 # so we get a lot of single-gloss metrics
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --no-filter-metrics --out metric_results_round_4 2>&1|tee out/$(date +%s).txt
@@ -697,8 +761,14 @@ if __name__ == "__main__":
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_1_2_z_combined_818_metrics/ --specific-metrics-csv metric_results_1_2_z_combined_818_metrics/round1_2_z_combined_metric_stats_with_default_distance_issue.csv 2>&1|tee out/in_out_trials_$(date +%s).txt
 
 
+# embed metrics only, 250 glosses, skipping glosses over 30 long
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs_with_embed/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_embeddings/ --specific-metrics-csv metric_results_embeddings/no_metrics.csv --embedding-metrics --skip-glosses-with-more-than-this-many 30 2>&1|tee embed_out/in_out_trials_$(date +%s).txt
+
+
+########################################
+# COUNTING
 # stat -c "%y" metric_results/scores/* | cut -d':' -f1 | sort | uniq -c # get the timestamps/hour
-# cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
 
 
 ###############################
@@ -727,6 +797,16 @@ if __name__ == "__main__":
 # same, on train
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 2 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast" 2>&1|tee out/full_matrix$(date +%s).txt
 
-###############################
-# z-stretching
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py --gloss-count 84 dataset_dfs/*.csv --additional-glosses "MEETING,WEATHER,COLD,WINTER,CHICAGO,PERCENT,PERCENT,PHILADELPHIA,CHICAGO,PHILADELPHIA,TRADITION,WORK,GIFT,GIVE,SANTA,THANKSGIVING,SANTA,THANKYOU,FULL,SANTA,THANKSGIVING,THANKYOU,FULL,THANKSGIVING,FULL,THANKYOU,ANIMAL,HOLIDAY,HAVE,HOLIDAY,ANIMAL,HAVE,COW,MOOSE,BUFFALO,MOOSE,MOOSE,PRESIDENT,BUFFALO,COW,COW,PRESIDENT,BUFFALO,PRESIDENT,FAMILY,TEAM,FAMILY,GROUP,CLASS,FAMILY,GROUP,TEAM,CLASS,TEAM,CLASS,GROUP,DIRTY,PIG,GRASS,PIG,DIRTY,GRASS,DUTY,PUMPKIN,HERE,SALAD,HUNGRY,THIRSTY,FULL,HUNGRY,FULL,THIRSTY,ANIMAL,VACATION,HAVE,VACATION,COW,HORSE,COW,DEER,BUFFALO,DEER,DEER,PRESIDENT,DEER,MOOSE,MOUSE,RAT,MOUSE,ROSE,RAT,ROSE,LION,TIGER,BEAR,HUG,BEAR,LOVE,HUG,LOVE,SNAKE,SPICY,ALASKA,HAWAII,ALASKA,PRETTY,ALASKA,FACE,HAWAII,PRETTY,FACE,HAWAII,FACE,PRETTY,ARIZONA,RESTAURANT,ARIZONA,CAFETERIA,CAFETERIA,RESTAURANT,CALIFORNIA,GOLD,CALIFORNIA,SILVER,CALIFORNIA,PHONE,CALIFORNIA,WHY,GOLD,SILVER,GOLD,PHONE,GOLD,WHY,PHONE,SILVER,SILVER,WHY,PHONE,WHY,COLOR,FRIENDLY,NEWYORK,PRACTICE,WEDNESDAY,WEST,TEA,VOTE,APPLE,ONION,WATER,WINE,COOKIE,PIE,FAVORITE,TASTE,FAVORITE,LUCKY,LUCKY,TASTE,AUNT,GIRL,CHILD,CHILDREN,PLEASE,SORRY,ENJOY,PLEASE,DONTKNOW,KNOW,LEARN,STUDENT,DAY,TODAY,TOMORROW,YESTERDAY,TUESDAY,WEDNESDAY,FRIDAY,TUESDAY,SATURDAY,TUESDAY,FRIDAY,WEDNESDAY,SATURDAY,WEDNESDAY,FRIDAY,SATURDAY,HIGHSCHOOL,THURSDAY,SIX,THREE,NINE,THREE,NINE,SIX,SEVEN,SIX,EIGHT,SIX,EIGHT,SEVEN,NINE,SEVEN,EIGHT,NINE,NAME,WEIGHT,MY,YOUR,BAD,GOOD,PENCIL,WRITE,ICECREAM,MICROPHONE,ADVERTISE,SHOES,GAME,RACE,EXCITED,THRILLED,NEWSPAPER,PRINT,FEW,SEVERAL,INTRODUCE,INVITE,SOCKS,STARS,SEE,WATCH,ENOUGH,FULL,CHAIR,SIT,TELL,TRUE,BUT,DIFFERENT,BATHROOM,TUESDAY,HUSBAND,WIFE,MOTHER,VOMIT,OHISEE,YELLOW,HARDOFHEARING,HISTORY,PREFER,TASTE,CHALLENGE,GAME,CLOSE,OPEN,BLACK,SUMMER,PAPER,SCHOOL,NAME,WEIGH,HOUSE,ROOF,BEER,BROWN,DANCE,READ,COMMITTEE,SENATE,EXPERIMENT,SCIENCE,ATTENTION,FOCUS,BRAG,RUSSIA,DONTCARE,DONTMIND,GALLAUDET,GLASSES,FRIENDLY,SAD" --out metric_results_z_offsets --no-filter-metrics 2>&1|tee out/$(date +%s).txt
+
+# full matrix for fastest z-stretching within the top 10 by MAP, train
+# 38 trials results: 0.0226587702833351 mean score time, 0.9956021308898926 MAP
+# untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast
+# On 48-cpu, 96g machine, 44 workers, batch size 100, memory usage rises to about 21 GB after a few minutes a and then rises more slowly
+# After 11 minutes it had done 132/160k batches. Killed it and ran again with Batch Size: 200, so that's 40000 distances per, about 40401 total batches (201x201).
+# Then it levelled off around 32 GB
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+# test (TODO)
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+
+# monitor progress:
+# watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
