@@ -14,9 +14,9 @@ def get_embeddings_df(embeddings_folder: Path, split_id_on_dash=False):
     prefix = "EMBEDDING"
     files_df = file_paths_list_to_df(embedding_files, prefix=prefix)
     # id, model_name = parse_id_and_model_name_from_embedding_file(path)
-    # files_df["VIDEO_ID"]
-    # files_df["EMBEDDING_MODEL"]
-    files_df[["VIDEO_ID", "EMBEDDING_MODEL"]] = files_df[f"{prefix}_FILE_PATH"].apply(
+    # files_df[DatasetDFCol.VIDEO_ID]
+    # files_df[DatasetDFCol.EMBEDDING_MODEL]
+    files_df[[DatasetDFCol.VIDEO_ID, DatasetDFCol.EMBEDDING_MODEL]] = files_df[f"{prefix}_FILE_PATH"].apply(
         lambda path: pd.Series(parse_id_and_model_name_from_embedding_file(path))
     )
 
@@ -49,7 +49,7 @@ def process(
     merged_df = dataset_df.merge(embeddings_df, on=DatasetDFCol.VIDEO_ID, how="left")
     if len(merged_df) == len(dataset_df):
         # ASL Citizen has slightly different filenames...
-        embeddings_df["VIDEO_ID"] = embeddings_df["VIDEO_ID"].astype(str).str.split("-").str[0]
+        embeddings_df[DatasetDFCol.VIDEO_ID] = embeddings_df[DatasetDFCol.VIDEO_ID].astype(str).str.split("-").str[0]
         merged_df = dataset_df.merge(embeddings_df, on=DatasetDFCol.VIDEO_ID, how="left")
     typer.echo(merged_df.head())
     typer.echo(merged_df.info())
