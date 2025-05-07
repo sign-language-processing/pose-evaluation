@@ -290,30 +290,51 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
 
 
 def run_metrics_full_distance_matrix_batched_parallel(
-    df: pd.DataFrame, out_path: Path, metrics: list, batch_size: int = 100, max_workers: int = 4, merge=False
+    df: pd.DataFrame,
+    out_path: Path,
+    metrics: list,
+    batch_size: int = 100,
+    max_workers: int = 4,
+    merge=False,
+    intersplit: bool = True,  
 ):
     typer.echo(
-        f"Calculating full distance matrix on {len(df)} poses from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
+        f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
+        f"from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
-    typer.echo(f"A full distance matrix is {len(df)*len(df)} distances.")
+
+    if intersplit:
+        splits = df[DatasetDFCol.SPLIT].unique().tolist()
+        if len(splits) != 2:
+            raise ValueError(f"Expected exactly two splits for intersplit comparison, got: {splits}")
+        split_a, split_b = splits
+        df_a = df[df[DatasetDFCol.SPLIT] == split_a].reset_index(drop=True)
+        df_b = df[df[DatasetDFCol.SPLIT] == split_b].reset_index(drop=True)
+        n_a, n_b = len(df_a), len(df_b)
+        typer.echo(f"Intersplit mode: comparing {split_a} ({n_a}) vs {split_b} ({n_b})")
+        batches_hyp = math.ceil(n_a / batch_size)
+        batches_ref = math.ceil(n_b / batch_size)
+
+    else:
+        df_a = df_b = df.reset_index(drop=True)
+        n = len(df)
+        batches_hyp = batches_ref = math.ceil(n / batch_size)
+    
+    total_batches = batches_hyp * batches_ref
     typer.echo(f"Batch size {batch_size}, max workers {max_workers}")
     typer.echo(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
     typer.echo(f"Results will be saved to {out_path}")
-
-    n = len(df)
-    batches_per_axis = math.ceil(n / batch_size)
-    total_batches = batches_per_axis**2
-
-    # how_many = 1000
-    # typer.echo(f"TODO REMOVE THIS: HARDCODED TAKING FIRST {how_many}")
-    # df = df.head(how_many)
+    typer.echo(f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})")
 
     scores_path = out_path / "scores"
     typer.echo(f"Scores will be saved in batches to {scores_path}")
     scores_path.mkdir(exist_ok=True, parents=True)
 
     dataset_names = "+".join(df[DatasetDFCol.DATASET].unique().tolist())
-    split_names = "+".join(df[DatasetDFCol.SPLIT].unique().tolist())
+    if intersplit:
+        split_names = "_vs_".join(df[DatasetDFCol.SPLIT].unique().tolist())
+    else:
+        split_names = "+".join(df[DatasetDFCol.SPLIT].unique().tolist())
 
     for i, metric in tqdm(enumerate(metrics), total=len(metrics), desc="Iterating over metrics"):
         typer.echo("*" * 60)
@@ -321,46 +342,39 @@ def run_metrics_full_distance_matrix_batched_parallel(
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
         typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
-        typer.echo(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis}), looks like")
+        typer.echo(f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})")
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
         metric_results_path.mkdir(parents=True, exist_ok=True)
         typer.echo(f"Saving batches to {metric_results_path}")
 
         existing_results = list(metric_results_path.glob("*.parquet"))
-        typer.echo(
-            f"Looks like we've got {len(existing_results)} already done, meaning we've got {total_batches-len(existing_results)} left"
-        )
+        typer.echo(f"{len(existing_results)} batches already exist; {total_batches - len(existing_results)} remaining.")
 
         futures = {}
         batch_id = 0
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for hyp_start in tqdm(range(0, len(df), batch_size), desc=f"Hyp batching for Metric {i}"):
-                hyp_chunk = df.iloc[hyp_start : hyp_start + batch_size].copy()
+            for hyp_start in tqdm(range(0, len(df_a), batch_size), desc=f"Hyp batching for Metric {i}"):
+                hyp_chunk = df_a.iloc[hyp_start : hyp_start + batch_size].copy()
 
-                for ref_start in range(0, len(df), batch_size):
-                    ref_chunk = df.iloc[ref_start : ref_start + batch_size].copy()
+                for ref_start in range(0, len(df_b), batch_size):
+                    ref_chunk = df_b.iloc[ref_start : ref_start + batch_size].copy()
                     batch_filename = metric_results_path / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
 
-                    if batch_filename.exists():
-                        # typer.echo(f"✅ Skipping batch {batch_id} (already exists)")
-                        pass
-                    else:
+                    if not batch_filename.exists():
                         future = executor.submit(
                             compute_batch_pairs, hyp_chunk, ref_chunk, metric, signature, batch_filename
                         )
                         futures[future] = batch_filename
 
                     batch_id += 1
-
-        typer.echo(f"Expecting {total_batches} total batches ({batches_per_axis}x{batches_per_axis})")
+        typer.echo(f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})")
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
             batch_filename = futures.pop(future)
             result_path = future.result()
             typer.echo(f"💾 Worker saved: {Path(result_path).name}")
 
-        # Final merge
         if merge:
             typer.echo("🔄 Merging all batch files...")
             all_batch_files = sorted(metric_results_path.glob("batch_*.parquet"))
@@ -372,6 +386,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
             )
             merged_df.to_parquet(final_path, index=False, compression="snappy")
             typer.echo(f"✅ Final results written to {final_path}\n")
+
 
 
 def get_filtered_metrics(
@@ -705,8 +720,6 @@ def main(
     out.mkdir(parents=True, exist_ok=True)
     if full:
         run_metrics_full_distance_matrix_batched_parallel(
-            # df, out_path=out, metrics=metrics, batch_size=100, max_workers=10 # 12-cpu machine
-            # df, out_path=out, metrics=metrics, batch_size=20, max_workers=30 # 12-cpu machine
             df,
             out_path=out,
             metrics=metrics,
@@ -806,6 +819,8 @@ if __name__ == "__main__":
 # Then it levelled off around 32 GB
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 # test (TODO)
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+# train+test
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 
 # monitor progress:
