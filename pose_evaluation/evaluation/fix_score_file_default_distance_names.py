@@ -88,10 +88,16 @@ def dedupe_and_append(out_path: Path, df_new: pd.DataFrame, ext: str) -> None:
     else:
         df_existing = pd.read_parquet(out_path)
 
+    for col in [ScoreDFCol.SIGNATURE, ScoreDFCol.METRIC, ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]:
+        assert set(df_existing[col].unique()) == set(
+            df_new[col].unique()
+        ), f"{col} values do not match for {old_stem} and {new_metric}"
+
     df_combined = pd.concat([df_existing, df_new], ignore_index=True)
     df_combined = df_combined.drop_duplicates().reset_index(drop=True)
-    assert len(df_combined["SIGNATURE"].unique()) == 1
-    assert len(df_combined["METRIC"].unique()) == 1
+
+    for col in [ScoreDFCol.SIGNATURE, ScoreDFCol.METRIC, ScoreDFCol.GLOSS_A]:
+        assert len(df_combined[col].unique()) == 1, f"Output somehow has more than one of {col}"
 
     if ext == "csv":
         df_combined.to_csv(out_path, index=False)
