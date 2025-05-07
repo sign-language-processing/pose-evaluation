@@ -11,6 +11,7 @@ from tqdm import tqdm
 from typing import Optional, List
 from collections import defaultdict
 
+
 def load_dataset(dataset_dir: Path):
     # partitioning = ds.partitioning(pa.schema([("METRIC", pa.string())]))  # Add your partition column here
     dataset = ds.dataset(dataset_dir, format="parquet", partitioning="hive")
@@ -37,11 +38,13 @@ def get_metric_partition_names(dataset):
         for metric in partition:
             yield metric
 
+
 def load_metric_df(dataset, metric):
     filter_expr = pc.equal(ds.field("METRIC"), metric)
     # Filter the dataset by this metric (partition)
     metric_df = dataset.to_table(filter=filter_expr).to_pandas()
     return metric_df
+
 
 def load_metric_dfs(dataset):
     # Load the dataset using the Hive partitioning
@@ -50,12 +53,11 @@ def load_metric_dfs(dataset):
     # Print the schema of the partitioning to understand its structure
     # print(dataset.partitioning.schema)
 
-    # Iterate over the partition dictionaries (which are the metrics in this case)    
+    # Iterate over the partition dictionaries (which are the metrics in this case)
     for metric in get_metric_partition_names(dataset):
         # Create a filter expression using pyarrow.compute
         metric_df = load_metric_df(dataset, metric)
-        
-        
+
         yield metric, metric_df
 
 
@@ -73,10 +75,10 @@ def summarize_df(df):
 
 
 def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, sample_count=5):
-    
+
     if columns is None:
         columns = ["METRIC", "GLOSS_A", "GLOSS_B", "GLOSS_A_PATH", "GLOSS_B_PATH"]
-    
+
     print(f"Iterating over batches to find unique values for {columns}")
 
     # Collect unique values across all batches
@@ -90,7 +92,7 @@ def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, samp
             # Add unique values for this column to the set
             unique_values[col].update(uniques)
         if i % 1000 == 0:
-            print("*"*60)
+            print("*" * 60)
             for col in columns:
                 col_uniques = unique_values[col]
                 print(f"Column '{col}': {len(col_uniques)} unique value(s), here are the first {sample_count}")
@@ -98,15 +100,12 @@ def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, samp
                     print(f"  - {val}")
 
     # Print summary of unique values per column
-    print("$"*60)
+    print("$" * 60)
     for col in columns:
         col_uniques = unique_values[col]
         print(f"Column '{col}': {len(col_uniques)} unique value(s), here are the first {sample_count}")
         for val in sorted(list(col_uniques)[:sample_count]):
             print(f"  - {val}")
-
-
-
 
 
 def main():
@@ -120,26 +119,24 @@ def main():
 
     dataset = load_dataset(args.dataset_dir)
 
-
-    
-
     metric_names = list(get_metric_partition_names(dataset))
-    
+
     print(f"Metrics: {len(metric_names)}")
     # for m in metric_names:
     #     print(m)
     # table = load_dataset(args.dataset_dir)
     # summarize_table(table)
 
-
-
-    for metric, metric_df in load_metric_dfs(dataset):
-        print(f"Metric {metric} has {len(metric_df):,} rows")
-        # summarize_df(metric_df)
-    
+    # OOM KILLED
+    # for metric, metric_df in load_metric_dfs(dataset):
+    #     print(f"Metric {metric} has {len(metric_df):,} rows")
+    #     summarize_df(metric_df)
 
     summarize_dataset_with_batches(dataset)
 
 
 if __name__ == "__main__":
     main()
+
+
+# conda activate /opt/home/cleong/envs/pose_eval_src && python pose_evaluation/evaluation/load_pyarrow_dataset.py metric_results_full_matrix/pyarrow_dataset/semlex/
