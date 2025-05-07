@@ -1,9 +1,17 @@
 import re
+import os
+import torch
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import io
+
+# https://discuss.streamlit.io/t/error-in-torch-with-streamlit/90908/4
+torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
+
+# # or simply:
+# torch.classes.__path__ = []
 
 from pose_evaluation.evaluation.interpret_name import shorten_metric_name
 
@@ -84,9 +92,10 @@ csv_paths_default = [
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv",
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/score_analysis/stats_by_metric.csv",
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_3/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_z_offsets_combined/score_analysis/stats_by_metric.csv",
     "/opt/home/cleong/projects/pose-evaluation/metric_results_1_2_z_combined_818_metrics/score_analysis/stats_by_metric.csv",
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/score_analysis/stats_by_metric.csv",
-    # "/opt/home/cleong/projects/pose-evaluation/metric_results_z_offsets_combined/score_analysis/stats_by_metric.csv",
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_embeddings/score_analysis/stats_by_metric.csv",
 ]
 csv_paths_input = st.text_input(
     "Enter paths to your CSV files (comma-separated)",
@@ -270,8 +279,8 @@ if csv_paths_input:
     else:
         title = title + f" ({metric_count} metrics"
 
-    # if trials_count is not None:
-    #     title = title + f", {trials_count:,} trials"
+    if trials_count is not None:
+        title = title + f" over {trials_count:,} trials"
 
     if exclude:
         title = title + f", excl. '{exclude}'"
@@ -341,6 +350,12 @@ if csv_paths_input:
             "padwithfirstframe",
             "youtubeaslkeypoints",
             "zspeed",
+            "embedding",
+            "pop_sign_finetune",
+            "asl_citizen_finetune",
+            "sem_lex_finetune",
+            "asl_finetune",
+            "asl_signs_finetune",
         ]
     for fps in [
         15,
