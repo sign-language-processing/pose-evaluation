@@ -9,6 +9,8 @@ import pyarrow.parquet as pq
 import typer
 from tqdm import tqdm
 
+from pose_evaluation.evaluation.load_pyarrow_dataset import summarize_metric_partitions
+
 app = typer.Typer()
 
 
@@ -139,80 +141,137 @@ def evaluate(
     neighbor_label_col: str = typer.Option("GLOSS_B"),
     output_path: Optional[Path] = typer.Option(None, help="Optional output path to save top-k results as Parquet."),
     verbose: bool = typer.Option(False, help="Print classification details."),
+    metric: Optional[str] = typer.Option(None, help="Metric partition value to evaluate."),
 ):
     """
     Perform KNN classification using intra- or cross-split distances from a PyArrow dataset.
     """
     dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
 
-    # if "METRIC" in dataset.partitioning.schema.names:
-    #     print("METRIC in partition!")
-    # else:
-    #     print(dataset.partitioning)
-    #     print("&&&&&&&&&&&&&& SCHEMA")
-    #     print(dataset.partitioning.schema)
-    #     print("&&&&&&&&&&&&&& DICTS")
-    #     print(dataset.partitioning.dictionaries)
-    # exit()
-    summary_stats = summarize_distance_matrix(dataset)
-    if summary_stats["fill_ratio"] < 0.5:
-        print("⚠️ Warning: distance matrix is sparse.")
+    if "METRIC" in dataset.partitioning.schema.names:
+        # metric_values = dataset.partitioning.dictionaries[0].to_pylist()
+        metric_stats_dict = summarize_metric_partitions(dataset_path)
+        metric_values = [str(m) for m in metric_stats_dict.keys()]
 
-    # TODO: iterate over metrics
+        if metric is None:
+            typer.echo("Dataset has Available METRIC values:")
+            for i, val in enumerate(metric_values):
+                typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']:} rows)")
+            typer.echo("a. All metrics")
+            typer.echo("n. No filtering")
+            typer.echo("x. Exit")
 
-    top_k_results = compute_top_k_neighbors(
-        dataset=dataset,
-        k=k,
-        score_col=score_col,
-        query_path_col=query_path_col,
-        neighbor_path_col=neighbor_path_col,
-        query_label_col=query_label_col,
-        neighbor_label_col=neighbor_label_col,
-    )
+            choice = typer.prompt("Select a metric number (or 'a' for all, 'n' for none)")
 
-    # Evaluation: compute top-1 accuracy
-    correct = 0
-    total = 0
+            if choice.lower() == "a":
+                selected_metrics = metric_values
+            elif choice.lower() == "n":
+                selected_metrics = [None]
+            elif choice.lower() == "x":
+                print(f"All right, fare well!")
+                exit()
+            else:
+                try:
+                    selected_metrics = [metric_values[int(choice) - 1]]
+                except (ValueError, IndexError):
+                    typer.echo("Invalid selection.")
+                    raise typer.Exit(code=1)
+        else:
+            if metric == "all":
+                selected_metrics = metric_values
+            elif metric == "none":
+                selected_metrics = [None]
+            elif metric in metric_values:
+                selected_metrics = [metric]
+            else:
+                typer.echo(f"Metric '{metric}' not found in dataset.")
+                raise typer.Exit(code=1)
 
-    if output_path:
-        output_rows = []
+        metric_datasets = []
+        for m in selected_metrics:
+            if m is None:
+                filtered = dataset  # no filtering
+            else:
+                filtered = dataset.filter(ds.field("METRIC") == m)
+            metric_datasets.append((m, filtered))
+    else:
+        typer.echo("No METRIC partition found in dataset.")
+        metric_datasets = [(None, dataset)]
 
-    for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc="Processing items"):
-        neighbor_labels = [label for _, _, label in neighbors]
-        label_counts = Counter(neighbor_labels)
-        predicted_label = label_counts.most_common(1)[0][0]
-        predicted_label_count = label_counts.most_common(1)[0][1]
-        is_correct = predicted_label == query_label
-        correct += is_correct
-        total += 1
+    for metric_name, dataset in metric_datasets:
+        typer.echo(f"\nEvaluating metric: {metric_name or 'None'}")
 
-        if verbose:
-            typer.echo(
-                f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) {'✓' if is_correct else '✗'}"
-            )
+        summary_stats = summarize_distance_matrix(dataset)
+
+        if summary_stats["fill_ratio"] < 0.5:
+            print("⚠️ Warning: distance matrix is sparse.")
+
+        top_k_results = compute_top_k_neighbors(
+            dataset=dataset,
+            k=k,
+            score_col=score_col,
+            query_path_col=query_path_col,
+            neighbor_path_col=neighbor_path_col,
+            query_label_col=query_label_col,
+            neighbor_label_col=neighbor_label_col,
+        )
+
+        # Evaluation: compute top-1 accuracy
+        correct = 0
+        total = 0
 
         if output_path:
-            for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
-                output_rows.append(
-                    {
-                        query_path_col: query_path,
-                        query_label_col: query_label,
-                        neighbor_path_col: neighbor_path,
-                        neighbor_label_col: neighbor_label,
-                        score_col: score,
-                        "RANK": rank,
-                    }
+            output_rows = []
+
+        for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc="Processing items"):
+            neighbor_labels = [label for _, _, label in neighbors]
+            label_counts = Counter(neighbor_labels)
+            predicted_label = label_counts.most_common(1)[0][0]
+            predicted_label_count = label_counts.most_common(1)[0][1]
+            is_correct = predicted_label == query_label
+            correct += is_correct
+            total += 1
+
+            if verbose:
+                typer.echo(
+                    f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) {'✓' if is_correct else '✗'}"
                 )
 
-    accuracy = correct / total if total > 0 else 0.0
-    typer.echo(f"\nTop-{k} Accuracy: {accuracy:.4f} ({correct}/{total})")
+            if output_path:
+                for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
+                    output_rows.append(
+                        {
+                            query_path_col: query_path,
+                            query_label_col: query_label,
+                            neighbor_path_col: neighbor_path,
+                            neighbor_label_col: neighbor_label,
+                            score_col: score,
+                            "RANK": rank,
+                        }
+                    )
 
-    if output_path:
-        typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
-        table = pa.table(output_rows)
-        pq.write_table(table, output_path)
+        accuracy = correct / total if total > 0 else 0.0
+        typer.echo(f"\nTop-{k} Accuracy: {accuracy:.4f} ({correct}/{total})")
+
+        if output_path:
+            typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
+            table = pa.table(output_rows)
+            pq.write_table(table, output_path)
 
 
 if __name__ == "__main__":
     app()
+
+# NOTE: GLOSS_A is the test set and GLOSS_B is the train set.
+# I printed some samples from the table and got:
+# Row 4:
+#   SCORE                : 96.02032274735807
+#   GLOSS_A              : ARMY
+#   GLOSS_B              : MOST
+#   SIGNATURE            : untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1...
+#   GLOSS_A_PATH         : /opt/home/cleong/data/ASL_Citizen/poses/pose/04138050683379402-ARMY.pose
+#   GLOSS_B_PATH         : /opt/home/cleong/data/ASL_Citizen/poses/pose/7040324327088798-MOST.pose
+#   TIME                 : 0.02099267399898963
+# 7040324327088798 is in ASL Citizen's train.csv
+# 04138050683379402 is in ASL Citizen's test.csv
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && /opt/home/cleong/projects/pose-evaluation# python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/knn_eval.py metric_results_full_matrix/pyarrow_dataset/asl-citizen/testvstrain/METRIC\=untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast/ --k 5 --verbose
