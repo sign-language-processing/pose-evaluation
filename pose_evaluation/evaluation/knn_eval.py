@@ -6,6 +6,7 @@ from typing import Dict, Tuple, List, Optional, Any
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+import pandas as pd
 import typer
 from tqdm import tqdm
 
@@ -101,18 +102,21 @@ def compute_top_k_neighbors(
     neighbor_path_col: str,
     query_label_col: str,
     neighbor_label_col: str,
-    batch_size: int = 1024,
-) -> Dict[Tuple[str, str], List[Tuple[float, str, str]]]:
+    # batch_size: int = 1024,
+    min_references_per_query: Optional[int] = None,
+) -> Tuple[Dict[Tuple[str, str], List[Tuple[float, str, str]]], Dict[str, int]]:
     """
     Compute top-k nearest neighbors from a PyArrow dataset.
+    Only includes queries with at least `min_references_per_query` neighbor entries.
 
     Returns:
-        Dict mapping (query_path, query_label) to sorted list of
-        (score, neighbor_path, neighbor_label).
+        - A dict mapping (query_path, query_label) to sorted list of (score, neighbor_path, neighbor_label)
+        - A stats dict with 'total', 'kept', 'skipped'
     """
     top_k = defaultdict(list)
+    reference_counts = defaultdict(int)
 
-    for batch in tqdm(dataset.to_batches(batch_size=batch_size), desc="Processing batches"):
+    for batch in tqdm(dataset.to_batches(), desc="Processing batches"):
         table = batch.to_pydict()
 
         for q_path, n_path, score, q_label, n_label in zip(
@@ -123,11 +127,27 @@ def compute_top_k_neighbors(
             table[neighbor_label_col],
         ):
             key = (q_path, q_label)
+            reference_counts[key] += 1
             heapq.heappush(top_k[key], (-score, n_path, n_label))
             if len(top_k[key]) > k:
                 heapq.heappop(top_k[key])
 
-    return {key: sorted([(-s, n_path, n_label) for s, n_path, n_label in heap]) for key, heap in top_k.items()}
+    total = len(top_k)
+    filtered_top_k = {}
+    for key, heap in top_k.items():
+        if min_references_per_query is None or reference_counts[key] >= min_references_per_query:
+            filtered_top_k[key] = sorted([(-s, n_path, n_label) for s, n_path, n_label in heap])
+
+    kept = len(filtered_top_k)
+    skipped = total - kept
+
+    stats = {
+        "total": total,
+        "kept": kept,
+        "skipped": skipped,
+    }
+
+    return filtered_top_k, stats
 
 
 def evaluate_top_k_results(
@@ -159,7 +179,8 @@ def evaluate_top_k_results(
 
         if verbose:
             typer.echo(
-                f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) {'✓' if is_correct else '✗'}"
+                f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) "
+                f"{'✓' if is_correct else '✗'} ({[f'{label} x {count}' for label, count in label_counts.items()]})"
             )
 
         if output_path:
@@ -178,9 +199,35 @@ def evaluate_top_k_results(
     accuracy = correct / total if total > 0 else 0.0
 
     if output_path and output_rows:
-        typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
-        table = pa.table(output_rows)
-        pq.write_table(table, output_path)
+        # Check if file exists and confirm
+        if output_path.exists():
+            typer.echo(f"\nFile {output_path} already exists.")
+            choice = typer.prompt("Choose an action: [o]verwrite / [n]ew name / [s]kip", default="s").lower()
+
+            if choice == "o":
+                pass  # proceed to write
+            elif choice == "n":
+                while True:
+                    new_name = typer.prompt("Enter new file name")
+                    if not new_name.endswith(".parquet"):
+                        new_name += ".parquet"
+                    new_path = output_path.parent / new_name
+
+                    if not new_path.exists():
+                        output_path = new_path
+                        break
+                    else:
+                        typer.echo(
+                            f"File {new_path} already exists. Please choose a different name or Ctrl+C to abort."
+                        )
+            else:
+                typer.echo("Skipping save.")
+                output_path = None
+
+        if output_path:
+            typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
+            df = pd.DataFrame(output_rows)
+            df.to_parquet(output_path, index=False)
 
     return accuracy
 
@@ -202,7 +249,7 @@ def get_metric_filtered_datasets(
     if metric is None:
         typer.echo("Dataset has available METRIC values:")
         for i, val in enumerate(metric_values):
-            typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']} rows)")
+            typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']:,} rows)")
         typer.echo("a. All metrics")
         typer.echo("n. No filtering")
         typer.echo("x. Exit")
@@ -269,9 +316,9 @@ def evaluate(
         summary_stats = summarize_distance_matrix(dataset)
 
         if summary_stats["fill_ratio"] < 0.5:
-            print("⚠️ Warning: distance matrix is sparse.")
+            print(f"⚠️ Warning: distance matrix is sparse! Fill Ratio: {fill_ratio}")
 
-        top_k_results = compute_top_k_neighbors(
+        top_k_results, filter_stats = compute_top_k_neighbors(
             dataset=dataset,
             k=k,
             score_col=score_col,
@@ -279,9 +326,22 @@ def evaluate(
             neighbor_path_col=neighbor_path_col,
             query_label_col=query_label_col,
             neighbor_label_col=neighbor_label_col,
+            min_references_per_query=summary_stats["num_references"],  # optional
         )
 
-        # Evaluation: compute top-1 accuracy
+        typer.echo(
+            f"Queries evaluated: {filter_stats['kept']} "
+            f"(skipped {filter_stats['skipped']} under min_references={summary_stats["num_references"]})"
+        )
+
+        if output_path is None:
+            proposed_path = Path.cwd() / f"{metric_name}.parquet"
+        else:            
+            output_path.mkdir(exist_ok=True, parents=True)
+            proposed_path = output_path / f"{metric_name}.parquet"
+        typer.echo(f"Results will be saved to {proposed_path}")
+            
+
         accuracy = evaluate_top_k_results(
             top_k_results=top_k_results,
             k=k,
@@ -290,7 +350,7 @@ def evaluate(
             neighbor_path_col=neighbor_path_col,
             neighbor_label_col=neighbor_label_col,
             score_col=score_col,
-            output_path=output_path,
+            output_path=proposed_path,
             verbose=verbose,
         )
 
