@@ -130,6 +130,120 @@ def compute_top_k_neighbors(
     return {key: sorted([(-s, n_path, n_label) for s, n_path, n_label in heap]) for key, heap in top_k.items()}
 
 
+def evaluate_top_k_results(
+    top_k_results: dict,
+    k: int,
+    query_path_col: str,
+    query_label_col: str,
+    neighbor_path_col: str,
+    neighbor_label_col: str,
+    score_col: str,
+    output_path: Optional[Path] = None,
+    verbose: bool = False,
+) -> float:
+    """
+    Evaluate top-k results and optionally save to a Parquet file.
+    Returns the accuracy.
+    """
+    correct = 0
+    total = 0
+    output_rows = [] if output_path else None
+
+    for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc="Processing items"):
+        neighbor_labels = [label for _, _, label in neighbors]
+        label_counts = Counter(neighbor_labels)
+        predicted_label, predicted_label_count = label_counts.most_common(1)[0]
+        is_correct = predicted_label == query_label
+        correct += is_correct
+        total += 1
+
+        if verbose:
+            typer.echo(
+                f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) {'✓' if is_correct else '✗'}"
+            )
+
+        if output_path:
+            for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
+                output_rows.append(
+                    {
+                        query_path_col: query_path,
+                        query_label_col: query_label,
+                        neighbor_path_col: neighbor_path,
+                        neighbor_label_col: neighbor_label,
+                        score_col: score,
+                        "RANK": rank,
+                    }
+                )
+
+    accuracy = correct / total if total > 0 else 0.0
+
+    if output_path and output_rows:
+        typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
+        table = pa.table(output_rows)
+        pq.write_table(table, output_path)
+
+    return accuracy
+
+
+def get_metric_filtered_datasets(
+    dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
+) -> List[Tuple[Optional[str], ds.Dataset]]:
+    """
+    Returns a list of (metric_name, filtered_dataset) tuples
+    based on the user selection or provided metric string.
+    """
+    if "METRIC" not in dataset.partitioning.schema.names:
+        typer.echo("No METRIC partition found in dataset.")
+        return [(None, dataset)]
+
+    metric_stats_dict = summarize_metric_partitions(dataset_path)
+    metric_values = [str(m) for m in metric_stats_dict.keys()]
+
+    if metric is None:
+        typer.echo("Dataset has available METRIC values:")
+        for i, val in enumerate(metric_values):
+            typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']} rows)")
+        typer.echo("a. All metrics")
+        typer.echo("n. No filtering")
+        typer.echo("x. Exit")
+
+        choice = typer.prompt("Select a metric number (or 'a' for all, 'n' for none)")
+
+        if choice.lower() == "a":
+            selected_metrics = metric_values
+        elif choice.lower() == "n":
+            selected_metrics = [None]
+        elif choice.lower() == "x":
+            print("All right, fare well!")
+            raise typer.Exit()
+        else:
+            try:
+                selected_metrics = [metric_values[int(choice) - 1]]
+            except (ValueError, IndexError):
+                typer.echo("Invalid selection.")
+                raise typer.Exit(code=1)
+    else:
+        if metric == "all":
+            selected_metrics = metric_values
+        elif metric == "none":
+            selected_metrics = [None]
+        elif metric in metric_values:
+            selected_metrics = [metric]
+        else:
+            typer.echo(f"Metric '{metric}' not found in dataset.")
+            raise typer.Exit(code=1)
+
+    metric_datasets = []
+    for m in selected_metrics:
+        if m is None:
+            filtered = dataset  # no filtering
+        else:
+            filtered = dataset.filter(ds.field("METRIC") == m)
+        metric_datasets.append((m, filtered))
+
+    return metric_datasets
+
+
 @app.command()
 def evaluate(
     dataset_path: Path = typer.Argument(..., help="Path to Arrow/Parquet dataset."),
@@ -147,56 +261,7 @@ def evaluate(
     Perform KNN classification using intra- or cross-split distances from a PyArrow dataset.
     """
     dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
-
-    if "METRIC" in dataset.partitioning.schema.names:
-        # metric_values = dataset.partitioning.dictionaries[0].to_pylist()
-        metric_stats_dict = summarize_metric_partitions(dataset_path)
-        metric_values = [str(m) for m in metric_stats_dict.keys()]
-
-        if metric is None:
-            typer.echo("Dataset has Available METRIC values:")
-            for i, val in enumerate(metric_values):
-                typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']:} rows)")
-            typer.echo("a. All metrics")
-            typer.echo("n. No filtering")
-            typer.echo("x. Exit")
-
-            choice = typer.prompt("Select a metric number (or 'a' for all, 'n' for none)")
-
-            if choice.lower() == "a":
-                selected_metrics = metric_values
-            elif choice.lower() == "n":
-                selected_metrics = [None]
-            elif choice.lower() == "x":
-                print(f"All right, fare well!")
-                exit()
-            else:
-                try:
-                    selected_metrics = [metric_values[int(choice) - 1]]
-                except (ValueError, IndexError):
-                    typer.echo("Invalid selection.")
-                    raise typer.Exit(code=1)
-        else:
-            if metric == "all":
-                selected_metrics = metric_values
-            elif metric == "none":
-                selected_metrics = [None]
-            elif metric in metric_values:
-                selected_metrics = [metric]
-            else:
-                typer.echo(f"Metric '{metric}' not found in dataset.")
-                raise typer.Exit(code=1)
-
-        metric_datasets = []
-        for m in selected_metrics:
-            if m is None:
-                filtered = dataset  # no filtering
-            else:
-                filtered = dataset.filter(ds.field("METRIC") == m)
-            metric_datasets.append((m, filtered))
-    else:
-        typer.echo("No METRIC partition found in dataset.")
-        metric_datasets = [(None, dataset)]
+    metric_datasets = get_metric_filtered_datasets(dataset_path, dataset, metric)
 
     for metric_name, dataset in metric_datasets:
         typer.echo(f"\nEvaluating metric: {metric_name or 'None'}")
@@ -217,46 +282,19 @@ def evaluate(
         )
 
         # Evaluation: compute top-1 accuracy
-        correct = 0
-        total = 0
+        accuracy = evaluate_top_k_results(
+            top_k_results=top_k_results,
+            k=k,
+            query_path_col=query_path_col,
+            query_label_col=query_label_col,
+            neighbor_path_col=neighbor_path_col,
+            neighbor_label_col=neighbor_label_col,
+            score_col=score_col,
+            output_path=output_path,
+            verbose=verbose,
+        )
 
-        if output_path:
-            output_rows = []
-
-        for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc="Processing items"):
-            neighbor_labels = [label for _, _, label in neighbors]
-            label_counts = Counter(neighbor_labels)
-            predicted_label = label_counts.most_common(1)[0][0]
-            predicted_label_count = label_counts.most_common(1)[0][1]
-            is_correct = predicted_label == query_label
-            correct += is_correct
-            total += 1
-
-            if verbose:
-                typer.echo(
-                    f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) {'✓' if is_correct else '✗'}"
-                )
-
-            if output_path:
-                for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
-                    output_rows.append(
-                        {
-                            query_path_col: query_path,
-                            query_label_col: query_label,
-                            neighbor_path_col: neighbor_path,
-                            neighbor_label_col: neighbor_label,
-                            score_col: score,
-                            "RANK": rank,
-                        }
-                    )
-
-        accuracy = correct / total if total > 0 else 0.0
-        typer.echo(f"\nTop-{k} Accuracy: {accuracy:.4f} ({correct}/{total})")
-
-        if output_path:
-            typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
-            table = pa.table(output_rows)
-            pq.write_table(table, output_path)
+        typer.echo(f"\nTop-{k} Accuracy: {accuracy:.4f}")
 
 
 if __name__ == "__main__":
