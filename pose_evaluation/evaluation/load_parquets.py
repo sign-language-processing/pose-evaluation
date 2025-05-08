@@ -180,7 +180,7 @@ def load_and_merge(
     return merged_table
 
 
-def get_unique_values(input_paths: List[Union[str, Path]], column_names: List[str]) -> dict:
+def get_unique_values(input_paths: List[Union[str, Path]], column_names: Optional[List[str]] = None) -> dict:
     """
     Returns a dictionary of unique values for each specified column across the given Parquet files.
 
@@ -191,30 +191,23 @@ def get_unique_values(input_paths: List[Union[str, Path]], column_names: List[st
     Returns:
         dict: A dictionary where each key is a column name and the value is a set of unique values.
     """
-    unique_values = {col: set() for col in column_names}
+    unique_values = defaultdict(set)
     dataset = ds.dataset([str(p) for p in input_paths], format="parquet")
 
     for batch in tqdm(dataset.to_batches(columns=column_names), total=len(input_paths), desc="Loading batches"):
         table = batch.to_pandas()
-        for col in column_names:
-            unique_values[col].update(table[col].dropna().unique())
 
+        for col in table.columns:
+            if column_names is None or col in column_names:
+                unique_values[col].update(table[col].dropna().unique())
     return {k: sorted(v) for k, v in unique_values.items()}
 
 
-def summarize_columns(input_paths, sample_count=10):
+def summarize_columns(input_paths, sample_count=10, column_names=None):
     print("** COUNT UNIQUES BY COLUMN **")
     unique_values = get_unique_values(
         input_paths,
-        [
-            ScoreDFCol.METRIC,
-            ScoreDFCol.SIGNATURE,
-            ScoreDFCol.GLOSS_A,
-            ScoreDFCol.GLOSS_A_PATH,
-            ScoreDFCol.GLOSS_B,
-            ScoreDFCol.GLOSS_B_PATH,
-            ScoreDFCol.SCORE,
-        ],
+        column_names=column_names,
     )
     for column, values in unique_values.items():
         random.shuffle(values)
@@ -237,9 +230,10 @@ def print_sampled_preview(table, num_rows=5, max_val_len=100):
 
 
 # https://medium.com/pythoneers/dipping-into-data-streams-the-magic-of-reservoir-sampling-762f41b78781
-def sample_rows(input_paths, sample_count=100, column_names=None):
+def sample_rows(input_paths, sample_count=100, column_names=None, shuffle=True):
     print("** Sample Rows **")
-    random.shuffle(input_paths)
+    if shuffle:
+        random.shuffle(input_paths)
     dataset = ds.dataset([str(p) for p in input_paths], format="parquet")
 
     reservoir = []
@@ -262,7 +256,18 @@ def sample_rows(input_paths, sample_count=100, column_names=None):
     return sampled_table
 
 
+def head(input_paths, n=100, column_names=None):
+    print(f"** Head: n={n} **")
+    dataset = ds.dataset([str(p) for p in input_paths], format="parquet")
+    scanner = dataset.scanner(columns=column_names)
+    return scanner.head(n)
+
+
 def main():
+
+    default_score_columns = ",".join(
+        [value for name, value in vars(ScoreDFCol).items() if not name.startswith("__") and not callable(value)]
+    )
     parser = argparse.ArgumentParser(description="Inspect a metric results file.")
     parser.add_argument(
         "path",
@@ -285,6 +290,13 @@ def main():
     )
 
     parser.add_argument(
+        "--sample-columns",
+        type=str,
+        default=default_score_columns,
+        help=f"comma-separated list of columns to sample, or '' for all. Default:{default_score_columns}",
+    )
+
+    parser.add_argument(
         "--count-unique",
         action="store_true",
         help="whether to count unique values for the columns",
@@ -292,8 +304,13 @@ def main():
 
     parser.add_argument(
         "--sample-rows",
-        action="store_true",
+        type=int,
         help="Whether to print a few random rows",
+    )
+    parser.add_argument(
+        "--head",
+        type=int,
+        help="print this many rows",
     )
 
     parser.add_argument(
@@ -335,15 +352,24 @@ def main():
         print(f"Unsupported file extension: {filepath}")
         return
 
+    if args.sample_columns:
+        sample_columns = args.sample_columns.split(",")
+    else:
+        sample_columns = None
+
     if args.count:
         count_rows(parquets)
 
     if args.count_unique:
-        summarize_columns(parquets)
+        summarize_columns(parquets, column_names=sample_columns)
 
     if args.sample_rows:
-        sampled_table = sample_rows(parquets)
-        print_sampled_preview(sampled_table)
+        sampled_table = sample_rows(parquets, sample_count=args.sample_rows, column_names=sample_columns)
+        print_sampled_preview(sampled_table, num_rows=args.sample_rows)
+
+    if args.head:
+        sampled_table = head(parquets, n=args.head, column_names=sample_columns)
+        print_sampled_preview(sampled_table, num_rows=args.head)
 
     if args.merge_dir is not None:
         merge_dir = args.merge_dir
