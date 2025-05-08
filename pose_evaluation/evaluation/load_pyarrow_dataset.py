@@ -46,6 +46,13 @@ def load_metric_df(dataset, metric):
     return metric_df
 
 
+def yield_metric_batches(dataset, metric):
+    filter_expr = pc.equal(ds.field("METRIC"), metric)
+    # Filter the dataset by this metric (partition)
+    for record_batch in dataset.to_batches(filter=filter_expr):
+        yield record_batch
+
+
 def load_metric_dfs(dataset):
     # Load the dataset using the Hive partitioning
     # print(dataset.partitioning)  # pyarrow._dataset.HivePartitioning object
@@ -108,9 +115,40 @@ def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, samp
             print(f"  - {val}")
 
 
+def summarize_metric_partitions(dataset_path):
+    """
+    Summarizes number of rows per METRIC partition using pyarrow's count_rows().
+    Size is not included unless specifically required, as row count is most efficient.
+
+    Parameters:
+        dataset_path (str or Path): Path to the dataset root.
+
+    Returns:
+        dict: {metric_value: {'num_rows': int}}
+    """
+    dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
+
+    if "METRIC" not in dataset.partitioning.schema.names:
+        raise ValueError("No METRIC partition found in dataset.")
+
+    partition_stats = {}
+
+    metric_index = dataset.partitioning.schema.names.index("METRIC")
+    metric_values = dataset.partitioning.dictionaries[metric_index].to_pylist()
+
+    for metric in metric_values:
+        filter_expr = ds.field("METRIC") == metric
+        num_rows = dataset.count_rows(filter=filter_expr)
+        partition_stats[metric] = {"num_rows": num_rows}
+
+    return partition_stats
+
+
 def main():
     parser = argparse.ArgumentParser(description="Load and summarize a partitioned Parquet dataset.")
     parser.add_argument("dataset_dir", type=Path, help="Path to the root directory of the dataset")
+    parser.add_argument("--count-metrics", action="store_true", help="Summarize by column")
+    parser.add_argument("--summarize_cols", action="store_true", help="Summarize by column")
     args = parser.parse_args()
 
     if not args.dataset_dir.exists():
@@ -121,18 +159,17 @@ def main():
 
     metric_names = list(get_metric_partition_names(dataset))
 
-    print(f"Metrics: {len(metric_names)}")
-    # for m in metric_names:
-    #     print(m)
-    # table = load_dataset(args.dataset_dir)
-    # summarize_table(table)
+    if args.count_metrics:
+        metric_stats = summarize_metric_partitions(args.dataset_dir)
+        for metric, metric_stats in metric_stats.items():
+            print(f"{metric}: {metric_stats['num_rows']} rows")
 
     # OOM KILLED
     # for metric, metric_df in load_metric_dfs(dataset):
     #     print(f"Metric {metric} has {len(metric_df):,} rows")
     #     summarize_df(metric_df)
-
-    summarize_dataset_with_batches(dataset)
+    if args.summarize_cols:
+        summarize_dataset_with_batches(dataset)
 
 
 if __name__ == "__main__":
