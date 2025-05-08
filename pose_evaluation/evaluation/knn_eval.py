@@ -150,6 +150,68 @@ def compute_top_k_neighbors(
     return filtered_top_k, stats
 
 
+
+
+
+def get_metric_filtered_datasets(
+    dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
+) -> List[Tuple[Optional[str], ds.Dataset]]:
+    """
+    Returns a list of (metric_name, filtered_dataset) tuples
+    based on the user selection or provided metric string.
+    """
+    if "METRIC" not in dataset.partitioning.schema.names:
+        typer.echo("No METRIC partition found in dataset.")
+        return [(None, dataset)]
+
+    metric_stats_dict = summarize_metric_partitions(dataset_path)
+    metric_values = [str(m) for m in metric_stats_dict.keys()]
+
+    if metric is None:
+        typer.echo("Dataset has available METRIC values:")
+        for i, val in enumerate(metric_values):
+            typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']:,} rows)")
+        typer.echo("a. All metrics")
+        typer.echo("n. No filtering")
+        typer.echo("x. Exit")
+
+        choice = typer.prompt("Select a metric number (or 'a' for all, 'n' for none)")
+
+        if choice.lower() == "a":
+            selected_metrics = metric_values
+        elif choice.lower() == "n":
+            selected_metrics = [None]
+        elif choice.lower() == "x":
+            print("All right, fare well!")
+            raise typer.Exit()
+        else:
+            try:
+                selected_metrics = [metric_values[int(choice) - 1]]
+            except (ValueError, IndexError):
+                typer.echo("Invalid selection.")
+                raise typer.Exit(code=1)
+    else:
+        if metric == "all":
+            selected_metrics = metric_values
+        elif metric == "none":
+            selected_metrics = [None]
+        elif metric in metric_values:
+            selected_metrics = [metric]
+        else:
+            typer.echo(f"Metric '{metric}' not found in dataset.")
+            raise typer.Exit(code=1)
+
+    metric_datasets = []
+    for m in selected_metrics:
+        if m is None:
+            filtered = dataset  # no filtering
+        else:
+            filtered = dataset.filter(ds.field("METRIC") == m)
+        metric_datasets.append((m, filtered))
+
+    return metric_datasets
+
+
 def evaluate_top_k_results(
     top_k_results: dict,
     k: int,
@@ -230,66 +292,6 @@ def evaluate_top_k_results(
             df.to_parquet(output_path, index=False)
 
     return accuracy
-
-
-def get_metric_filtered_datasets(
-    dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
-) -> List[Tuple[Optional[str], ds.Dataset]]:
-    """
-    Returns a list of (metric_name, filtered_dataset) tuples
-    based on the user selection or provided metric string.
-    """
-    if "METRIC" not in dataset.partitioning.schema.names:
-        typer.echo("No METRIC partition found in dataset.")
-        return [(None, dataset)]
-
-    metric_stats_dict = summarize_metric_partitions(dataset_path)
-    metric_values = [str(m) for m in metric_stats_dict.keys()]
-
-    if metric is None:
-        typer.echo("Dataset has available METRIC values:")
-        for i, val in enumerate(metric_values):
-            typer.echo(f"{i + 1}. {val} ({metric_stats_dict[val]['num_rows']:,} rows)")
-        typer.echo("a. All metrics")
-        typer.echo("n. No filtering")
-        typer.echo("x. Exit")
-
-        choice = typer.prompt("Select a metric number (or 'a' for all, 'n' for none)")
-
-        if choice.lower() == "a":
-            selected_metrics = metric_values
-        elif choice.lower() == "n":
-            selected_metrics = [None]
-        elif choice.lower() == "x":
-            print("All right, fare well!")
-            raise typer.Exit()
-        else:
-            try:
-                selected_metrics = [metric_values[int(choice) - 1]]
-            except (ValueError, IndexError):
-                typer.echo("Invalid selection.")
-                raise typer.Exit(code=1)
-    else:
-        if metric == "all":
-            selected_metrics = metric_values
-        elif metric == "none":
-            selected_metrics = [None]
-        elif metric in metric_values:
-            selected_metrics = [metric]
-        else:
-            typer.echo(f"Metric '{metric}' not found in dataset.")
-            raise typer.Exit(code=1)
-
-    metric_datasets = []
-    for m in selected_metrics:
-        if m is None:
-            filtered = dataset  # no filtering
-        else:
-            filtered = dataset.filter(ds.field("METRIC") == m)
-        metric_datasets.append((m, filtered))
-
-    return metric_datasets
-
 
 @app.command()
 def evaluate(
