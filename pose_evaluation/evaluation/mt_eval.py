@@ -32,6 +32,15 @@ if __name__ == "__main__":
     )
     ref_folder = Path("/opt/home/cleong/data/zifan_signsuisse/system_outputs/signsuisse_test/ref/")
 
+    stats_by_metric_csv = Path(
+        "/opt/home/cleong/projects/pose-evaluation/stats_by_metric_sorted_by_mean_average_precision by Metric (top 822 of 18558 metrics over 44,254 trials, excl. 'embedding', excl. metrics w less than 5 trials).csv"
+    )
+    stats_by_metric_df = pd.read_csv(stats_by_metric_csv)
+
+    stats_by_metric_df = stats_by_metric_df.sort_values(by="mean_average_precision", ascending=False, kind="stable")
+    print(f"Loaded {len(stats_by_metric_df)} rows")
+    print(stats_by_metric_df[["SHORT", "mean_average_precision"]].head())
+
     item_count = 1000
 
     # use raw for reference
@@ -46,8 +55,8 @@ if __name__ == "__main__":
     sockeye_paths = [sockeye_folder / f"{i}.imputed.pose" for i in range(item_count)]
 
     system_paths = {
-        # "sockeye": sockeye_paths,
-        # "sign_mt_v2": sign_mt_v2_paths,
+        "sockeye": sockeye_paths,
+        "sign_mt_v2": sign_mt_v2_paths,
         "sign_mt": sign_mt_paths,
     }
 
@@ -55,17 +64,27 @@ if __name__ == "__main__":
     entries = []
     metrics = get_metrics()
 
-    # out of 10k+ metric combinations, filter to just the top 10
-    FILTER_METRICS = True
-    if FILTER_METRICS:
-        metrics = get_filtered_metrics(
-            metrics,
-            top10=True,
-            top10_nohands_nointerp=False,
-            top10_nohands_nodtw_nointerp=False,
-            top50_nointerp=False,
-            return4=False,
-        )
+    # # out of 10k+ metric combinations, filter to just the top 10
+    # FILTER_METRICS = True
+    # if FILTER_METRICS:
+    #     metrics = get_filtered_metrics(
+    #         metrics,
+    #         top10=True,
+    #         top10_nohands_nointerp=False,
+    #         top10_nohands_nodtw_nointerp=False,
+    #         top50_nointerp=False,
+    #         return4=False,
+    #     )
+
+    metric_names_to_use = set(stats_by_metric_df["METRIC"].head(50).tolist())
+    print(metric_names_to_use)
+    metrics = [m for m in metrics if m.name in metric_names_to_use]
+
+    print(f"USING THE FOLLOWING METRICS")
+    for i, m in enumerate(metrics):
+        print(i, m.name)
+
+    # exit()
 
     # Split metrics into chunks of 10, if you want to do many metrics
     chunk_size = 10
@@ -76,7 +95,7 @@ if __name__ == "__main__":
 
         for system, hyp_paths in system_paths.items():
 
-            output_csv_path = f"/opt/home/cleong/data/zifan_signsuisse/metrics/metrics.{system}-{len(metrics)}metrics-metric{chunk_start}-metric{chunk_end}.csv"
+            output_csv_path = f"/opt/home/cleong/data/zifan_signsuisse/zspeed_metrics/metrics.{system}-{len(metrics)}metrics-metric{chunk_start}-metric{chunk_end}.csv"
 
             print(f"Running metrics for {system}, {chunk_start} to {chunk_end} and saving to {output_csv_path}")
             entries = []
