@@ -150,9 +150,6 @@ def compute_top_k_neighbors(
     return filtered_top_k, stats
 
 
-
-
-
 def get_metric_filtered_datasets(
     dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
 ) -> List[Tuple[Optional[str], ds.Dataset]]:
@@ -212,27 +209,77 @@ def get_metric_filtered_datasets(
     return metric_datasets
 
 
-def evaluate_top_k_results(
+def save_neighbors(
     top_k_results: dict,
-    k: int,
+    output_path: Path,
     query_path_col: str,
     query_label_col: str,
     neighbor_path_col: str,
     neighbor_label_col: str,
     score_col: str,
-    output_path: Optional[Path] = None,
+) -> None:
+    """
+    Save top-k results from neighbor dict to Parquet.
+    Prompts before overwriting.
+    """
+    output_rows = []
+
+    for (query_path, query_label), neighbors in top_k_results.items():
+        for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
+            output_rows.append(
+                {
+                    query_path_col: query_path,
+                    query_label_col: query_label,
+                    neighbor_path_col: neighbor_path,
+                    neighbor_label_col: neighbor_label,
+                    score_col: score,
+                    "RANK": rank,
+                }
+            )
+
+    if not output_rows:
+        typer.echo("⚠️ No results to save.")
+        return
+
+    if output_path.exists():
+        typer.echo(f"\nFile {output_path} already exists.")
+        choice = typer.prompt("Choose an action: [o]verwrite / [n]ew name / [s]kip", default="s").lower()
+
+        if choice == "o":
+            pass
+        elif choice == "n":
+            while True:
+                new_name = typer.prompt("Enter new file name")
+                if not new_name.endswith(".parquet"):
+                    new_name += ".parquet"
+                new_path = output_path.parent / new_name
+                if not new_path.exists():
+                    output_path = new_path
+                    break
+                else:
+                    typer.echo(f"File {new_path} already exists. Please choose a different name or Ctrl+C to abort.")
+        else:
+            typer.echo("Skipping save.")
+            return
+
+    typer.echo(f"Saving top-k neighbors to {output_path} ...")
+    df = pd.DataFrame(output_rows)
+    df.to_parquet(output_path, index=False)
+
+
+def evaluate_top_k_results(
+    top_k_results: dict,
+    k: int,
     verbose: bool = False,
 ) -> float:
     """
-    Evaluate top-k results and optionally save to a Parquet file.
-    Returns the accuracy.
+    Evaluate top-k results and return accuracy only.
     """
     correct = 0
     total = 0
-    output_rows = [] if output_path else None
 
-    for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc="Processing items"):
-        neighbor_labels = [label for _, _, label in neighbors]
+    for (query_path, query_label), neighbors in tqdm(top_k_results.items(), desc=f"Processing items, k={k}"):
+        neighbor_labels = [label for _, _, label in neighbors[:k]]
         label_counts = Counter(neighbor_labels)
         predicted_label, predicted_label_count = label_counts.most_common(1)[0]
         is_correct = predicted_label == query_label
@@ -244,57 +291,44 @@ def evaluate_top_k_results(
                 f"{query_path}: {predicted_label} x {predicted_label_count} (true: {query_label}) "
                 f"{'✓' if is_correct else '✗'} ({[f'{label} x {count}' for label, count in label_counts.items()]})"
             )
+    typer.echo(f"Evaluated {total} queries, of which {correct} were correctly classified")
 
-        if output_path:
-            for rank, (score, neighbor_path, neighbor_label) in enumerate(neighbors, start=1):
-                output_rows.append(
-                    {
-                        query_path_col: query_path,
-                        query_label_col: query_label,
-                        neighbor_path_col: neighbor_path,
-                        neighbor_label_col: neighbor_label,
-                        score_col: score,
-                        "RANK": rank,
-                    }
-                )
+    return correct / total if total > 0 else 0.0
 
-    accuracy = correct / total if total > 0 else 0.0
 
-    if output_path and output_rows:
-        # Check if file exists and confirm
-        if output_path.exists():
-            typer.echo(f"\nFile {output_path} already exists.")
-            choice = typer.prompt("Choose an action: [o]verwrite / [n]ew name / [s]kip", default="s").lower()
+@app.command("analyze")
+def analyze_neighbors_command(
+    file_path: Path = typer.Argument(..., help="Path to a saved Parquet file of neighbors."),
+    k: int = typer.Option(5, help="Value of k used in top-k neighbors."),
+    query_path_col: str = typer.Option("GLOSS_A_PATH"),
+    neighbor_path_col: str = typer.Option("GLOSS_B_PATH"),
+    query_label_col: str = typer.Option("GLOSS_A"),
+    neighbor_label_col: str = typer.Option("GLOSS_B"),
+    score_col: str = typer.Option("SCORE"),
+    verbose: bool = typer.Option(False, help="Print classification details."),
+):
+    """
+    Analyze previously saved top-k neighbor results.
+    """
+    df = pd.read_parquet(file_path)
+    grouped = df.groupby([query_path_col, query_label_col])
 
-            if choice == "o":
-                pass  # proceed to write
-            elif choice == "n":
-                while True:
-                    new_name = typer.prompt("Enter new file name")
-                    if not new_name.endswith(".parquet"):
-                        new_name += ".parquet"
-                    new_path = output_path.parent / new_name
+    top_k_results = {
+        (query_path, query_label): list(zip(group[score_col], group[neighbor_path_col], group[neighbor_label_col]))
+        for (query_path, query_label), group in grouped
+    }
 
-                    if not new_path.exists():
-                        output_path = new_path
-                        break
-                    else:
-                        typer.echo(
-                            f"File {new_path} already exists. Please choose a different name or Ctrl+C to abort."
-                        )
-            else:
-                typer.echo("Skipping save.")
-                output_path = None
+    accuracy = evaluate_top_k_results(
+        top_k_results,
+        k=k,
+        verbose=verbose,
+    )
 
-        if output_path:
-            typer.echo(f"Saving top-{k} neighbors to {output_path} ...")
-            df = pd.DataFrame(output_rows)
-            df.to_parquet(output_path, index=False)
+    typer.echo(f"\nAccuracy from saved neighbors: {accuracy:.4f}")
 
-    return accuracy
 
-@app.command()
-def evaluate(
+@app.command("compute")
+def do_knn(
     dataset_path: Path = typer.Argument(..., help="Path to Arrow/Parquet dataset."),
     k: int = typer.Option(1, help="Number of neighbors."),
     score_col: str = typer.Option("SCORE"),
@@ -333,26 +367,30 @@ def evaluate(
 
         typer.echo(
             f"Queries evaluated: {filter_stats['kept']} "
-            f"(skipped {filter_stats['skipped']} under min_references={summary_stats["num_references"]})"
+            f"(skipped {filter_stats['skipped']} under min_references={summary_stats['num_references']})"
         )
 
+        proposed_name = f"{metric_name}_top_{k}_neighbors.parquet"
         if output_path is None:
-            proposed_path = Path.cwd() / f"{metric_name}.parquet"
-        else:            
+            proposed_path = Path.cwd() / proposed_name
+        else:
             output_path.mkdir(exist_ok=True, parents=True)
-            proposed_path = output_path / f"{metric_name}.parquet"
+            proposed_path = output_path / proposed_name
         typer.echo(f"Results will be saved to {proposed_path}")
-            
+
+        save_neighbors(
+            top_k_results,
+            output_path=proposed_path,
+            score_col=score_col,
+            query_path_col=query_path_col,
+            neighbor_path_col=neighbor_path_col,
+            query_label_col=query_label_col,
+            neighbor_label_col=neighbor_label_col,
+        )
 
         accuracy = evaluate_top_k_results(
-            top_k_results=top_k_results,
+            top_k_results,
             k=k,
-            query_path_col=query_path_col,
-            query_label_col=query_label_col,
-            neighbor_path_col=neighbor_path_col,
-            neighbor_label_col=neighbor_label_col,
-            score_col=score_col,
-            output_path=proposed_path,
             verbose=verbose,
         )
 
