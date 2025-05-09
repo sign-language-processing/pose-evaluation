@@ -87,7 +87,7 @@ def summarize_distance_matrix(
         if key == "reference_count_distribution":
             print("\nReference count distribution (top 10):")
             for count, freq in counts_distribution.most_common(10):
-                print(f"  {count} references → {freq} queries")
+                print(f"  {count:,} references → {freq:,} queries")
         else:
             print(f"{key.replace('_', ' ').capitalize()}: {value}")
 
@@ -104,6 +104,7 @@ def compute_top_k_neighbors(
     neighbor_label_col: str,
     # batch_size: int = 1024,
     min_references_per_query: Optional[int] = None,
+    higher_is_better=False,
 ) -> Tuple[Dict[Tuple[str, str], List[Tuple[float, str, str]]], Dict[str, int]]:
     """
     Compute top-k nearest neighbors from a PyArrow dataset.
@@ -128,7 +129,9 @@ def compute_top_k_neighbors(
         ):
             key = (q_path, q_label)
             reference_counts[key] += 1
-            heapq.heappush(top_k[key], (-score, n_path, n_label))
+            if higher_is_better:
+                score = -score
+            heapq.heappush(top_k[key], (score, n_path, n_label))
             if len(top_k[key]) > k:
                 heapq.heappop(top_k[key])
 
@@ -370,7 +373,7 @@ def do_knn(
             f"(skipped {filter_stats['skipped']} under min_references={summary_stats['num_references']})"
         )
 
-        proposed_name = f"{metric_name}_top_{k}_neighbors.parquet"
+        proposed_name = f"{metric_name}_{summary_stats['num_queries']}_hyps_top_{k}_neighbors.parquet"
         if output_path is None:
             proposed_path = Path.cwd() / proposed_name
         else:
