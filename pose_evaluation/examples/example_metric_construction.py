@@ -18,9 +18,14 @@ from pose_evaluation.metrics.pose_processors import (
     get_standard_pose_processors,
 )
 
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+
 if __name__ == "__main__":
     # Define file paths for test pose data
-    test_data_path = Path("pose_evaluation") / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+    # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
+    test_data_path = (
+        Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+    )
     reference_file = test_data_path / "colin-1-HOUSE.pose"
     hypothesis_file = test_data_path / "colin-2-HOUSE.pose"
 
@@ -136,6 +141,8 @@ if __name__ == "__main__":
         ),
     ]
 
+    metrics = [EmbeddingDistanceMetric(model="ModelName")]
+
     # Evaluate each metric on the test poses
     for metric in metrics:
         print("*" * 10)
@@ -164,6 +171,11 @@ if __name__ == "__main__":
             print("\nSCORE With Signature:")
             print(metric.score_with_signature(poses[0], poses[1]))
 
+            if isinstance(metric, EmbeddingDistanceMetric):
+                print(
+                    "Sorry, this is an embedding metric, it can't handle poses! You need to load the .npy files to arrays of shape (768,) first!"
+                )
+                continue
             print("\nSCORE with Signature (short):")
             print(metric.score_with_signature(poses[0], poses[1], short=True))
 

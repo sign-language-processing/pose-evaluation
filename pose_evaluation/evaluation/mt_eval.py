@@ -25,6 +25,18 @@ if __name__ == "__main__":
     # for reference, always use the raw pose for full keypoints
     # for sign_mt/sign_mt_v2, same
     # for sockeye, the MT system does not produce the face, so we have <id>.pose (direct system output) and <id>.imputed.pose (the face imputed with an average face). I'd use the imputed one for completeness
+
+    # TODO: to support Embedding Metrics:
+    # 0. Embed all the .pose files and save as .npy
+    # 1. Instantiate Embedding Metric
+    # EmbeddingDistanceMetric(model="asl_citizen_finetune_checkpoint_best")
+    # 2. load in embeddings:
+    # embedding = np.load(file_path)
+    # if embedding.ndim == 2 and embedding.shape[0] == 1:
+    #     embedding = embedding[0]  # Reduce shape from (1, 768) to (768,)
+    # return embedding
+    # 3. Replace the paths below with the .npy files that match the .poses
+
     sockeye_folder = Path("/opt/home/cleong/data/zifan_signsuisse/system_outputs/signsuisse_test/sockeye/")
     sign_mt_v2_folder = Path("/opt/home/cleong/data_munging/local_data/zifan_signsuisse/signsuisse_test/sign_mt_v2")
     sign_mt_folder = Path(
