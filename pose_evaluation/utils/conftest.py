@@ -33,6 +33,22 @@ def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:  #
     return copy.deepcopy(original_poses)
 
 
+@pytest.fixture(scope="function")
+def mediapipe_poses_test_data_refined() -> List[Pose]:  # pylint: disable=redefined-outer-name
+    refined_path = utils_standard_mediapipe_landmarks_test_data_dir.parent / "refined_landmarks"
+    pose_paths = refined_path.glob("*.pose")
+    original_poses = [load_pose_file(pose_path) for pose_path in pose_paths]
+    return copy.deepcopy(original_poses)
+
+
+@pytest.fixture(scope="function")
+def mediapipe_poses_test_data_mixed_shapes() -> List[Pose]:  # pylint: disable=redefined-outer-name
+    mixed_pair_path = utils_standard_mediapipe_landmarks_test_data_dir.parent / "mixed"
+    pose_paths = mixed_pair_path.glob("*.pose")
+    original_poses = [load_pose_file(pose_path) for pose_path in pose_paths]
+    return copy.deepcopy(original_poses)
+
+
 @pytest.fixture
 def standard_mediapipe_components_dict() -> Dict[str, List[str]]:
     format_json = utils_standard_mediapipe_landmarks_test_data_dir / "mediapipe_components_and_points.json"

@@ -27,6 +27,8 @@ TensorConvertableType = Union[List, np.ndarray, Tensor]
 class EmbeddingDistanceMetric(EmbeddingMetric):
     def __init__(
         self,
+        model: str,
+        name: Optional[str] = None,
         kind: ValidDistanceKinds = "cosine",
         device: Optional[Union[torch.device, str]] = None,
         dtype=None,
@@ -39,17 +41,21 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             dtype (torch.dtype): The data type to use for tensors.
                 If None, uses torch.get_default_dtype()
         """
-        super().__init__(f"EmbeddingDistanceMetric {kind}", higher_is_better=False)
+        if name is None:
+            name = f"EmbeddingDistanceMetric_{model}_{kind}"
+
+        super().__init__(name, higher_is_better=False)
+        self.model = model
         self.kind = kind
         if device is None:
-            self.device = torch.device(st_util.get_device_name())
+            self._device = torch.device(st_util.get_device_name())
         else:
-            self.device = torch.device(device) if isinstance(device, str) else device
+            self._device = torch.device(device) if isinstance(device, str) else device
 
         if dtype is None:
             dtype = torch.get_default_dtype()
 
-        self.dtype = dtype
+        self._dtype = dtype
 
         # Dispatch table for metric computations
         self._metric_dispatch = {
@@ -63,8 +69,8 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         """
         Explicitly set the device used for tensors.
         """
-        self.device = torch.device(device)
-        logger.info(f"Device set to: {self.device}")
+        self._device = torch.device(device)
+        logger.info(f"Device set to: {self._device}")
         return self
 
     def _to_batch_tensor_on_device(self, data: TensorConvertableType) -> Tensor:
@@ -84,7 +90,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             data = torch.stack(data)
 
         return st_util._convert_to_batch_tensor(data).to(  # pylint: disable=protected-access
-            device=self.device, dtype=self.dtype
+            device=self._device, dtype=self._dtype
         )
 
     def score(self, hypothesis: TensorConvertableType, reference: TensorConvertableType) -> Number:
