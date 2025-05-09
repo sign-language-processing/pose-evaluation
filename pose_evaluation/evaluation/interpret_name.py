@@ -140,6 +140,71 @@ def shorten_metric_name(metric_name: str):
     return short
 
 
+def descriptive_name(metric_name):
+    metric_choices = interpret_name(metric_name)
+    if metric_choices is None:
+        return "Unknown"
+
+    name_parts = []
+
+    # Measure abbreviation
+    measure_abbr = {"AggregatedPowerDistance": "APE", "dtaiDTWAggregatedDistanceFast": "DTW"}
+    name_parts.append(measure_abbr.get(metric_choices["measure"], metric_choices["measure"]))
+
+    # Defaults for comparison — values that don't need to be printed
+    default_values = {
+        "normalize": False,
+        "default": 10.0,
+        "fillmasked": 10.0,
+        "trim": False,
+        "interp": None,
+        "keypoints": "removelegsandworld",
+        "zspeed": 1.0,
+        "seq_align": "zeropad",  # only one can be set
+    }
+
+    # Human-readable names for specific fields
+    keypoints_names = {
+        "hands": "Hands-Only",
+        "removelegsandworld": None,  # default, don't print
+        "reduceholistic": "Reduced Holistic",
+        "youtubeaslkeypoints": "YouTube-ASL Keypoints",
+    }
+
+    seq_align_names = {"zeropad": "ZeroPad", "padwithfirstframe": "PadWithFirstFrame", "dtw": None}
+
+    key_names = {"interp": "Interp", "fillmasked": "MaskFill", "zspeed": "Z-Stretch", "normalize": "Norm."}
+
+    keys_to_skip = [
+        "default",
+    ]
+
+    for key, val in metric_choices.items():
+        if val is None or key in ["measure"] or key in keys_to_skip:
+            continue  # skip None and already-printed fields
+
+        key_name = key_names[key] if key in key_names else key.capitalize()
+        # Skip default values
+        if key in default_values and val == default_values[key]:
+            continue
+
+        if isinstance(val, bool):
+            if val:
+                name_parts.append(key_name)
+        elif key == "keypoints":
+            readable = keypoints_names.get(val)
+            if readable:
+                name_parts.append(readable)
+        elif key == "seq_align":
+            readable = seq_align_names.get(val)
+            if readable:
+                name_parts.append(readable)
+        else:
+            name_parts.append(f"{key_name}{val}")
+
+    return " +".join(name_parts)
+
+
 if __name__ == "__main__":
     METRIC_FILES = [
         "/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv",
@@ -165,6 +230,7 @@ if __name__ == "__main__":
 
         if metric_choices is not None:
             short = shorten_metric_name(metric)
+
             shorts.append(short)
             # print(short)
             metric_choices["original"] = metric
@@ -185,11 +251,6 @@ if __name__ == "__main__":
     # Display the original and short columns for these duplicates
     # print(duplicates[["original", "short"]])
 
-    interpretation_csv = Path("metric_name_interpretation.csv")
-    dupe_short_names_csv = Path("metric_name_short_dupes.csv")
-    interpretation.to_csv(interpretation_csv)
-    duplicates.to_csv(dupe_short_names_csv)
-
     for col in interpretation.columns:
         uniques = interpretation[col].unique()
         if col not in ["original", "short", "hash"]:
@@ -197,6 +258,16 @@ if __name__ == "__main__":
         else:
             print(f"Total {col}:{len(interpretation[col]):,}, Unique:{len(uniques):,}")
         counts.append(len(uniques))
+    import random
+
+    for m in random.sample(metrics, k=5):
+        print(m)
+        print(descriptive_name(m))
+    exit()
+    interpretation_csv = Path("metric_name_interpretation.csv")
+    dupe_short_names_csv = Path("metric_name_short_dupes.csv")
+    interpretation.to_csv(interpretation_csv)
+    duplicates.to_csv(dupe_short_names_csv)
     print(f"{len(interpretation):,} interpretations written to {interpretation_csv.resolve()}")
     print(f"{len(duplicates):,} dupes written to {dupe_short_names_csv.resolve()}")
     print("duplicate short names:", len(duplicates))
