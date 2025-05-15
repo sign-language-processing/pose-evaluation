@@ -37,14 +37,14 @@ def combine_dataset_dfs(dataset_df_files: List[Path], splits: List[str], filter_
                     DatasetDFCol.POSE_FILE_PATH: str,
                 },
             )
-
+            typer.echo(f"Loaded {len(df)} rows")
             df = df[df[DatasetDFCol.SPLIT].isin(splits)]
             df[DatasetDFCol.DATASET] = file_path.stem
             typer.echo(f"Loaded {len(df)} rows from splits: {splits}")
+            typer.echo(f"There are {len(df[DatasetDFCol.GLOSS].unique())} unique glosses")
             dfs.append(df)
         else:
             typer.echo(f"❌ Missing: {file_path}")
-
     df = pd.concat(dfs)
     if DatasetDFCol.VIDEO_FILE_PATH in df.columns:
         df = df.drop(columns=[DatasetDFCol.VIDEO_FILE_PATH])
@@ -53,7 +53,7 @@ def combine_dataset_dfs(dataset_df_files: List[Path], splits: List[str], filter_
 
     if filter_en_vocab:
         df = df[~df[DatasetDFCol.GLOSS].str.contains("EN:", na=False)]
-
+    typer.echo(f"Loaded {len(df)} rows total, from {len(dataset_df_files)} files")
     return df
 
 
@@ -102,6 +102,15 @@ def run_metrics_in_out_trials(
     gloss_dfs_folder: Optional[Path] = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
+    typer.echo(f"The number of possible unique glosses to pick from is {len(query_gloss_vocabulary)}")
+
+    if gloss_dfs_folder is None:
+        gloss_dfs_folder = out_path.parent / "gloss_dfs"
+        if gloss_dfs_folder.is_dir():
+            typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
+        else:
+            gloss_dfs_folder = out_path / "gloss_dfs"
+            gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
 
     if gloss_count:
         query_gloss_vocabulary = query_gloss_vocabulary[:gloss_count]
@@ -119,6 +128,26 @@ def run_metrics_in_out_trials(
     if shuffle_query_glosses:
         random.shuffle(query_gloss_vocabulary)
 
+    if skip_glosses_with_more_than_this_many is not None:
+        filtered_gloss_vocabulary = []
+        print(f"GLOSS,SAMPLES")
+        for gloss in query_gloss_vocabulary:
+            in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
+            # TODO: this crashes if it's a new gloss without an in_gloss CSV. BUT there's some metric_inputs_df filtering with embeddings to think about later... a new function perhaps?
+            in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
+            if len(in_gloss_df) <= skip_glosses_with_more_than_this_many:
+                typer.echo(
+                    f"{gloss}, {len(in_gloss_df)}: less than or equal to the threshold {skip_glosses_with_more_than_this_many}. Adding to the gloss vocabulary"
+                    # f"{gloss},{len(in_gloss_df)}"
+                )
+                filtered_gloss_vocabulary.append(gloss)
+
+        filtered_gloss_vocabulary = list(set(filtered_gloss_vocabulary))
+        typer.echo(
+            f"{len(filtered_gloss_vocabulary)} Glosses with items less than or equal to {skip_glosses_with_more_than_this_many}: "
+        )
+        typer.echo(f"{filtered_gloss_vocabulary}")
+        query_gloss_vocabulary = filtered_gloss_vocabulary
     # All gloss–metric combinations
     gloss_metric_combos = list(product(query_gloss_vocabulary, metrics))
 
@@ -128,14 +157,6 @@ def run_metrics_in_out_trials(
     if metric_count is not None:
         typer.echo(f"Selecting {metric_count} of {len(gloss_metric_combos)} gloss-metric combinations")
         gloss_metric_combos = gloss_metric_combos[:metric_count]
-
-    if gloss_dfs_folder is None:
-        gloss_dfs_folder = out_path.parent / "gloss_dfs"
-        if gloss_dfs_folder.is_dir():
-            typer.echo(f"Using existing gloss_dfs_folder: {gloss_dfs_folder}")
-        else:
-            gloss_dfs_folder = out_path / "gloss_dfs"
-            gloss_dfs_folder.mkdir(exist_ok=True, parents=True)
 
     scores_path = out_path / "scores"
     scores_path.mkdir(exist_ok=True, parents=True)
@@ -156,6 +177,8 @@ def run_metrics_in_out_trials(
                 metric_inputs_df = df.drop(
                     columns=[DatasetDFCol.EMBEDDING_MODEL, DatasetDFCol.EMBEDDING_FILE_PATH]
                 ).drop_duplicates()
+            else:
+                metric_inputs_df = df.drop_duplicates()
 
         results = defaultdict(list)
         results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
@@ -245,8 +268,11 @@ def run_metrics_in_out_trials(
         results_df = pd.DataFrame.from_dict(results)
         results_df.to_parquet(results_path, index=False, compression="snappy")
         typer.echo(f"Wrote {len(results_df)} scores to {results_path}")
+
         typer.echo("\n")
         typer.echo("*" * 50)
+    typer.echo(f"Query glosses had {len(query_gloss_vocabulary)}: {query_gloss_vocabulary}")
+    typer.echo(f"Scores saved to {scores_path}")
 
 
 def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename):
@@ -297,6 +323,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
     max_workers: int = 4,
     merge=False,
     intersplit: bool = True,
+    max_hyp: Optional[int] = None,
 ):
     typer.echo(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
@@ -399,11 +426,18 @@ def get_filtered_metrics(
     top50_nointerp=False,
     get_top_10_nointerp_default10_fillmasked10=False,
     return4=False,
+    include_keywords: List[str] | None = None,
+    exclude_keywords: List[str] | None = None,
     specific_metrics: str | list[str] | None = None,
     csv_path: Path | None = None,
 ):
     if isinstance(specific_metrics, str):
         specific_metrics = [specific_metrics]
+
+    print(f"Filtering {len(metrics)} Metrics:")
+    print(f"Include: {include_keywords}")
+    print(f"Exclude: {exclude_keywords}")
+
     # top 10
     top_10_metrics_by_map = [
         "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
@@ -574,6 +608,7 @@ def get_filtered_metrics(
     # Get a set of target names for efficient lookup
     metrics_to_use = []
     if specific_metrics is not None:
+        typer.echo(f"Adding specific metric: {specific_metrics}")
         metrics_to_use.extend(specific_metrics)
 
     if top10:
@@ -588,19 +623,34 @@ def get_filtered_metrics(
         metrics_to_use.extend(top_50_by_map_excluding_interp)
 
     if get_top_10_nointerp_default10_fillmasked10:
+        typer.echo(f"Adding {len(top_10_nointerp_default10_fillmasked10)} from top_10_nointerp_default10_fillmasked10")
         metrics_to_use.extend(top_10_nointerp_default10_fillmasked10)
 
     if return4:
+        typer.echo(f"Adding Return4 Metric")
         metrics_to_use.append("Return4Metric_defaultdist4.0")
 
     if csv_path is not None:
         df = pd.read_csv(csv_path)
         csv_metrics = df["METRIC"].unique().tolist()
+        typer.echo(f"Adding {len(csv_metrics)} from {csv_path}")
         metrics_to_use.extend(csv_metrics)
+
+    if include_keywords is not None:
+        include_list = [m.name for m in metrics if all(k.lower() in m.name.lower() for k in include_keywords)]
+        typer.echo(f"Adding {len(include_list)} metrics that include all of: {include_keywords}")
+        metrics_to_use.extend(include_list)
+        typer.echo(f"There are now {len(metrics_to_use)} metrics")
+
+    if exclude_keywords is not None:
+        typer.echo(f"Filtering metrics to those that exclude all of: {exclude_keywords}")
+        metrics_to_use = [m for m in metrics_to_use if not any(k.lower() in m.lower() for k in exclude_keywords)]
+        typer.echo(f"There are now {len(metrics_to_use)} metrics")
 
     metrics_to_use_set = set(metrics_to_use)
 
     # Filter metrics based on .name
+
     filtered_metrics = [m for m in metrics if m.name in metrics_to_use_set]
 
     # Find which metrics_to_use were unmatched
@@ -608,8 +658,11 @@ def get_filtered_metrics(
     unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
 
     typer.echo(specific_metrics)
-    typer.echo(f"{len(filtered_metrics)} Filtered metrics: {[m.name for m in filtered_metrics]}")
     typer.echo(f"{len(unmatched_metrics)} Unmatched metrics_to_use: {unmatched_metrics}")
+    typer.echo(
+        f"{len(filtered_metrics)} Filtered metrics, here are the first few: {[m.name for m in filtered_metrics[:10]]}"
+    )
+
     return filtered_metrics
 
 
@@ -655,6 +708,12 @@ def main(
     specific_metrics_csv: Path = typer.Option(
         None, help="If specified, will read the metrics from this CSV and add those"
     ),
+    include_keywords: List[str] = typer.Option(
+        None, help="Will filter metrics to only those that include any of these"
+    ),
+    exclude_keywords: List[str] = typer.Option(
+        None, help="Will filter metrics to only those that include none of these"
+    ),
     skip_glosses_with_more_than_this_many: int = typer.Option(
         None, help="skip long glosses with more than this many items/samples"
     ),
@@ -679,7 +738,7 @@ def main(
     typer.echo(f"* Vocabulary: {len(df[DatasetDFCol.GLOSS].unique())}")
     typer.echo(f"* Pose Files: {len(df[DatasetDFCol.POSE_FILE_PATH].unique())}")
 
-    metrics = get_metrics()
+    metrics = get_metrics()  # generate all possible metrics
     # typer.echo(f"Metrics: {[m.name for m in metrics]}")
     typer.echo(f"We have a total of {len(metrics)} metrics")
 
@@ -694,6 +753,8 @@ def main(
             return4=False,
             specific_metrics=specific_metrics,
             csv_path=specific_metrics_csv,
+            include_keywords=include_keywords,
+            exclude_keywords=exclude_keywords,
         )
     else:
 
@@ -706,6 +767,8 @@ def main(
                 top10_nohands_nodtw_nointerp=False,
                 top50_nointerp=False,
                 return4=False,
+                include_keywords=include_keywords,
+                exclude_keywords=exclude_keywords,
             )
 
     if embedding_metrics:
@@ -790,7 +853,7 @@ if __name__ == "__main__":
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/count_files_by_hour.py
 
 
-###############################
+###########################################################################
 # Full Matrix
 # Batch size 100, max workers 8 seems to level off at 8 workers working, 29 GB memory usage
 # Batch size 100, max workers 40 seems to level off at 40 workers working, 62 GB memory usage
@@ -823,11 +886,26 @@ if __name__ == "__main__":
 # On 48-cpu, 96g machine, 44 workers, batch size 100, memory usage rises to about 21 GB after a few minutes a and then rises more slowly
 # After 11 minutes it had done 132/160k batches. Killed it and ran again with Batch Size: 200, so that's 40000 distances per, about 40401 total batches (201x201).
 # Then it levelled off around 32 GB
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits train --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
-# test (TODO)
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits test --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 # train+test intersplit
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 44 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --full-intersplit --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+
+# top Precision@10 metric
+# Of 33450
+# with about 1433 w/ > 5 trials, after 48k trials
+# untrimmed_zspeed1.0_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 8 --batch-size 100 --specific-metrics "untrimmed_zspeed1.0_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast" --full-intersplit --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
+
+# top MAP metric that isn't dtw (but is zspeed)
+# Of about 1433 w/ > 5 trials, after 48k trials
+# excl. 'defaultdist1000.0,defaultdist100.0,defaultdist10.0,defaultdist1.0,dtw,embedding', leaving about 197
+# untrimmed_zspeed100.0_normalizedbyshoulders_removelegsandworld_defaultdist0.0_interp15_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric
+
+# top MAP that isn't dtw or zspeed
+# Of about 1433 w/ > 5 trials, after 48k trials
+# excl. 'defaultdist1000.0,defaultdist100.0,defaultdist10.0,defaultdist1.0,dtw,zspeed,embedding',
+# startendtrimmed_unnormalized_hands_defaultdist0.0_interp120_zeropad_fillmasked1.0_AggregatedPowerDistanceMetric
+# running it on the 64-cpu, 30g machine: 8 workers 100 batch seems
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 8 --batch-size 100 --specific-metrics "startendtrimmed_unnormalized_hands_defaultdist0.0_interp120_zeropad_fillmasked1.0_AggregatedPowerDistanceMetric" --full-intersplit --out metric_results_full_matrix/ 2>&1|tee out/full_matrix$(date +%s).txt
 
 # monitor progress:
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
