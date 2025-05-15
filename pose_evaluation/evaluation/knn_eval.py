@@ -6,6 +6,7 @@ from typing import Dict, Tuple, List, Optional, Any
 import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
+import pyarrow.compute as pc
 import pandas as pd
 import typer
 from tqdm import tqdm
@@ -24,48 +25,48 @@ def summarize_distance_matrix(
     neighbor_label_col: str = "GLOSS_B",
 ) -> Dict[str, Any]:
     """
-    Summarizes the sparsity and completeness of a KNN-style distance matrix in a PyArrow dataset.
-
-    Returns a dictionary with:
-        - shape info
-        - fill stats
-        - reference count distribution
-        - unique path/label counts
+    Summarizes the sparsity and completeness of a KNN-style distance matrix in a memory-efficient way.
     """
-
-    query_to_neighbors = defaultdict(set)
-    all_queries = set()
-    all_references = set()
-    all_query_labels = set()
-    all_reference_labels = set()
+    query_to_refcount = Counter()
+    unique_queries = set()
+    unique_references = set()
+    unique_query_labels = set()
+    unique_reference_labels = set()
     score_count = 0
 
-    for batch in tqdm(dataset.to_batches(), desc="Building Distance Matrix Summary"):
-        query_paths = batch[query_path_col].to_pylist()
-        neighbor_paths = batch[neighbor_path_col].to_pylist()
-        scores = batch[score_col].to_pylist()
-        query_labels = batch[query_label_col].to_pylist()
-        neighbor_labels = batch[neighbor_label_col].to_pylist()
+    scan_cols = [query_path_col, neighbor_path_col, score_col, query_label_col, neighbor_label_col]
+    scanner = dataset.scanner(columns=scan_cols)
 
-        for q_path, r_path, s, q_label, r_label in zip(
-            query_paths, neighbor_paths, scores, query_labels, neighbor_labels
-        ):
-            if s is not None:
-                query_to_neighbors[q_path].add(r_path)
-                all_queries.add(q_path)
-                all_references.add(r_path)
-                all_query_labels.add(q_label)
-                all_reference_labels.add(r_label)
-                score_count += 1
+    for batch in tqdm(scanner.to_batches(), desc="Scanning Batches"):
+        q_paths = batch.column(query_path_col)
+        r_paths = batch.column(neighbor_path_col)
+        scores = batch.column(score_col)
+        q_labels = batch.column(query_label_col)
+        r_labels = batch.column(neighbor_label_col)
 
-    num_queries = len(all_queries)
-    num_references = len(all_references)
+        for i in range(batch.num_rows):
+            if not scores[i].is_valid:  # skip nulls
+                continue
+
+            q_path = q_paths[i].as_py()
+            r_path = r_paths[i].as_py()
+            q_label = q_labels[i].as_py()
+            r_label = r_labels[i].as_py()
+
+            query_to_refcount[q_path] += 1
+            unique_queries.add(q_path)
+            unique_references.add(r_path)
+            unique_query_labels.add(q_label)
+            unique_reference_labels.add(r_label)
+            score_count += 1
+
+    num_queries = len(unique_queries)
+    num_references = len(unique_references)
     total_possible = num_queries * num_references
 
-    neighbor_counts = {q: len(refs) for q, refs in query_to_neighbors.items()}
-    full_rows = sum(1 for count in neighbor_counts.values() if count == num_references)
-    avg_refs_per_query = sum(neighbor_counts.values()) / len(neighbor_counts) if neighbor_counts else 0
-    counts_distribution = Counter(neighbor_counts.values())
+    full_rows = sum(1 for count in query_to_refcount.values() if count == num_references)
+    avg_refs_per_query = sum(query_to_refcount.values()) / num_queries if num_queries else 0
+    counts_distribution = Counter(query_to_refcount.values())
 
     summary = {
         "num_queries": num_queries,
@@ -77,11 +78,10 @@ def summarize_distance_matrix(
         "queries_with_full_reference_set": full_rows,
         "average_references_per_query": avg_refs_per_query,
         "reference_count_distribution": dict(counts_distribution),
-        "unique_query_labels": len(all_query_labels),
-        "unique_reference_labels": len(all_reference_labels),
+        "unique_query_labels": len(unique_query_labels),
+        "unique_reference_labels": len(unique_reference_labels),
     }
 
-    # Optional: print in human-readable format
     print("\n--- Distance Matrix Summary ---")
     for key, value in summary.items():
         if key == "reference_count_distribution":
@@ -102,16 +102,14 @@ def compute_top_k_neighbors(
     neighbor_path_col: str,
     query_label_col: str,
     neighbor_label_col: str,
-    # batch_size: int = 1024,
     min_references_per_query: Optional[int] = None,
-    higher_is_better=False,
 ) -> Tuple[Dict[Tuple[str, str], List[Tuple[float, str, str]]], Dict[str, int]]:
     """
-    Compute top-k nearest neighbors from a PyArrow dataset.
+    Compute top-k nearest neighbors from a PyArrow dataset, assuming lower scores are better (e.g., distances).
     Only includes queries with at least `min_references_per_query` neighbor entries.
 
     Returns:
-        - A dict mapping (query_path, query_label) to sorted list of (score, neighbor_path, neighbor_label)
+        - A dict mapping (query_path, query_label) to a sorted list of (score, neighbor_path, neighbor_label)
         - A stats dict with 'total', 'kept', 'skipped'
     """
     top_k = defaultdict(list)
@@ -129,26 +127,34 @@ def compute_top_k_neighbors(
         ):
             key = (q_path, q_label)
             reference_counts[key] += 1
-            if higher_is_better:
-                score = -score
             heapq.heappush(top_k[key], (score, n_path, n_label))
             if len(top_k[key]) > k:
+                # Pop *largest* (worst) score to keep only k smallest
+                heapq._heapify_max(top_k[key])
                 heapq.heappop(top_k[key])
+                heapq.heapify(top_k[key])  # Restore min-heap property
 
     total = len(top_k)
     filtered_top_k = {}
     for key, heap in top_k.items():
         if min_references_per_query is None or reference_counts[key] >= min_references_per_query:
-            filtered_top_k[key] = sorted([(-s, n_path, n_label) for s, n_path, n_label in heap])
-
-    kept = len(filtered_top_k)
-    skipped = total - kept
+            filtered_top_k[key] = sorted(heap)
 
     stats = {
         "total": total,
-        "kept": kept,
-        "skipped": skipped,
+        "kept": len(filtered_top_k),
+        "skipped": total - len(filtered_top_k),
     }
+
+    # Debug: Print a few sample neighbors for inspection
+    print("\nSample top-k neighbors:")
+    for i, ((q_path, q_label), neighbors) in enumerate(filtered_top_k.items()):
+        print(f"Query: {q_path} ({q_label})")
+        for score, n_path, n_label in neighbors:
+            print(f"  -> {n_path} ({n_label}) with score {score:.4f}")
+        print()
+        if i >= 2:  # Limit to first 3 queries
+            break
 
     return filtered_top_k, stats
 
