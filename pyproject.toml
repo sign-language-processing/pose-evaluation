@@ -26,6 +26,7 @@ dependencies = [
     "spoken-to-signed @ git+https://github.com/ZurichNLP/spoken-to-signed-translation.git",
     "typer",
     "torchmetrics",
+    "kaleido", # for downloading figures
 ]
 
 [project.optional-dependencies]
