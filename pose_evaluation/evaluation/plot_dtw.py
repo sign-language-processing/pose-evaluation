@@ -13,12 +13,49 @@ def pad_seq(seq, val, count):
     return seq_pad
 
 
+def apply_minimal_layout(fig: go.Figure, is_3d: bool = True, size: int = 600) -> None:
+    if is_3d:
+        fig.update_layout(
+            title=None,
+            scene=dict(
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                zaxis=dict(visible=False),
+                bgcolor="white",
+            ),
+            margin=dict(l=0, r=0, t=0, b=0),
+            showlegend=False,
+            paper_bgcolor="white",
+            width=size,
+            height=size,
+        )
+    else:
+        fig.update_layout(
+            title=None,
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            margin=dict(l=0, r=0, t=0, b=0),
+            showlegend=False,
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            width=size,
+            height=size,
+        )
+
+
+def export_minimal_pdf(fig: go.Figure, output_path: Path, is_3d: bool = True, size: int = 600) -> None:
+    apply_minimal_layout(fig, is_3d=is_3d, size=size)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pio.write_image(fig, str(output_path.with_suffix(".pdf")), format="pdf")
+    print(f"Exported: {output_path.with_suffix('.pdf')}")
+
+
 if __name__ == "__main__":
     out_path = Path("dtw_plots")
     out_path.mkdir(exist_ok=True)
 
     # Generate angles from 0 to 2π
-    point_count_1_list = [20, 8]
+    point_count_1_list = [12, 6]
     paddings = ["padwithfirstframe", "zeropad", None]
     add_mappings = [
         True,
@@ -35,19 +72,19 @@ if __name__ == "__main__":
     for point_count_1, padding, add_mappings, add_z, update_x in product(
         point_count_1_list, paddings, add_mappings, add_z_values, update_x_vals
     ):
-        point_count_2 = 8
+        point_count_2 = 6
         print(
             f"Point Counts: {point_count_1},{point_count_2}. Padding:{padding}, add_mappings: {add_mappings}, add_z: {add_z}, update_x: {update_x}"
         )
 
         if point_count_1 == point_count_2:
-            title = "Equal-Length Sequences"
+            title = f"Equal-Length Sequences ({point_count_1},{point_count_2})"
             if padding is not None:
                 print(f"SKIPPING! No point adding {padding} if they're the same length")
                 continue
 
         else:
-            title = f"Unequal-Length Sequences"
+            title = f"Unequal-Length Sequences ({point_count_1},{point_count_2})"
         mode = "lines+markers"
 
         angles1 = np.linspace(0, 2 * np.pi, point_count_1)
@@ -130,6 +167,7 @@ if __name__ == "__main__":
         fig = go.Figure()
 
         if add_z:
+            print(f"Adding the THIRD DIMENSION")
             # Add trace
             fig.add_trace(
                 go.Scatter3d(
@@ -210,7 +248,8 @@ if __name__ == "__main__":
 
         if add_z:
             fig.update_layout(scene=dict(camera=dict(eye=dict(x=camxyz[0], y=camxyz[1], z=camxyz[2]))))
-            title = f"{title} (3D, cam={camxyz})"
+            title = f"{title} (3D)"
+            # title = f"{title} (3D, cam={camxyz})"
 
         if add_mappings:
             title = f"{title} (Mappings)"
@@ -225,18 +264,11 @@ if __name__ == "__main__":
         print(title)
 
         # Show the plot
-        fig.show()
+        # fig.show()
+        fig_out = out_path / f"{title}".replace(" ", "")
         fig.write_html(f"{fig_out}.html")
 
-        fig.update_layout(
-            title=None,
-            xaxis_title=None,
-            yaxis_title=None,
-            showlegend=False,
-            width=1200,
-            height=800,
-        )
-
-        fig_out = out_path / f"{title}"
         print(fig_out)
-        pio.write_image(fig, f"{fig_out}.pdf", format="pdf")
+        # pio.write_image(fig, f"{fig_out}.pdf", format="pdf")
+        export_minimal_pdf(fig, fig_out, is_3d=add_z)
+        print("*" * 60)
