@@ -159,7 +159,7 @@ def descriptive_name(metric_name):
         "trim": False,
         "interp": None,
         "keypoints": "removelegsandworld",
-        "zspeed": 1.0,
+        # "zspeed": 1.0,
         "seq_align": "zeropad",  # only one can be set
     }
 
@@ -167,8 +167,8 @@ def descriptive_name(metric_name):
     keypoints_names = {
         "hands": "Hands-Only",
         "removelegsandworld": None,  # default, don't print
-        "reduceholistic": "Reduced Holistic",
-        "youtubeaslkeypoints": "YouTube-ASL Keypoints",
+        "reduceholistic": "Reduce-Holistic KPs",
+        "youtubeaslkeypoints": "YouTube-ASL KPs",
     }
 
     seq_align_names = {"zeropad": "ZeroPad", "padwithfirstframe": "PadWithFirstFrame", "dtw": None}
@@ -181,16 +181,20 @@ def descriptive_name(metric_name):
 
     for key, val in metric_choices.items():
         if val is None or key in ["measure"] or key in keys_to_skip:
-            continue  # skip None and already-printed fields
+            continue  # skip None and already-printed fields, and certain fields that we just don't want to print
 
         key_name = key_names[key] if key in key_names else key.capitalize()
+
         # Skip default values
         if key in default_values and val == default_values[key]:
+            # print(f"{key} has default value {val}, skipping")
             continue
 
         if isinstance(val, bool):
             if val:
                 name_parts.append(key_name)
+        elif key == "zspeed":
+            name_parts.append(f"{key_name}(Speed{val})")
         elif key == "keypoints":
             readable = keypoints_names.get(val)
             if readable:
@@ -200,6 +204,7 @@ def descriptive_name(metric_name):
             if readable:
                 name_parts.append(readable)
         else:
+            # print(f"Appending {key_name}:{val}")
             name_parts.append(f"{key_name}{val}")
 
     return " +".join(name_parts)
@@ -209,6 +214,8 @@ if __name__ == "__main__":
     METRIC_FILES = [
         "/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv",
         "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv",
+        # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/score_analysis/stats_by_metric.csv",
+        "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/5_12_2025_score_analysis_288_metrics_169_glosses/stats_by_metric.csv",
     ]
     dfs = [pd.read_csv(f) for f in METRIC_FILES]
 
@@ -226,6 +233,8 @@ if __name__ == "__main__":
     print(f"After deduplication, the total is {len(metrics)}.")
 
     for metric in metrics:
+        if "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0" not in metric:
+            continue
         metric_choices = interpret_name(metric)
 
         if metric_choices is not None:
@@ -237,7 +246,9 @@ if __name__ == "__main__":
             metric_choices["short"] = short
             metric_choices["hash"] = hashlib.md5(f"{metric}".encode()).hexdigest()[:8]
             choices.append(metric_choices)
-
+        print(metric)
+        print(descriptive_name(metric))
+    exit()
     interpretation = pd.DataFrame(choices)
     interpretation.sort_values(by="short")
 
@@ -260,9 +271,9 @@ if __name__ == "__main__":
         counts.append(len(uniques))
     import random
 
-    for m in random.sample(metrics, k=5):
-        print(m)
-        print(descriptive_name(m))
+    # for m in random.sample(metrics, k=5):
+    #     print(m)
+    #     print(descriptive_name(m))
     exit()
     interpretation_csv = Path("metric_name_interpretation.csv")
     dupe_short_names_csv = Path("metric_name_short_dupes.csv")
