@@ -13,7 +13,7 @@ torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import shorten_metric_name
+from pose_evaluation.evaluation.interpret_name import shorten_metric_name, descriptive_name, interpret_name
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -93,9 +93,14 @@ csv_paths_default = [
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/score_analysis/stats_by_metric.csv",
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_3/score_analysis/stats_by_metric.csv",
     # "/opt/home/cleong/projects/pose-evaluation/metric_results_z_offsets_combined/score_analysis/stats_by_metric.csv",
-    "/opt/home/cleong/projects/pose-evaluation/metric_results_1_2_z_combined_818_metrics/score_analysis/stats_by_metric.csv",
-    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/score_analysis/stats_by_metric.csv",
-    "/opt/home/cleong/projects/pose-evaluation/metric_results_embeddings/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_embeddings/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_1_2_z_combined_818_metrics/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/score_analysis/stats_by_metric.csv",
+    # "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/score_analysis/stats_by_metric.csv",
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/5_14_169_glosses_40680_metrics_score_analysis/stats_by_metric.csv",
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/5_12_2025_score_analysis_288_metrics_169_glosses/stats_by_metric.csv",
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_embeddings/5_2_2025_embedding_score_analysis_169_glosses/stats_by_metric.csv",
 ]
 csv_paths_input = st.text_input(
     "Enter paths to your CSV files (comma-separated)",
@@ -174,12 +179,31 @@ if csv_paths_input:
     sort_col = st.selectbox("Sort by column", numeric_cols)
     sort_ascending = st.checkbox("Sort ascending?", value=False)
 
-    # --- Keyword filtering---
+    # --- Keyword filtering ---
     exclude = st.text_input("Keywords to exclude? (comma-separated)", value="")
+    include = st.text_input("Keywords to include? (comma-separated)", value="")
+
+    metric_series = df[METRIC_COL].str.lower()
+
+    match_all = st.checkbox("Require all keywords (AND)?", value=False)  # default is "any" (OR)
+
+    if include:
+        keywords = [kw.strip().lower() for kw in include.split(",") if kw.strip()]
+
+        # Ensure your `metric_series` is lowercase for consistent matching
+        metric_series = df["METRIC"].str.lower()
+
+        if match_all:
+            for kw in keywords:
+                df = df[metric_series.str.contains(re.escape(kw), na=False)]
+        else:
+            pattern = "|".join(map(re.escape, keywords))
+            df = df[metric_series.str.contains(pattern, na=False)]
+
     if exclude:
         keywords = [kw.strip().lower() for kw in exclude.split(",") if kw.strip()]
-        pattern = "|".join(map(re.escape, keywords))  # escape special characters
-        df = df[~df[METRIC_COL].str.lower().str.contains(pattern, na=False)]
+        pattern = "|".join(map(re.escape, keywords))
+        df = df[~metric_series.str.contains(pattern, na=False)]
 
     # --- Multi-keyword matching ---
     keyword_input = st.text_input("Search / highlight by keyword(s) (comma-separated)", value="")
@@ -262,7 +286,7 @@ if csv_paths_input:
         df = df.head(top_n)
 
     # --- Plot ---
-    title = f"{sort_col} by Metric"
+    title = f"{sort_col.replace("_"," ").capitalize()} by Metric"
 
     top_or_bottom = ""
     if sort_ascending:
@@ -329,6 +353,27 @@ if csv_paths_input:
             file_name=f"combined_metric_stats.csv",
             mime="text/csv",
         )
+        markdown_output = ""  # Initialize an empty string to store the Markdown
+        metrics_to_markdown = df["METRIC"].tolist()
+        metrics_to_markdown.reverse()
+        for metric in metrics_to_markdown:
+            metric_row = df[df["METRIC"] == metric].iloc[0]
+            # markdown_lines = [
+            #     f"\n% {metric} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}&\t{metric_row['hyp_gloss_count']}\t\\\\",
+            #     f"\n{descriptive_name(metric)} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}&\t{metric_row['hyp_gloss_count']}\t\\\\",
+            # ]
+            markdown_lines = [
+                f"\n% {interpret_name(metric)}",
+                f"\n% {metric} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}\t\\\\",
+                f"\n{descriptive_name(metric)} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}\t\\\\",
+            ]
+
+            for mdl in markdown_lines:
+                if "Unknown" not in mdl:
+                    markdown_output += mdl
+
+                # st.code(mdl, language=None)
+        st.code(markdown_output, language=None)
 
     # --- Keyword Presence Effect Estimation (Group Comparison) ---
     st.markdown("## 🔍 Estimate Effect of a Keyword (Group Comparison)")
