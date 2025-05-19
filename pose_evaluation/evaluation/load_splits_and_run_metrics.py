@@ -146,8 +146,17 @@ def run_metrics_in_out_trials(
         typer.echo(
             f"{len(filtered_gloss_vocabulary)} Glosses with items less than or equal to {skip_glosses_with_more_than_this_many}: "
         )
-        typer.echo(f"{filtered_gloss_vocabulary}")
+
         query_gloss_vocabulary = filtered_gloss_vocabulary
+
+    # filter glosses that will cause issues #TODO: A better solution upstream, and maybe don't use glosses in filenames
+    # Also, the load_parquets script can handle the weird filenames no problem, and convert to pyarrow.
+    removed_glosses = []
+    for punc in ["/", " ", "\\", ".", "_"]:
+        query_gloss_vocabulary = [g for g in query_gloss_vocabulary if punc not in g]
+        print(f"Filtered out glosses with {punc}: there are now {len(query_gloss_vocabulary)}")
+
+    typer.echo(f"{query_gloss_vocabulary}")
     # All gloss–metric combinations
     gloss_metric_combos = list(product(query_gloss_vocabulary, metrics))
 
@@ -180,6 +189,12 @@ def run_metrics_in_out_trials(
             else:
                 metric_inputs_df = df.drop_duplicates()
 
+        # if not Path("gloss_counts.csv").is_file():
+        #     gloss_count_df = metric_inputs_df.groupby("GLOSS").size().reset_index(name="SAMPLE_COUNT")
+        #     gloss_count_df = gloss_count_df.sort_values(by="SAMPLE_COUNT")
+        #     gloss_count_df.to_csv("gloss_counts.csv", index=False)
+        #     print(Path("gloss_counts.csv").resolve())
+        #     exit()
         results = defaultdict(list)
         results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
         if results_path.exists():
