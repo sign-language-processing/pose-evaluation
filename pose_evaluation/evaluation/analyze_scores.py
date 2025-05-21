@@ -29,6 +29,7 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
     e.g., 'GLOSS_trimmed_normalized_defaultdist10.0_extra_outgloss_4x_score_results'
     returns 'trimmed_normalized_defaultdist10.0_extra'
     """
+    # TODO: Fix. There are glosses with underscores, e.g. "WASH_DISHES". Workaround: convert to pyarrow first
     if "_outgloss_" not in stem or "_" not in stem:
         return None
     _, rest = stem.split("_", 1)
@@ -420,10 +421,11 @@ if __name__ == "__main__":
         metric_generator  = load_metric_dfs(dataset)
 
     analyzed=0
-    for metric, metric_df in tqdm(metric_generator, desc="Analyzing metrics"):
+    for i, (metric, metric_df) in enumerate(tqdm(metric_generator, desc="Analyzing metrics")):
+
         print("*" * 50)
         if metric in metrics_analyzed:
-            print(f"Skipping already analyzed metric: {metric}")
+            print(f"Skipping already analyzed metric #{i}: {metric}")
             continue
 
         reused_old = False
@@ -435,19 +437,19 @@ if __name__ == "__main__":
                 previous_total = prev_rows["total_count"].iloc[0]
                 current_total = len(metric_df)
                 if current_total == previous_total:
-                    print(f"Skipping re-analysis of {metric}: total_count unchanged ({current_total}). Reusing previous stats.")
+                    print(f"Skipping re-analysis of #{i} {metric}: total_count unchanged ({current_total}). Reusing previous stats.")
                     for col in previous_stats_by_metric.columns:
                         stats_by_metric[col].append(prev_rows[col].iloc[0])
                     metrics_analyzed.add(metric)
                     reused_old = True
                 else:
-                    print(f"Reanalyzing {metric}: total_count changed (was {previous_total}, now {current_total})")
+                    print(f"Reanalyzing #{i} {metric}: total_count changed (was {previous_total}, now {current_total}). Analyzed so far:{analyzed}")
 
         if reused_old:
             continue  # Skip actual re-analysis
 
         
-        print(f"Analyzing metric: {metric}")
+        print(f"Analyzed {len(metrics_analyzed)}, now analyzing metric #{i}: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
@@ -465,4 +467,5 @@ if __name__ == "__main__":
 
 
 
-# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_1_2_z_combined_818_metrics/scores --file-format parquet
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_round_4/scores/ --file-format parquet
