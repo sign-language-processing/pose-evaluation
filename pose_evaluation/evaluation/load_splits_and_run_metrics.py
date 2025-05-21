@@ -344,6 +344,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
         f"from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
+    typer.echo(f"max_hyp is set to {max_hyp}, limiting number of hyp chunks if not None")
 
     if intersplit:
         splits = df[DatasetDFCol.SPLIT].unique().tolist()
@@ -367,6 +368,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
     total_batches = batches_hyp * batches_ref
     typer.echo(f"Batch size {batch_size}, max workers {max_workers}")
+
     typer.echo(f"Splits: {df[DatasetDFCol.SPLIT].unique()}")
     typer.echo(f"Results will be saved to {out_path}")
     typer.echo(f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})")
@@ -388,6 +390,10 @@ def run_metrics_full_distance_matrix_batched_parallel(
         typer.echo(f"Metric Signature: {signature}")
         typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
         typer.echo(f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})")
+        if max_hyp is not None:
+            typer.echo(
+                f"With max hyp {max_hyp}: like, {(max_hyp+batch_size)//batch_size}x{batches_ref} = {(max_hyp//batch_size)*batches_ref}?"
+            )
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
         metric_results_path.mkdir(parents=True, exist_ok=True)
@@ -401,6 +407,10 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for hyp_start in tqdm(range(0, len(df_a), batch_size), desc=f"Hyp batching for Metric {i}"):
+                if max_hyp is not None and hyp_start > max_hyp:
+                    # typer.echo(f"Skipping hyp_start {hyp_start} due to max_hyp={max_hyp}")
+                    continue
+
                 hyp_chunk = df_a.iloc[hyp_start : hyp_start + batch_size].copy()
 
                 for ref_start in range(0, len(df_b), batch_size):
@@ -418,7 +428,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
             batch_filename = futures.pop(future)
             result_path = future.result()
-            typer.echo(f"💾 Worker saved: {Path(result_path).name}")
+            # typer.echo(f"💾 Worker saved: {Path(result_path).name}")
 
         if merge:
             typer.echo("🔄 Merging all batch files...")
@@ -712,6 +722,9 @@ def main(
         True, help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits"
     ),
     max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
+    full_matrix_max_hyp: Optional[int] = typer.Option(
+        None, help="Don't calculate rows of the full distance matrix past batches starting with this index"
+    ),
     batch_size: Optional[int] = typer.Option(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
     ),
@@ -809,6 +822,7 @@ def main(
             batch_size=batch_size,
             max_workers=max_workers,
             intersplit=full_intersplit,
+            max_hyp=full_matrix_max_hyp,
         )
 
     else:
