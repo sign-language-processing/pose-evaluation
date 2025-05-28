@@ -8,3 +8,14 @@ pose_evaluation.egg-info/
 *.code-workspace
 .vscode/
 coverage.lcov
+
+*.csv
+*.zip
+**/out/*
+**out*.txt
+**metric_results**
+*.parquet
+*.tex
+*.png
+**/dtw_plots/*
+**/plots/*
