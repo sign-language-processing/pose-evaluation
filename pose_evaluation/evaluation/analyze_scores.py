@@ -29,10 +29,12 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
     e.g., 'GLOSS_trimmed_normalized_defaultdist10.0_extra_outgloss_4x_score_results'
     returns 'trimmed_normalized_defaultdist10.0_extra'
     """
-    # TODO: Fix. There are glosses with underscores, e.g. "WASH_DISHES". Workaround: convert to pyarrow first
+    # TODO: Fix. There are glosses with underscores, e.g. "WASH_DISHES". Workaround: convert to pyarrow first        
     if "_outgloss_" not in stem or "_" not in stem:
         return None
-    _, rest = stem.split("_", 1)
+    possible_gloss, rest = stem.split("_", 1)
+    first_part = rest.split("_", 1)[0]
+    assert "Return4" in first_part or "trimmed" in first_part, f"Unexpected format: {rest}, possibly gloss has underscores? {possible_gloss}"
     metric, _ = rest.split("_outgloss_", 1)
     return metric
 
@@ -354,16 +356,32 @@ if __name__ == "__main__":
     type=str,
     choices=["pyarrow", "parquet", "csv"],
     default="pyarrow",
-    help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.",
-)
+    help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.")
+
+    parser.add_argument(
+    "--query-gloss-list",
+    type=str,
+    help="query glosses to include, comma-separated")
     args = parser.parse_args()
+    
+    
+    
     scores_folder = Path(args.scores_folder)
+    gloss_list = None
+    if args.query_gloss_list is not None:
+        gloss_list = list(set([s.strip() for s in args.query_gloss_list.split(",")]))
+        # "SORRY,MOTHER,BEER,CALIFORNIA,DEAFSCHOOL,GOVERNMENT,FRIDAY,CHEW1,WEDNESDAY,REPLACE,THRILLED,MEETING,YOUR,SEVERAL,HAWAII,DRUG,DECIDE2,SHARK2,VOTE,HARDOFHEARING,OHISEE,PERFUME1,SCREWDRIVER3,LIBRARY,FORK4,LIVE2,CALM,SHAME,CAFETERIA,BANANA2,MOOSE,MAIL1,SANTA,BEAR,THANKSGIVING,TIE1,PAIR,SPECIALIST,ARIZONA,NECKLACE4,PRINT,DRINK2,THURSDAY,SIX,CASTLE2,TOSS,WEIGH,PRACTICE,STARS,LEAF1,HUSBAND,BEAK,CHALLENGE,BINOCULARS,DOLPHIN2,VAMPIRE,PUMPKIN,BRAINWASH,COMMITTEE,TEA,TURBAN,PREFER,EASTER,HUG,BATHROOM,RUIN,SNAKE,PHILADELPHIA,CONVINCE2,DONTKNOW,EIGHT,COOKIE,TELL,DEAF2,PIPE2,SATURDAY,SEVEN,SILVER,ROOF,DRIP,DUTY,COUNSELOR,NINE,RECORDING,RAT,SALAD,EVERYTHING,SNOWSUIT,EACH,CHICAGO,BAG2,PRESIDENT,GALLAUDET,CLOSE,FEW,CELERY,EARN,PEPSI,SOCKS,MICROPHONE,LUCKY,PJS,TRUE,ROSE,GOTHROUGH,RESTAURANT,WEATHER,STADIUM,FISHING2,PERCENT,KNITTING3,EXPERIMENT,TAKEOFF1,ACCENT,OPINION1,PIE,RUSSIA,WEIGHT,DONTCARE,ROCKINGCHAIR1,CANDY1,SPICY,ENOUGH,GLASSES,TUESDAY,WIFE,WASHDISHES,NEWSTOME,WEST,APPEAR,INTRODUCE,DONTMIND,HERE,LEND,PHONE,ERASE1,THREE,ADVERTISE,BERRY,DART,WINE,PILL,FRIENDLY,DIP3,TRADITION,TOP,ADULT,TASTE,DISRUPT,VACATION,SENATE,NEWSPAPER,FOCUS,DEER,INVITE,BRAG,BUFFALO,SHAVE5,BUT,CHILD,NEWYORK,WORKSHOP,FINGERSPELL,ALASKA,ONION,VOMIT,WEAR,THANKYOU,HIGHSCHOOL"
+        print(f"Including results with the following {len(gloss_list)} query glosses: {gloss_list}")
+        
+
+    
 
     analysis_folder = scores_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
 
     score_files_index_path = analysis_folder / "score_files_index.json"
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
+    metric_stats_out_temp = analysis_folder / "stats_by_metric_temp.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
     metric_by_gloss_stats_folder.mkdir(exist_ok=True)
     ks = [1, 5, 10]
@@ -423,6 +441,8 @@ if __name__ == "__main__":
     analyzed=0
     for i, (metric, metric_df) in enumerate(tqdm(metric_generator, desc="Analyzing metrics")):
 
+        
+
         print("*" * 50)
         if metric in metrics_analyzed:
             print(f"Skipping already analyzed metric #{i}: {metric}")
@@ -448,20 +468,42 @@ if __name__ == "__main__":
         if reused_old:
             continue  # Skip actual re-analysis
 
+        if gloss_list is not None:
+            
+            filtered_df = metric_df[metric_df["GLOSS_A"].isin(gloss_list)]
+            print(f"Filtering scores to those in query gloss list: {len(metric_df)} before, {len(filtered_df)} after")
+            metric_df = filtered_df
+            missing = set(gloss_list) - set(metric_df["GLOSS_A"].unique())
+            if missing:
+                print(f"Missing glosses from GLOSS_A: {missing} SKIPPING!!!!!")
+                continue
+
         
         print(f"Analyzed {len(metrics_analyzed)}, now analyzing metric #{i}: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
         metrics_analyzed.add(metric)
+
+        if i % 10 == 0:
+            stats_by_metric_df = pd.DataFrame(stats_by_metric)
+            print(f"$"*60)
+            print(f"INCREMENTAL SAVE: {i}")
+            print(f"Saving {len(stats_by_metric_df)} to {metric_stats_out_temp}, of which {len(stats_by_metric_df) - analyzed} are reused")
+            stats_by_metric_df.to_csv(metric_stats_out_temp, index=False)
+            print(f"$"*60)
+
+
+            
+        
         analyzed +=1
         print("*" * 50)
 
     if stats_by_metric:
         stats_by_metric_df = pd.DataFrame(stats_by_metric)
-        print(stats_by_metric_df)
+        
         print(f"Saving {len(stats_by_metric_df)} to {metric_stats_out}, of which {len(stats_by_metric_df) - analyzed} are reused")
-        stats_by_metric_df.to_csv(metric_stats_out, index=False)
+        stats_by_metric_df.to_csv(metric_stats_out, index=False)        
     else:
         print("No metrics were analyzed.")
 
