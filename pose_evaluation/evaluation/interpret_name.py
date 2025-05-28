@@ -154,8 +154,8 @@ def descriptive_name(metric_name):
     # Defaults for comparison — values that don't need to be printed
     default_values = {
         "normalize": False,
-        "default": 10.0,
-        "fillmasked": 10.0,
+        "default": 0.0,
+        "fillmasked": 0.0,
         "trim": False,
         "interp": None,
         "keypoints": "removelegsandworld",
@@ -176,7 +176,7 @@ def descriptive_name(metric_name):
     key_names = {"interp": "Interp", "fillmasked": "MaskFill", "zspeed": "Z-Stretch", "normalize": "Norm."}
 
     keys_to_skip = [
-        "default",
+        # "default",
     ]
 
     for key, val in metric_choices.items():
