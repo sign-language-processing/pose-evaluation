@@ -152,32 +152,57 @@ def compute_map_by_metric_safe(lf: pl.LazyFrame, limit_rows: None | int = None) 
     """
     Computes mean average precision (mAP) per METRIC from a Polars LazyFrame.
     Lower scores are better (ascending rank order).
+    Fixed to match TorchMetrics exactly - replicates TorchMetrics' internal ranking logic.
     """
     start_time = time.perf_counter()
     if limit_rows is not None:
         lf = lf.limit(limit_rows)
-        print(f"Limiting Rows to {limit_rows}")
+        print(f"⏳ Scanning first {limit_rows:,} rows")
+
     # Filter out self-scores
     lf = lf.filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
 
-    # Rank by score (ascending since lower is better)
+    # Add relevant flag
+    lf = lf.with_columns([(pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant")])
+
+    # Add random column for shuffling (to match the sample(frac=1, random_state=42))
+    # Then sort by shuffle order first, then by score
+    lf = (
+        lf.with_columns([pl.int_range(pl.len()).shuffle(seed=42).alias("shuffle_order")])
+        .sort(["METRIC", "GLOSS_A_PATH", "shuffle_order"])
+        .sort(["METRIC", "GLOSS_A_PATH", "SCORE"], maintain_order=True)
+    )
+
+    # Now we need to replicate TorchMetrics' ranking behavior
+    # TorchMetrics expects higher scores = better, so it would rank -SCORE in descending order
+    # Since we have lower scores = better, we rank SCORE in ascending order
+    # BUT we need to use TorchMetrics' dense ranking logic
+
+    # The key difference: TorchMetrics uses the ORIGINAL order after shuffling as tiebreaker
+    # Let's add a position column to handle ties properly
+    lf = lf.with_columns([pl.int_range(pl.len()).over(["METRIC", "GLOSS_A_PATH"]).alias("position")])
+
+    # Rank by score, with position as tiebreaker (mimicking TorchMetrics' behavior)
     lf = lf.with_columns(
         [
-            pl.col("SCORE").rank("dense", descending=False).over(["METRIC", "GLOSS_A_PATH"]).alias("rank"),
-            (pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant"),
+            pl.col("SCORE").rank("dense", descending=False).over(["METRIC", "GLOSS_A_PATH"]).alias("rank_score"),
+            # Also need ordinal rank for precision calculation
+            pl.col("SCORE").rank("ordinal", descending=False).over(["METRIC", "GLOSS_A_PATH"]).alias("rank_ordinal"),
         ]
     )
 
-    # Sort by rank to ensure proper order for cumulative calculations
-    lf = lf.sort(["METRIC", "GLOSS_A_PATH", "rank"])
+    # Sort by rank to ensure proper order for cumulative sum
+    lf = lf.sort(["METRIC", "GLOSS_A_PATH", "rank_ordinal"])
 
-    # Calculate precision at each rank position
+    # Calculate cumulative sum of relevant items up to each position
+    lf = lf.with_columns([pl.col("relevant").cum_sum().over(["METRIC", "GLOSS_A_PATH"]).alias("relevant_count")])
+
+    # Calculate precision_at_k only for relevant items
+    # Use the ordinal rank for precision calculation (this matches TorchMetrics)
     lf = lf.with_columns(
-        [pl.col("relevant").cum_sum().over(["METRIC", "GLOSS_A_PATH"]).alias("relevant_count")]
-    ).with_columns(
         [
             pl.when(pl.col("relevant") == 1)
-            .then(pl.col("relevant_count") / pl.col("rank"))
+            .then(pl.col("relevant_count") / pl.col("rank_ordinal"))
             .otherwise(None)
             .alias("precision_at_k")
         ]
@@ -191,11 +216,14 @@ def compute_map_by_metric_safe(lf: pl.LazyFrame, limit_rows: None | int = None) 
     )
 
     # Mean average precision per metric
-    map_by_metric = avg_precision.group_by("METRIC").agg(pl.col("average_precision").mean().alias("mAP"))
-    result = map_by_metric.collect(engine="streaming")
+    result = (
+        avg_precision.group_by("METRIC")
+        .agg(pl.col("average_precision").mean().alias("mAP"))
+        .collect(engine="streaming")
+    )
+
     duration = time.perf_counter() - start_time
     print(f"⏱️ Execution time: {duration:.2f} seconds")
-
     return result
 
 
@@ -211,7 +239,7 @@ if __name__ == "__main__":
 
     compute_score_by_metric(lf)
 
-    result = compute_map_by_metric_safe(pl.scan_parquet(args.path))
+    result = compute_map_by_metric_safe(pl.scan_parquet(args.path), limit_rows=300_000_000)
     print(result)
 
     for row in result.iter_rows():
