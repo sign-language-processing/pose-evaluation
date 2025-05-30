@@ -1,23 +1,22 @@
 import argparse
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict
 from collections import defaultdict
 from pathlib import Path
 import json
-import re 
+import re
 
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import torch
-from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
+from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
-from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
+from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol
 from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 _DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
-
 
 
 tqdm.pandas()
@@ -36,6 +35,7 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
     metric, _ = rest.split("_outgloss_", 1)
     return metric
 
+
 def extract_filename_dist(filename: str) -> Optional[float]:
     """
     From a filename, extract the float following 'defaultdist'.
@@ -45,13 +45,14 @@ def extract_filename_dist(filename: str) -> Optional[float]:
     return float(m.group(1)) if m else None
 
 
-def extract_signature_distance(signature: str) -> Optional[str]:
+def extract_signature_distance(signature: str) -> Optional[float]:
     """
     From a signature string, extract the float following 'default_distance:'.
     Returns None if not found.
     """
     m = _SIGNATURE_RE.search(signature)
     return float(m.group(1)) if m else None
+
 
 def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) -> dict:
     if ks is None:
@@ -113,27 +114,12 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
 
         results["mean_average_precision"] = RetrievalMAP()(preds, targets, indexes).item()
         results["mean_reciprocal_rank"] = RetrievalMRR()(preds, targets, indexes).item()
-    
-    print(f"Calculating @k-metrics")
+
+    print("Calculating @k-metrics")
     for k in tqdm(ks, desc="metrics at k"):
         results[f"precision@{k}"] = float(np.mean(per_k_stats[k]["precision"])) if per_k_stats[k]["precision"] else 0.0
         results[f"recall@{k}"] = float(np.mean(per_k_stats[k]["recall"])) if per_k_stats[k]["recall"] else 0.0
         results[f"match_count@{k}"] = per_k_stats[k]["match_count"]
-
-    # print(f"Calculating @k-metrics using TorchMetrics")
-    # for k in tqdm(ks, desc="torchmetrics at k"):
-    #     precision_at_k = RetrievalPrecision(top_k=k)
-    #     recall_at_k = RetrievalRecall(top_k=k)
-
-    #     results[f"precision@{k}(torch)"] = precision_at_k(preds, targets, indexes).item()
-    #     results[f"recall@{k}(torch)"] = recall_at_k(preds, targets, indexes).item()
-    
-    # # Assertions for comparison
-    # for k in ks:
-    #     assert np.isclose(results[f"precision@{k}(torch)"], results[f"precision@{k}"], atol=1e-4), f"Precision@{k} mismatch: {results[f'precision@{k}(torch)']:.4f} vs {results[f'precision@{k}']:.4f}"
-    #     assert np.isclose(results[f"recall@{k}(torch)"], results[f"recall@{k}"], atol=1e-4), f"Recall@{k} mismatch: {results[f'recall@{k}(torch)']:.4f} vs {results[f'recall@{k}']:.4f}"
-
-
     return results
 
 
@@ -182,8 +168,8 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     # Gloss and gloss-pair stats
     metric_df["gloss_tuple"] = [
-                tuple(x) for x in np.sort(metric_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
-            ]
+        tuple(x) for x in np.sort(metric_df[[ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]].values, axis=1)
+    ]
     gloss_tuples = metric_df["gloss_tuple"].unique()
     metric_glosses = set(metric_df[ScoreDFCol.GLOSS_A].tolist() + metric_df[ScoreDFCol.GLOSS_B].tolist())
 
@@ -247,10 +233,10 @@ def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out
 
     return result
 
+
 def load_score_parquet(parquet_file: Path) -> pd.DataFrame:
     """Loads a score Parquet file into a Pandas DataFrame."""
     return pd.read_parquet(parquet_file)
-
 
 
 def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"):
@@ -286,7 +272,9 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
         signature_files = defaultdict(list)
 
         try:
-            for score_file in tqdm(files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric_name}'"):
+            for score_file in tqdm(
+                files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric_name}'"
+            ):
                 if file_format == "csv":
                     scores_df = load_score_csv(csv_file=score_file)
                 else:
@@ -320,7 +308,9 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
                 all_dfs.append(scores_df)
 
-            assert len(signatures_set) == 1, f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
+            assert (
+                len(signatures_set) == 1
+            ), f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
 
         except AssertionError as e:
             debug_path = Path.cwd() / "debug_jsons"
@@ -350,12 +340,12 @@ if __name__ == "__main__":
         help="Path to the folder containing the score files, either a pyarrow parquet datset (default) or csv files",
     )
     parser.add_argument(
-    "--file-format",
-    type=str,
-    choices=["pyarrow", "parquet", "csv"],
-    default="pyarrow",
-    help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.",
-)
+        "--file-format",
+        type=str,
+        choices=["pyarrow", "parquet", "csv"],
+        default="pyarrow",
+        help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.",
+    )
     args = parser.parse_args()
     scores_folder = Path(args.scores_folder)
 
@@ -388,15 +378,21 @@ if __name__ == "__main__":
             score_files_index = json.load(f)
             print(score_files_index[ScoresIndexDFCol.SUMMARY])
 
-    if previous_stats_by_metric is not None and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores") == previous_stats_by_metric["total_count"].sum():
-        print(f"Score count has not changed, no need to re-analyze. Quitting now.")
+    if (
+        previous_stats_by_metric is not None
+        and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores")
+        == previous_stats_by_metric["total_count"].sum()
+    ):
+        print("Score count has not changed, no need to re-analyze. Quitting now.")
         exit()
     else:
-        print(f"Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
+        print("Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
         if score_files_index.get(ScoresIndexDFCol.SUMMARY):
             print("Index has")
             print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
-            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values")
+            print(
+                f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values"
+            )
             print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_b"]:,} unique 'gloss b' (ref) values")
             print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"]:,} scores")
 
@@ -414,13 +410,13 @@ if __name__ == "__main__":
     metrics_analyzed = set()
 
     if args.file_format != "pyarrow":
-        metric_generator  = load_metric_dfs_from_filenames(args.scores_folder, file_format=args.file_format)
-    
-    else:
-        dataset= load_dataset(scores_folder)
-        metric_generator  = load_metric_dfs(dataset)
+        metric_generator = load_metric_dfs_from_filenames(args.scores_folder, file_format=args.file_format)
 
-    analyzed=0
+    else:
+        dataset = load_dataset(scores_folder)
+        metric_generator = load_metric_dfs(dataset)
+
+    analyzed = 0
     for i, (metric, metric_df) in enumerate(tqdm(metric_generator, desc="Analyzing metrics")):
 
         print("*" * 50)
@@ -437,34 +433,38 @@ if __name__ == "__main__":
                 previous_total = prev_rows["total_count"].iloc[0]
                 current_total = len(metric_df)
                 if current_total == previous_total:
-                    print(f"Skipping re-analysis of #{i} {metric}: total_count unchanged ({current_total}). Reusing previous stats.")
+                    print(
+                        f"Skipping re-analysis of #{i} {metric}: total_count unchanged ({current_total}). Reusing previous stats."
+                    )
                     for col in previous_stats_by_metric.columns:
                         stats_by_metric[col].append(prev_rows[col].iloc[0])
                     metrics_analyzed.add(metric)
                     reused_old = True
                 else:
-                    print(f"Reanalyzing #{i} {metric}: total_count changed (was {previous_total}, now {current_total}). Analyzed so far:{analyzed}")
+                    print(
+                        f"Reanalyzing #{i} {metric}: total_count changed (was {previous_total}, now {current_total}). Analyzed so far:{analyzed}"
+                    )
 
         if reused_old:
             continue  # Skip actual re-analysis
 
-        
         print(f"Analyzed {len(metrics_analyzed)}, now analyzing metric #{i}: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
         metrics_analyzed.add(metric)
-        analyzed +=1
+        analyzed += 1
         print("*" * 50)
 
     if stats_by_metric:
         stats_by_metric_df = pd.DataFrame(stats_by_metric)
         print(stats_by_metric_df)
-        print(f"Saving {len(stats_by_metric_df)} to {metric_stats_out}, of which {len(stats_by_metric_df) - analyzed} are reused")
+        print(
+            f"Saving {len(stats_by_metric_df)} to {metric_stats_out}, of which {len(stats_by_metric_df) - analyzed} are reused"
+        )
         stats_by_metric_df.to_csv(metric_stats_out, index=False)
     else:
         print("No metrics were analyzed.")
-
 
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_1_2_z_combined_818_metrics/scores --file-format parquet

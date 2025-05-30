@@ -1,18 +1,18 @@
-from itertools import combinations
+import ast
+import gc
+import hashlib
 import math
+from datetime import datetime
+from itertools import combinations
 from pathlib import Path
 from typing import Optional
-import hashlib
-from datetime import datetime
+
+import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from tqdm import tqdm
 import seaborn as sns
-import gc
-import ast
-import hashlib
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 sns.set_theme()
 
@@ -70,7 +70,7 @@ def plot_metric_histogram(
     # Labels and title
     plt.xlabel(f"{col} Value", fontsize=12)
     plt.ylabel("Frequency", fontsize=12)
-    plt.title(f"Mean Intergloss ({metric})", fontsize=14)
+    plt.title(f"Mean Inter-gloss ({metric})", fontsize=14)
 
     if show:
         plt.show()
@@ -202,7 +202,7 @@ def plot_metric_scatter(
 
     plt.xlabel(f"{metric_x_short}")
     plt.ylabel(f"{metric_y_short}")
-    plt.title(f"Mean Intergloss Scores:\n{metric_x_short} vs\n {metric_y_short}")
+    plt.title(f"Mean Inter-gloss Scores:\n{metric_x_short} vs\n {metric_y_short}")
     plt.grid(True)
 
     if show:
@@ -293,14 +293,14 @@ if __name__ == "__main__":
     print(asl_knowledge_graph_df.info())
     print(asl_knowledge_graph_df.head())
 
-    print(f"ASL KNOWLEDGE GRAPH HEAD:")
+    print("ASL KNOWLEDGE GRAPH HEAD:")
     asl_knowledge_graph_df["gloss_tuple"] = asl_knowledge_graph_df["gloss_tuple"].apply(normalize_gloss_tuple)
     # print(asl_knowledge_graph_df["gloss_tuple"].head())
     print(asl_knowledge_graph_df.head())
     # print(asl_knowledge_graph_df.info())
     print()
 
-    print(f"SCORES BY GLOSS HEAD")
+    print("SCORES BY GLOSS HEAD")
     scores_by_gloss_df["gloss_tuple"] = scores_by_gloss_df["gloss_tuple"].apply(normalize_gloss_tuple)
     # print(scores_by_gloss_df["gloss_tuple"].head())
     print(scores_by_gloss_df.head())
