@@ -1,10 +1,10 @@
+from itertools import product
 from pathlib import Path
+
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
-from itertools import product
-from fastdtw import fastdtw
-import random
+from fastdtw import fastdtw  # type: ignore (pylint can't find it but it's there)
 
 
 def pad_seq(seq, val, count):
@@ -66,29 +66,33 @@ if __name__ == "__main__":
     # add_z = True
 
     camxyz = (-2.0, -2.0, 1.0)
+    POINT_COUNT_2 = 6
 
     update_x_vals = [True, False]
 
     for point_count_1, padding, add_mappings, add_z, update_x in product(
         point_count_1_list, paddings, add_mappings, add_z_values, update_x_vals
     ):
-        point_count_2 = 6
+
         print(
-            f"Point Counts: {point_count_1},{point_count_2}. Padding:{padding}, add_mappings: {add_mappings}, add_z: {add_z}, update_x: {update_x}"
+            f"Point Counts: {point_count_1},{POINT_COUNT_2}.",
+            " Padding:{padding}, add_mappings: {add_mappings}, add_z: {add_z}, update_x: {update_x}",
         )
 
-        if point_count_1 == point_count_2:
-            title = f"Equal-Length Sequences ({point_count_1},{point_count_2})"
+        TITLE = ""
+
+        if point_count_1 == POINT_COUNT_2:
+            TITLE = TITLE + f"Equal-Length Sequences ({point_count_1},{POINT_COUNT_2})"
             if padding is not None:
                 print(f"SKIPPING! No point adding {padding} if they're the same length")
                 continue
 
         else:
-            title = f"Unequal-Length Sequences ({point_count_1},{point_count_2})"
-        mode = "lines+markers"
+            TITLE = TITLE + f"Unequal-Length Sequences ({point_count_1},{POINT_COUNT_2})"
+        MODE = "lines+markers"
 
         angles1 = np.linspace(0, 2 * np.pi, point_count_1)
-        angles2 = np.linspace(0, 2 * np.pi, point_count_2)
+        angles2 = np.linspace(0, 2 * np.pi, POINT_COUNT_2)
 
         # Compute sine and cosine values
         trace1_y = np.cos(angles1)
@@ -104,30 +108,30 @@ if __name__ == "__main__":
         trace2_z = [i * 0.25 for i in range(len(trace2_y))]
 
         if padding == "zeropad":
-            title = f"{title} (Zeropad)"
-            pad_count = point_count_1 - point_count_2
-            pad_value = 0
+            TITLE = f"{TITLE} (Zeropad)"
+            pad_count = point_count_1 - POINT_COUNT_2
+            PAD_VALUE = 0
             # trace2_y_pad = [0 for i in range(point_count_1 - point_count_2)]
             # trace2_y_pad.extend(trace2_y)
-            trace2_y = pad_seq(trace2_y, val=pad_value, count=pad_count)
+            trace2_y = pad_seq(trace2_y, val=PAD_VALUE, count=pad_count)
 
             # trace2_z_pad = [0 for i in range(point_count_1 - point_count_2)]
             # trace2_z_pad.extend(trace2_z)
             # trace2_z = trace2_z_pad
-            trace2_z = pad_seq(trace2_z, val=pad_value, count=pad_count)
+            trace2_z = pad_seq(trace2_z, val=PAD_VALUE, count=pad_count)
 
             if update_x:
                 # s2_pad = [0 for i in range(point_count_1 - point_count_2)]
                 # angles2_pad.extend(angles2)
                 # angles2 = angles2_pad
-                angles2 = pad_seq(angles2, val=pad_value, count=pad_count)
-                title += "(X also padded)"
+                angles2 = pad_seq(angles2, val=PAD_VALUE, count=pad_count)
+                TITLE += "(X also padded)"
             else:
                 angles2 = angles1
 
         elif padding == "padwithfirstframe":
-            title = f"{title} (Pad with First Frame)"
-            pad_count = point_count_1 - point_count_2
+            TITLE = f"{TITLE} (Pad with First Frame)"
+            pad_count = point_count_1 - POINT_COUNT_2
             # trace2_y_pad = [trace2_y[0] for i in range(point_count_1 - point_count_2)]
             # trace2_y_pad.extend(trace2_y)
             # trace2_y = trace2_y_pad
@@ -146,7 +150,7 @@ if __name__ == "__main__":
                 # angles2_pad.extend(angles2)
                 # angles2 = angles2_pad
                 angles2 = pad_seq(angles2, val=angles2[0], count=pad_count)
-                title += " (X also padded)"
+                TITLE += " (X also padded)"
             else:
                 angles2 = angles1
 
@@ -159,62 +163,62 @@ if __name__ == "__main__":
             # print(f"Points 1: {points1}")
             # print(f"Points 2: {points2}")
             dist, mappings = fastdtw(points1, points2, 1)
-            title = f"{title} (DTW)"
+            TITLE = f"{TITLE} (DTW)"
         # print(mappings)
         # mode = "markers"
 
         # Create the plot
-        fig = go.Figure()
+        latex_fig = go.Figure()
 
         if add_z:
-            print(f"Adding the THIRD DIMENSION")
+            print("Adding the THIRD DIMENSION")
             # Add trace
-            fig.add_trace(
+            latex_fig.add_trace(
                 go.Scatter3d(
                     x=angles1,
                     y=trace1_y,
                     z=trace1_z,
                     # z=[i for i in range(len(trace1_y))],
                     #  mode="lines",
-                    mode=mode,
+                    mode=MODE,
                     marker=dict(size=2),
                     name=f"Sequence 1: {point_count_1} points",
                 )
             )
 
             # Add other trace
-            fig.add_trace(
+            latex_fig.add_trace(
                 go.Scatter3d(
                     x=angles2,
                     y=trace2_y,
                     z=trace2_z,
                     # z=[i for i in range(len(trace2_y))],
                     #  mode="lines",
-                    mode=mode,
+                    mode=MODE,
                     marker=dict(size=2),
-                    name=f"Sequence 2 {point_count_2} points",
+                    name=f"Sequence 2 {POINT_COUNT_2} points",
                 )
             )
         else:
             # Add trace
-            fig.add_trace(
+            latex_fig.add_trace(
                 go.Scatter(
                     x=angles1,
                     y=trace1_y,
-                    mode=mode,
+                    mode=MODE,
                     marker=dict(size=2),
                     name=f"Sequence 1: {point_count_1} points",
                 )
             )
 
             # Add other trace
-            fig.add_trace(
+            latex_fig.add_trace(
                 go.Scatter(
                     x=angles2,
                     y=trace2_y,
-                    mode=mode,
+                    mode=MODE,
                     marker=dict(size=4),
-                    name=f"Sequence 2 {point_count_2} points",
+                    name=f"Sequence 2 {POINT_COUNT_2} points",
                 )
             )
 
@@ -223,7 +227,7 @@ if __name__ == "__main__":
 
             for i, j in mappings:
                 if add_z:
-                    fig.add_trace(
+                    latex_fig.add_trace(
                         go.Scatter3d(
                             x=[angles1[i], angles2[j]],
                             y=[trace1_y[i], trace2_y[j]],
@@ -234,7 +238,7 @@ if __name__ == "__main__":
                         )
                     )
                 else:
-                    fig.add_trace(
+                    latex_fig.add_trace(
                         go.Scatter(
                             x=[angles1[i], angles2[j]],
                             y=[trace1_y[i], trace2_y[j]],
@@ -247,28 +251,28 @@ if __name__ == "__main__":
         # Customize layout
 
         if add_z:
-            fig.update_layout(scene=dict(camera=dict(eye=dict(x=camxyz[0], y=camxyz[1], z=camxyz[2]))))
-            title = f"{title} (3D)"
+            latex_fig.update_layout(scene=dict(camera=dict(eye=dict(x=camxyz[0], y=camxyz[1], z=camxyz[2]))))
+            TITLE = f"{TITLE} (3D)"
             # title = f"{title} (3D, cam={camxyz})"
 
         if add_mappings:
-            title = f"{title} (Mappings)"
+            TITLE = f"{TITLE} (Mappings)"
 
-        fig.update_layout(
-            title=title,
+        latex_fig.update_layout(
+            title=TITLE,
             xaxis_title="Angle (radians)",
             yaxis_title="Value",
             legend_title="Functions",
             showlegend=True,
         )
-        print(title)
+        print(TITLE)
 
         # Show the plot
         # fig.show()
-        fig_out = out_path / f"{title}".replace(" ", "")
-        fig.write_html(f"{fig_out}.html")
+        fig_out = out_path / f"{TITLE}".replace(" ", "")
+        latex_fig.write_html(f"{fig_out}.html")
 
         print(fig_out)
         # pio.write_image(fig, f"{fig_out}.pdf", format="pdf")
-        export_minimal_pdf(fig, fig_out, is_3d=add_z)
+        export_minimal_pdf(latex_fig, fig_out, is_3d=add_z)
         print("*" * 60)
