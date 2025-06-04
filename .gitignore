@@ -8,3 +8,4 @@ pose_evaluation.egg-info/
 *.code-workspace
 .vscode/
 coverage.lcov
+*.zip

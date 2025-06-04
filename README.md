@@ -3,7 +3,7 @@
 The lack of automatic pose evaluation metrics is a major obstacle in the development of
 sign language generation models.
 
-![Distribution of scores](assets/pose-eval-title-picture.png)
+![Title Picture Showing Comparison of Poses via various methods](assets/pose-eval-title-picture.png)
 
 ## Goals
 
