@@ -161,6 +161,11 @@ if __name__ == "__main__":
         print(metric.get_signature().format(short=True))
 
         try:
+            if isinstance(metric, EmbeddingDistanceMetric):
+                print(
+                    "Sorry, this is an embedding metric, it can't handle poses! You need to load the .npy files to arrays of shape (768,) first!"
+                )
+                continue
             #
             print("\nSCORE ALL with Signature (short):")
             print(metric.score_all_with_signature(hypotheses, references, short=True, progress_bar=True))
@@ -171,11 +176,6 @@ if __name__ == "__main__":
             print("\nSCORE With Signature:")
             print(metric.score_with_signature(poses[0], poses[1]))
 
-            if isinstance(metric, EmbeddingDistanceMetric):
-                print(
-                    "Sorry, this is an embedding metric, it can't handle poses! You need to load the .npy files to arrays of shape (768,) first!"
-                )
-                continue
             print("\nSCORE with Signature (short):")
             print(metric.score_with_signature(poses[0], poses[1], short=True))
 

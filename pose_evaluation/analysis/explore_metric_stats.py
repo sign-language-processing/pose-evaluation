@@ -5,42 +5,43 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import io
+from pose_evaluation.evaluation.interpret_name import shorten_metric_name, descriptive_name, interpret_name
 
 # https://discuss.streamlit.io/t/error-in-torch-with-streamlit/90908/4
-torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]
+torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__)]  # type: ignore
 
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import shorten_metric_name, descriptive_name, interpret_name
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
 SHORT_COL = "SHORT"
 
 
-def plot_grouped_bar_chart(df: pd.DataFrame):
+def plot_grouped_bar_chart(df_to_plot: pd.DataFrame):
     st.subheader("Grouped Bar Chart")
 
-    if SHORT_COL not in df.columns:
+    if SHORT_COL not in df_to_plot.columns:
         st.warning(f"Column '{SHORT_COL}' not found in the DataFrame.")
         return
 
     # Let user select two numeric columns to compare
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    if len(numeric_cols) < 2:
+    numeric_cols_to_group = df_to_plot.select_dtypes(include="number").columns.tolist()
+    if len(numeric_cols_to_group) < 2:
         st.warning("Need at least two numeric columns to plot grouped bar chart.")
         return
 
-    col1 = st.selectbox("Select first column", numeric_cols, index=0)
-    col2 = st.selectbox("Select second column", numeric_cols, index=1)
+    col1 = st.selectbox("Select first column", numeric_cols_to_group, index=0)
+    col2 = st.selectbox("Select second column", numeric_cols_to_group, index=1)
 
     # Normalize option
     normalize = st.checkbox("Normalize columns to [0, 1] scale?", value=False)
 
     # Sort dataframe by col1
-    sorted_df = df[[SHORT_COL, col1, col2]].dropna().sort_values(by=col1, ascending=False).reset_index(drop=True)
+    sorted_df = (
+        df_to_plot[[SHORT_COL, col1, col2]].dropna().sort_values(by=col1, ascending=False).reset_index(drop=True)
+    )
 
     if normalize:
         sorted_df[col1] = (sorted_df[col1] - sorted_df[col1].min()) / (sorted_df[col1].max() - sorted_df[col1].min())
@@ -49,7 +50,7 @@ def plot_grouped_bar_chart(df: pd.DataFrame):
     # Create an x-label using row numbers and include SHORT_COL in hover
     x_labels = sorted_df.index.astype(str)
 
-    fig = go.Figure(
+    grouped_bar_fig = go.Figure(
         data=[
             go.Bar(
                 name=col1,
@@ -67,7 +68,7 @@ def plot_grouped_bar_chart(df: pd.DataFrame):
             ),
         ]
     )
-    fig.update_layout(
+    grouped_bar_fig.update_layout(
         barmode="group",
         xaxis_title="Sorted Rows by First Column",
         yaxis_title="Value" if not normalize else "Normalized Value",
@@ -76,16 +77,10 @@ def plot_grouped_bar_chart(df: pd.DataFrame):
         height=500,
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(grouped_bar_fig, use_container_width=True)
 
 
 # --- Path input ---
-# /opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv,/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv
-# csv_paths_input = st.text_input(
-#     "Enter paths to your CSV files (comma-separated)",
-#     value="/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials/stats_by_metric.csv,
-# /opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv,/opt/home/cleong/projects/pose-evaluation/metric_results_z_offsets_combined/score_analysis/stats_by_metric.csv",
-# )
 csv_paths_default = [
     # "/opt/home/cleong/projects/pose-evaluation/metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP/stats_by_metric.csv",
     # "/opt/home/cleong/projects/pose-evaluation/metric_results/score_analysis/stats_by_metric.csv",
@@ -108,7 +103,7 @@ csv_paths_input = st.text_input(
 )
 
 csv_path_options = [p.strip() for p in csv_paths_input.split(",")]
-csv_paths = st.multiselect(f"Which of these CSVs to load?", options=csv_path_options, default=csv_path_options)
+csv_paths = st.multiselect("Which of these CSVs to load?", options=csv_path_options, default=csv_path_options)
 
 if csv_paths_input:
     try:
@@ -121,8 +116,8 @@ if csv_paths_input:
             df_list.append(df)
             st.write(f"Loaded {len(df)} from {path}")
         df = pd.concat(df_list, ignore_index=True)
-    except Exception as e:
-        st.error(f"Error loading files: {e}")
+    except FileNotFoundError as e:
+        st.error(f"File not found: {e.filename}")
         st.stop()
 
     # Find duplicates in the METRIC_COL column
@@ -162,7 +157,6 @@ if csv_paths_input:
 
     # stats
     metric_count = len(df[METRIC_COL].unique())
-    total_distances_count = None
     trials_count = None
 
     # --- minimum query-gloss count
@@ -312,16 +306,13 @@ if csv_paths_input:
     if min_hyp > 0:
         title = title + f", excl. metrics w/ < {min_hyp:,} trials"
 
-    # if total_distances_count is not None:
-    #     title = title + f" with {total_distances_count:,} total distances"
-
     title = title + ")"
     title = st.text_input("Title for plot", value=title)
     show_data_labels = st.checkbox(f"Show data labels: {len(df)} rows")
     df["data_labels"] = df[sort_col].map(lambda x: f"{x:.5f}")
     text_arg = "data_labels" if show_data_labels else None
 
-    fig = px.bar(
+    distribution_fig = px.bar(
         df,
         x="RANK",
         y=sort_col,
@@ -332,15 +323,15 @@ if csv_paths_input:
         category_orders={SHORT_COL: df[SHORT_COL].tolist()},
     )
     if legend_title:
-        fig.update_layout(legend=dict(title=legend_title))
+        distribution_fig.update_layout(legend=dict(title=legend_title))
 
     if show_data_labels:
-        fig.update_traces(textposition="auto", textfont_size=12)
+        distribution_fig.update_traces(textposition="auto", textfont_size=12)
 
     # fig.update_layout(xaxis_tickangle=45)
     # fig.update_layout(xaxis_ticktext=[], xaxis_tickvals=[])
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(distribution_fig, use_container_width=True)
 
     # --- Optional table ---
     if st.checkbox(f"Show data table: {len(df)} rows"):
@@ -350,7 +341,7 @@ if csv_paths_input:
         st.download_button(
             label="Download Full Data Table CSV",
             data=df_csv_data,
-            file_name=f"combined_metric_stats.csv",
+            file_name="combined_metric_stats.csv",
             mime="text/csv",
         )
         markdown_output = ""  # Initialize an empty string to store the Markdown
@@ -483,9 +474,9 @@ if csv_paths_input:
 
             if st.checkbox(f"Show distributions for {kw}?"):
 
-                fig = go.Figure()
+                distribution_fig = go.Figure()
 
-                fig.add_trace(
+                distribution_fig.add_trace(
                     go.Histogram(
                         x=has_kw[sort_col],
                         name=f"Has '{kw}'",
@@ -495,7 +486,7 @@ if csv_paths_input:
                     )
                 )
 
-                fig.add_trace(
+                distribution_fig.add_trace(
                     go.Histogram(
                         x=no_kw[sort_col],
                         name=f"No '{kw}'",
@@ -505,7 +496,7 @@ if csv_paths_input:
                     )
                 )
 
-                fig.update_layout(
+                distribution_fig.update_layout(
                     barmode="overlay",
                     title=f"Distribution of '{sort_col}' by presence of '{kw}'",
                     xaxis_title=sort_col,
@@ -513,7 +504,7 @@ if csv_paths_input:
                     legend=dict(x=0.7, y=0.95),
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(distribution_fig, use_container_width=True)
 
     if summary_data:
         summary_df = pd.DataFrame(summary_data)

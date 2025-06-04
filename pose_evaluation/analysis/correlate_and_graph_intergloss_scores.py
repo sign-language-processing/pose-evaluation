@@ -31,10 +31,9 @@ def classify_relation(row):
 def plot_metric_histogram(
     df: pd.DataFrame,
     col: str,
-    metric: str,
+    metric_to_plot: str,
     bins: int = 10,
     kde: bool = True,
-    color: str = "royalblue",
     show=False,
     out_path: Optional[Path] = None,
 ):
@@ -49,10 +48,10 @@ def plot_metric_histogram(
         color (str): Color of the histogram bars.
     """
     # Filter dataframe by metric
-    df_filtered = df[df["METRIC"] == metric]
+    df_filtered = df[df["METRIC"] == metric_to_plot]
 
     if df_filtered.empty:
-        print(f"No data found for metric: {metric}")
+        print(f"No data found for metric: {metric_to_plot}")
         return
 
     # Set seaborn style
@@ -61,7 +60,7 @@ def plot_metric_histogram(
     # Create the plot
     plt.figure(figsize=(7, 5))
     sns.histplot(
-        df_filtered[col],
+        df_filtered[col].tolist(),
         bins=bins,
         kde=kde,
         #  color=color, edgecolor="black"
@@ -70,7 +69,7 @@ def plot_metric_histogram(
     # Labels and title
     plt.xlabel(f"{col} Value", fontsize=12)
     plt.ylabel("Frequency", fontsize=12)
-    plt.title(f"Mean Inter-gloss ({metric})", fontsize=14)
+    plt.title(f"Mean Inter-gloss ({metric_to_plot})", fontsize=14)
 
     if show:
         plt.show()
@@ -214,7 +213,7 @@ def plot_metric_scatter(
     # Save metadata to a sidecar .txt file
     if txt_file:
         relation_counts = merged_df["relation_type"].value_counts().to_dict()
-        with open(txt_file, "w") as f:
+        with open(txt_file, "w", encoding="utf-8") as f:
             f.write(f"Full X Metric: {metric_x}\n")
             f.write(f"Full Y Metric: {metric_y}\n")
             f.write(f"Timestamp: {datetime.now().isoformat()}\n")
@@ -245,7 +244,7 @@ def normalize_gloss_tuple(val):
     try:
         # Try literal_eval first
         return ast.literal_eval(val)
-    except:
+    except (ValueError, SyntaxError, TypeError):
         # Fall back to manually parsing something like (AIRPLANE, HOME)
         val = val.strip("() ")
         parts = [part.strip().strip("'\"") for part in val.split(",")]
@@ -259,8 +258,9 @@ if __name__ == "__main__":
     #     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials"
     # )
     aslkg_csv = Path("/opt/home/cleong/projects/semantic_and_visual_similarity/local_data/ASLKG/edges_v2_noweights.tsv")
-    known_lookalikes_csv = Path(
-        "/opt/home/cleong/projects/semantic_and_visual_similarity/local_data/SimilarSigns/deduped_sorted_similar_gloss_pairs.csv"
+    known_lookalikes_csv = (
+        Path("/opt/home/cleong/projects/semantic_and_visual_similarity/local_data/SimilarSigns")
+        / "deduped_sorted_similar_gloss_pairs.csv"
     )
 
     plots_folder = score_analysis_folder / "plots"
@@ -313,7 +313,8 @@ if __name__ == "__main__":
     print(set(asl_knowledge_graph_df["gloss_tuple"]).intersection(set(scores_by_gloss_df["gloss_tuple"])))
 
     print("*" * 20)
-    print(scores_by_gloss_df[scores_by_gloss_df["semantically_related"] == True])
+    semantically_related_items_df = scores_by_gloss_df[scores_by_gloss_df["semantically_related"]]
+    print(semantically_related_items_df)
 
     #############################################
     # Lookalikes
@@ -325,22 +326,10 @@ if __name__ == "__main__":
     scores_by_gloss_df["known_lookalikes"] = scores_by_gloss_df["gloss_tuple"].isin(
         set(known_lookalikes_df["gloss_tuple"])
     )
-    print(scores_by_gloss_df[scores_by_gloss_df["known_lookalikes"] == True])
+    scores_which_are_known_lookalikes = scores_by_gloss_df[scores_by_gloss_df["known_lookalikes"]]
+    print(scores_which_are_known_lookalikes)
 
     scores_by_gloss_df["relation_type"] = scores_by_gloss_df.apply(classify_relation, axis=1)
-
-    # Example:EmbeddingDistanceMetric_sem-lex_cosine_out_of_class_scores_by_gloss.csv
-    # gloss_tuple	count	mean	max	min	std	known_similar	metric	rank
-    # ('DEER', 'MOOSE')	870	0.125122927317674	0.364014387130737	0.0213934779167175	0.0508914505643154	True	EmbeddingDistanceMetric_sem-lex_cosine	1
-    # ('HUG', 'LOVE')	930	0.129592590242304	0.372491121292114	0.0322074890136718	0.0600298605817267	True	EmbeddingDistanceMetric_sem-lex_cosine	2
-    # ('BUT', 'DIFFERENT')	930	0.139856820337234	0.28130042552948	0.023825466632843	0.0414892420832739	True	EmbeddingDistanceMetric_sem-lex_cosine	3
-    # ('FAVORITE', 'GOOD')	32	0.140619456768036	0.271014928817749	0.0476789474487304	0.0497585180016914	False	EmbeddingDistanceMetric_sem-lex_cosine	4
-    # ('ANIMAL', 'HAVE')	930	0.157980350461057	0.340065956115723	0.0243424773216247	0.051135208995542	True	EmbeddingDistanceMetric_sem-lex_cosine	5
-    # ('CHALLENGE', 'GAME')	930	0.163187250334729	0.346950709819794	0.0585821270942688	0.050448722682526	True	EmbeddingDistanceMetric_sem-lex_cosine	6
-    # ('SATURDAY', 'TUESDAY')	31	0.163267293284016	0.318226993083954	0.0510987639427185	0.0666946134674303	True	EmbeddingDistanceMetric_sem-lex_cosine	7
-    # ('FAVORITE', 'SPICY')	32	0.169413153082132	0.287134885787964	0.104118287563324	0.0507829287998875	False	EmbeddingDistanceMetric_sem-lex_cosine	8
-    # ('FAMILY', 'SANTA')	30	0.174653542041779	0.230535089969635	0.130753219127655	0.0242531823125804	False	EmbeddingDistanceMetric_sem-lex_cosine	9
-    # ('FAVORITE', 'TASTE')	928	0.181375090739336	0.422960162162781	0.031768798828125	0.0689190830802117	True	EmbeddingDistanceMetric_sem-lex_cosine	10
 
     metrics = scores_by_gloss_df["METRIC"].unique().tolist()
     correlation_plots_folder = plots_folder / "metric_correlations"
@@ -373,7 +362,7 @@ if __name__ == "__main__":
     for metric in tqdm(metrics, desc="Generating histogram plots"):
         plot_metric_histogram(
             scores_by_gloss_df,
-            metric=metric,
+            metric_to_plot=metric,
             col="mean",
             out_path=histogram_plots_folder / f"{metric}_intergloss_hist.png",
         )
