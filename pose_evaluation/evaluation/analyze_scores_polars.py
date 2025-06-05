@@ -227,6 +227,495 @@ def compute_map_by_metric_safe(lf: pl.LazyFrame, limit_rows: None | int = None) 
     return result
 
 
+def compute_map_by_metric_safe_chunked(
+    lf: pl.LazyFrame, limit_rows: None | int = None, chunk_size: int = 1000000
+) -> pl.LazyFrame:
+    """
+    Memory-efficient version that processes data in chunks by METRIC to avoid OOM.
+    """
+    import time
+
+    start_time = time.perf_counter()
+    if limit_rows is not None:
+        lf = lf.limit(limit_rows)
+        print(f"⏳ Scanning first {limit_rows:,} rows")
+
+    # Get unique metrics first
+    metrics = lf.select("METRIC").unique().collect(engine="streaming")["METRIC"].to_list()
+    print(f"📊 Processing {len(metrics)} metrics")
+
+    results = []
+
+    for metric in metrics:
+        print(f"🔄 Processing metric: {metric}")
+
+        # Process one metric at a time to control memory usage
+        metric_lf = lf.filter(pl.col("METRIC") == metric)
+
+        # Filter out self-scores
+        metric_lf = metric_lf.filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
+
+        # Add relevant flag
+        metric_lf = metric_lf.with_columns([(pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant")])
+
+        # For very large datasets, we might need to process by GLOSS_A_PATH chunks
+        # Get unique GLOSS_A_PATH values for this metric
+        gloss_a_paths = metric_lf.select("GLOSS_A_PATH").unique().collect(engine="streaming")["GLOSS_A_PATH"].to_list()
+
+        avg_precisions = []
+
+        # Process in batches of GLOSS_A_PATH to control memory
+        batch_size = max(1, chunk_size // 10000)  # Adjust based on expected comparisons per path
+
+        for i in range(0, len(gloss_a_paths), batch_size):
+            batch_paths = gloss_a_paths[i : i + batch_size]
+            print(
+                f"  📁 Processing batch {i//batch_size + 1}/{(len(gloss_a_paths) + batch_size - 1)//batch_size} ({len(batch_paths)} paths)"
+            )
+
+            batch_lf = metric_lf.filter(pl.col("GLOSS_A_PATH").is_in(batch_paths))
+
+            # Add shuffling and sort
+            batch_lf = (
+                batch_lf.with_columns([pl.int_range(pl.len()).shuffle(seed=42).alias("shuffle_order")])
+                .sort(["GLOSS_A_PATH", "shuffle_order"])
+                .sort(["GLOSS_A_PATH", "SCORE"], maintain_order=True)
+            )
+
+            # Add ranking
+            batch_lf = batch_lf.with_columns(
+                [pl.col("SCORE").rank("ordinal", descending=False).over(["GLOSS_A_PATH"]).alias("rank_ordinal")]
+            )
+
+            # Sort by rank for cumsum
+            batch_lf = batch_lf.sort(["GLOSS_A_PATH", "rank_ordinal"])
+
+            # Calculate cumulative sum and precision
+            batch_lf = batch_lf.with_columns(
+                [pl.col("relevant").cum_sum().over(["GLOSS_A_PATH"]).alias("relevant_count")]
+            ).with_columns(
+                [
+                    pl.when(pl.col("relevant") == 1)
+                    .then(pl.col("relevant_count") / pl.col("rank_ordinal"))
+                    .otherwise(None)
+                    .alias("precision_at_k")
+                ]
+            )
+
+            # Calculate average precision for this batch
+            batch_avg_precision = (
+                batch_lf.filter(pl.col("precision_at_k").is_not_null())
+                .group_by(["GLOSS_A_PATH"])
+                .agg(pl.col("precision_at_k").mean().alias("average_precision"))
+                .collect(engine="streaming")
+            )
+
+            avg_precisions.append(batch_avg_precision)
+
+        # Combine all average precisions for this metric
+        if avg_precisions:
+            combined_avg_precision = pl.concat(avg_precisions)
+            map_value = combined_avg_precision["average_precision"].mean()
+            results.append({"METRIC": metric, "mAP": map_value})
+
+    # Convert results to DataFrame
+    result_df = pl.DataFrame(results)
+
+    duration = time.perf_counter() - start_time
+    print(f"⏱️ Execution time: {duration:.2f} seconds")
+    return result_df
+
+
+import polars as pl
+import time
+from pathlib import Path
+
+
+def compute_map_by_metric_memory_efficient(lf: pl.LazyFrame, limit_rows: None | int = None) -> pl.LazyFrame:
+    """
+    Memory-efficient computation of mean average precision (mAP) per METRIC.
+    This version still uses too much memory for very large datasets - use chunked versions instead.
+    """
+    start_time = time.perf_counter()
+    if limit_rows is not None:
+        lf = lf.limit(limit_rows)
+        print(f"⏳ Processing first {limit_rows:,} rows")
+
+    # Filter out self-scores and add relevant flag in one step
+    lf = lf.filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH")).with_columns(
+        [(pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant")]
+    )
+
+    # Simplified approach: just sort by score (no shuffling needed for mAP calculation)
+    # The random shuffling was likely causing memory issues without adding value
+    lf = lf.sort(["METRIC", "GLOSS_A_PATH", "SCORE"])
+
+    # Use simpler ranking - just ordinal rank which is what we need for precision calculation
+    lf = lf.with_columns(
+        [pl.col("SCORE").rank("ordinal", descending=False).over(["METRIC", "GLOSS_A_PATH"]).alias("rank")]
+    )
+
+    # Calculate cumulative sum of relevant items (more memory efficient)
+    lf = lf.with_columns([pl.col("relevant").cum_sum().over(["METRIC", "GLOSS_A_PATH"]).alias("relevant_count")])
+
+    # Calculate precision only for relevant items
+    lf = lf.with_columns(
+        [
+            pl.when(pl.col("relevant") == 1)
+            .then(pl.col("relevant_count") / pl.col("rank"))
+            .otherwise(None)
+            .alias("precision_at_k")
+        ]
+    )
+
+    # Use streaming engine throughout and collect results progressively
+    result = (
+        lf.filter(pl.col("precision_at_k").is_not_null())
+        .group_by(["METRIC", "GLOSS_A_PATH"])
+        .agg(pl.col("precision_at_k").mean().alias("average_precision"))
+        .group_by("METRIC")
+        .agg(pl.col("average_precision").mean().alias("mAP"))
+        .collect(engine="streaming")
+    )
+
+    duration = time.perf_counter() - start_time
+    print(f"⏱️ Execution time: {duration:.2f} seconds")
+    return result
+
+
+def compute_map_aggressive_chunking(
+    dataset_path: str, metrics_to_process: list[str] = None, max_queries_per_chunk: int = 1000
+) -> pl.DataFrame:
+    """
+    Aggressively chunk by both metric AND query paths to minimize memory usage.
+    Processes small batches of queries at a time.
+    """
+    import pyarrow.dataset as ds
+
+    dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
+
+    if metrics_to_process is None:
+        # Get all available metrics
+        metrics_to_process = [
+            frag.partition_expression.operands[1].value
+            for frag in dataset.get_fragments()
+            if hasattr(frag.partition_expression.operands[1], "value")
+        ]
+        metrics_to_process = list(set(metrics_to_process))
+
+    results = []
+
+    for metric in metrics_to_process:
+        print(f"🔄 Processing metric: {metric}")
+
+        # Filter dataset to single metric
+        filtered_dataset = dataset.filter(ds.field("METRIC") == metric)
+
+        # Get unique query paths for this metric
+        paths_lf = pl.scan_pyarrow_dataset(filtered_dataset).select("GLOSS_A_PATH").unique()
+        unique_paths = paths_lf.collect(engine="streaming")["GLOSS_A_PATH"].to_list()
+
+        print(f"  📊 Found {len(unique_paths):,} unique queries for {metric}")
+
+        all_avg_precisions = []
+
+        # Process queries in small chunks
+        for i in range(0, len(unique_paths), max_queries_per_chunk):
+            chunk_paths = unique_paths[i : i + max_queries_per_chunk]
+            chunk_num = i // max_queries_per_chunk + 1
+            total_chunks = (len(unique_paths) + max_queries_per_chunk - 1) // max_queries_per_chunk
+
+            print(f"  📦 Processing chunk {chunk_num}/{total_chunks} ({len(chunk_paths)} queries)")
+
+            try:
+                # Process this small chunk
+                chunk_avg_precisions = process_query_chunk_minimal_memory(filtered_dataset, chunk_paths)
+                all_avg_precisions.extend(chunk_avg_precisions)
+
+            except Exception as e:
+                print(f"    ❌ Error in chunk {chunk_num}: {e}")
+                continue
+
+        # Calculate mAP for this metric
+        if all_avg_precisions:
+            map_value = sum(all_avg_precisions) / len(all_avg_precisions)
+        else:
+            map_value = 0.0
+
+        results.append({"METRIC": metric, "mAP": map_value})
+        print(f"  ✅ {metric}: mAP = {map_value:.4f} (from {len(all_avg_precisions):,} queries)")
+
+    return pl.DataFrame(results)
+
+
+def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[float]:
+    """
+    Process a small chunk of queries with minimal memory usage.
+    Returns list of average precision values.
+    """
+    avg_precisions = []
+
+    for query_path in query_paths:
+        try:
+            # Load data for just this one query
+            query_lf = (
+                pl.scan_pyarrow_dataset(dataset)
+                .filter(pl.col("GLOSS_A_PATH") == query_path)
+                .filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
+                .select(["GLOSS_A", "GLOSS_B", "SCORE"])
+                .sort("SCORE")
+            )
+
+            # Collect this small dataset
+            query_data = query_lf.collect(engine="streaming")
+
+            if len(query_data) == 0:
+                continue
+
+            # Calculate relevance and AP in pure Python (more memory efficient for small data)
+            scores = query_data["SCORE"].to_list()
+            gloss_a = query_data["GLOSS_A"].to_list()
+            gloss_b = query_data["GLOSS_B"].to_list()
+
+            # Calculate average precision
+            relevant_count = 0
+            precision_sum = 0.0
+
+            for i, (a, b) in enumerate(zip(gloss_a, gloss_b)):
+                if a == b:  # relevant
+                    relevant_count += 1
+                    precision_at_i = relevant_count / (i + 1)
+                    precision_sum += precision_at_i
+
+            if relevant_count > 0:
+                ap = precision_sum / relevant_count
+                avg_precisions.append(ap)
+
+        except Exception as e:
+            print(f"    ⚠️ Error processing query {query_path}: {e}")
+            continue
+
+    return avg_precisions
+
+
+def compute_map_chunked_by_metric(
+    dataset_path: str, metrics_to_process: list[str] = None, chunk_size: int = 1000000
+) -> pl.DataFrame:
+    """
+    Process each metric separately to minimize memory usage.
+    This is the most memory-efficient approach for huge datasets.
+    """
+    import pyarrow.dataset as ds
+
+    dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
+
+    if metrics_to_process is None:
+        # Get all available metrics
+        metrics_to_process = [
+            frag.partition_expression.operands[1].value
+            for frag in dataset.get_fragments()
+            if hasattr(frag.partition_expression.operands[1], "value")
+        ]
+        metrics_to_process = list(set(metrics_to_process))
+
+    results = []
+
+    for metric in metrics_to_process:
+        print(f"🔄 Processing metric: {metric}")
+
+        # Filter dataset to single metric
+        filtered_dataset = dataset.filter(ds.field("METRIC") == metric)
+
+        # Convert to Polars LazyFrame
+        lf = pl.scan_pyarrow_dataset(filtered_dataset)
+
+        # Process in chunks if the metric is still too large
+        try:
+            metric_result = compute_map_single_metric_chunked(lf, metric, chunk_size)
+            results.append(metric_result)
+        except Exception as e:
+            print(f"❌ Error processing {metric}: {e}")
+            continue
+
+    # Combine all results
+    if results:
+        return pl.concat(results)
+    else:
+        return pl.DataFrame({"METRIC": [], "mAP": []})
+
+
+def compute_map_single_metric_chunked(lf: pl.LazyFrame, metric_name: str, chunk_size: int = 1000000) -> pl.DataFrame:
+    """
+    Process a single metric in chunks by GLOSS_A_PATH to minimize memory usage.
+    """
+    # Get unique GLOSS_A_PATH values to process in batches
+    unique_paths = lf.select("GLOSS_A_PATH").unique().collect(engine="streaming")["GLOSS_A_PATH"].to_list()
+
+    all_avg_precisions = []
+
+    # Process paths in chunks
+    for i in range(0, len(unique_paths), chunk_size):
+        chunk_paths = unique_paths[i : i + chunk_size]
+        print(
+            f"  📦 Processing chunk {i//chunk_size + 1}/{(len(unique_paths) + chunk_size - 1)//chunk_size} "
+            f"({len(chunk_paths)} paths)"
+        )
+
+        # Filter to current chunk of paths
+        chunk_lf = lf.filter(pl.col("GLOSS_A_PATH").is_in(chunk_paths))
+
+        # Process this chunk
+        chunk_result = process_chunk_for_map(chunk_lf)
+        all_avg_precisions.append(chunk_result)
+
+    # Combine all chunks and calculate final mAP
+    if all_avg_precisions:
+        combined = pl.concat(all_avg_precisions)
+        map_value = combined["average_precision"].mean()
+        return pl.DataFrame({"METRIC": [metric_name], "mAP": [map_value]})
+    else:
+        return pl.DataFrame({"METRIC": [metric_name], "mAP": [0.0]})
+
+
+def process_chunk_for_map(lf: pl.LazyFrame) -> pl.DataFrame:
+    """
+    Process a chunk of data to compute average precision per query.
+    """
+    # Filter out self-scores and add relevant flag
+    lf = (
+        lf.filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
+        .with_columns([(pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant")])
+        .sort(["GLOSS_A_PATH", "SCORE"])
+    )
+
+    # Add rank within each query
+    lf = lf.with_columns([pl.col("SCORE").rank("ordinal", descending=False).over("GLOSS_A_PATH").alias("rank")])
+
+    # Calculate cumulative relevant count
+    lf = lf.with_columns([pl.col("relevant").cum_sum().over("GLOSS_A_PATH").alias("relevant_count")])
+
+    # Calculate precision at each relevant position
+    lf = lf.with_columns(
+        [
+            pl.when(pl.col("relevant") == 1)
+            .then(pl.col("relevant_count") / pl.col("rank"))
+            .otherwise(None)
+            .alias("precision_at_k")
+        ]
+    )
+
+    # Calculate average precision per query
+    return (
+        lf.filter(pl.col("precision_at_k").is_not_null())
+        .group_by("GLOSS_A_PATH")
+        .agg(pl.col("precision_at_k").mean().alias("average_precision"))
+        .collect(engine="streaming")
+    )
+
+
+def compute_map_ultra_minimal_memory(dataset_path: str, metrics_to_process: list[str] = None) -> pl.DataFrame:
+    """
+    Ultra memory-efficient version that processes one metric and one query at a time.
+    Slowest but uses minimal memory.
+    """
+    import pyarrow.dataset as ds
+
+    dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
+
+    if metrics_to_process is None:
+        metrics_to_process = [
+            frag.partition_expression.operands[1].value
+            for frag in dataset.get_fragments()
+            if hasattr(frag.partition_expression.operands[1], "value")
+        ]
+        metrics_to_process = list(set(metrics_to_process))
+
+    results = []
+
+    for metric in metrics_to_process:
+        print(f"🔄 Processing metric: {metric}")
+
+        # Get all unique GLOSS_A_PATH values for this metric
+        metric_dataset = dataset.filter(ds.field("METRIC") == metric)
+        paths_df = pl.scan_pyarrow_dataset(metric_dataset).select("GLOSS_A_PATH").unique().collect(engine="streaming")
+        unique_paths = paths_df["GLOSS_A_PATH"].to_list()
+
+        avg_precisions = []
+
+        # Process each query (GLOSS_A_PATH) individually
+        for i, path in enumerate(unique_paths):
+            if i % 1000 == 0:
+                print(f"  📍 Processing query {i+1}/{len(unique_paths)}")
+
+            # Get data for this specific query
+            query_lf = (
+                pl.scan_pyarrow_dataset(metric_dataset)
+                .filter(pl.col("GLOSS_A_PATH") == path)
+                .filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
+                .with_columns([(pl.col("GLOSS_A") == pl.col("GLOSS_B")).cast(pl.Int8).alias("relevant")])
+                .sort("SCORE")
+            )
+
+            # Calculate AP for this query
+            query_data = query_lf.collect(engine="streaming")
+
+            if len(query_data) == 0:
+                continue
+
+            relevant_items = query_data["relevant"].to_list()
+
+            if sum(relevant_items) == 0:  # No relevant items
+                continue
+
+            # Calculate average precision for this query
+            ap = calculate_average_precision(relevant_items)
+            avg_precisions.append(ap)
+
+        # Calculate mAP for this metric
+        if avg_precisions:
+            map_value = sum(avg_precisions) / len(avg_precisions)
+        else:
+            map_value = 0.0
+
+        results.append({"METRIC": metric, "mAP": map_value})
+        print(f"  ✅ {metric}: mAP = {map_value:.4f}")
+
+    return pl.DataFrame(results)
+
+
+def calculate_average_precision(relevant_list: list[int]) -> float:
+    """
+    Calculate average precision for a single query given a list of relevance labels.
+    """
+    if not any(relevant_list):
+        return 0.0
+
+    precision_sum = 0.0
+    relevant_count = 0
+
+    for i, is_relevant in enumerate(relevant_list):
+        if is_relevant:
+            relevant_count += 1
+            precision_at_i = relevant_count / (i + 1)
+            precision_sum += precision_at_i
+
+    return precision_sum / relevant_count if relevant_count > 0 else 0.0
+
+    # Option 1: Simplified version (removes shuffling overhead)
+    # lf = pl.scan_pyarrow_dataset(your_dataset)
+    # result = compute_map_by_metric_memory_efficient(lf)
+
+    # Option 2: Process by metric chunks (recommended for huge datasets)
+    # result = compute_map_chunked_by_metric("path/to/your/dataset",
+    #                                       metrics_to_process=["metric1", "metric2"],
+    #                                       chunk_size=500000)
+
+    # Option 3: Ultra minimal memory (slowest but safest)
+    # result = compute_map_ultra_minimal_memory("path/to/your/dataset")
+
+    pass
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compute mean SCORE for each METRIC partition.")
     parser.add_argument("path", type=Path, help="Path to the METRIC=hive-partitioned Parquet dataset.")
@@ -237,11 +726,21 @@ if __name__ == "__main__":
 
     # run_experiments(args.path)
 
-    compute_score_by_metric(lf)
+    # compute_score_by_metric(lf)
 
-    result = compute_map_by_metric_memory_efficient(pl.scan_parquet(args.path), limit_rows=300_000_000)
-    print(result)
+    result = compute_map_by_metric_memory_efficient(pl.scan_parquet(args.path), limit_rows=100_000_000)
+    print(f"Optimized:\n{result}")
+    for row in result.iter_rows():
+        print(row)
 
+    # result = compute_map_by_metric_safe_chunked(pl.scan_parquet(args.path), limit_rows=100_000_000)
+    # print(f"Chunked:\n{result}")
+    # for row in result.iter_rows():
+    #     print(row)
+    result = compute_map_chunked_by_metric(
+        args.path, metrics_to_process=["metric1", "metric2"], chunk_size=500000
+    )
+    print(f"Chunked By Metric:\n{result}")
     for row in result.iter_rows():
         print(row)
 
