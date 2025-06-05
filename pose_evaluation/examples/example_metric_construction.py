@@ -20,6 +20,8 @@ from pose_evaluation.metrics.pose_processors import (
 
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
+from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
+
 if __name__ == "__main__":
     # Define file paths for test pose data
     # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
@@ -141,7 +143,13 @@ if __name__ == "__main__":
         ),
     ]
 
-    metrics = [EmbeddingDistanceMetric(model="ModelName")]
+    # metrics = [EmbeddingDistanceMetric(model="ModelName")]
+
+    Ham2Pose_nMSE = DistanceMetric(
+        "nMSE",
+        distance_measure=
+        pose_processors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
+    )
 
     # Evaluate each metric on the test poses
     for metric in metrics:

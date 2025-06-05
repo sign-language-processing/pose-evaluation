@@ -216,7 +216,7 @@ def summarize_columns(input_paths, sample_count=10, column_names=None):
             print(f"*\t{value}")
 
 
-def print_sampled_preview(table, num_rows=5, max_val_len=100):
+def print_sampled_preview(table, num_rows=5, max_val_len=500):
     print("Sampled rows preview:")
     for i in range(min(num_rows, table.num_rows)):
         row = table.slice(i, 1)
