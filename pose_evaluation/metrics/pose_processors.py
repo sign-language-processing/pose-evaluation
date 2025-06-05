@@ -1,6 +1,8 @@
 from typing import Any, List, Union, Iterable, Callable
 
+
 from tqdm import tqdm
+from numpy import ma
 
 from pose_format import Pose
 from pose_format.utils.generic import pose_hide_legs, reduce_holistic, detect_known_pose_format
@@ -10,6 +12,11 @@ from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
     reduce_poses_to_intersection,
+    pose_fill_masked_or_invalid,
+    pose_mask_invalid_values,
+    first_frame_pad_shorter_poses,
+    get_youtube_asl_mediapipe_keypoints,
+    add_z_offsets_to_pose,
 )
 
 
@@ -80,6 +87,14 @@ class HideLegsPosesProcessor(PoseProcessor):
         return pose_hide_legs(pose, remove=self.remove)
 
 
+class GetYoutubeASLKeypointsPoseProcessor(PoseProcessor):
+    def __init__(self, name="youtubeasl_keypoints") -> None:
+        super().__init__(name)
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return get_youtube_asl_mediapipe_keypoints(pose)
+
+
 class ReducePosesToCommonComponentsProcessor(PoseProcessor):
     def __init__(self, name="reduce_poses_to_intersection") -> None:
         super().__init__(name)
@@ -96,10 +111,21 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
         super().__init__(name="zero_pad_shorter_sequence")
 
     def process_pose(self, pose: Pose) -> Pose:
-        return pose  # intersection with itself
+        return pose
 
     def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
         return zero_pad_shorter_poses(poses)
+
+
+class FirstFramePadShorterPosesProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="padwithfirstframe")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose
+
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+        return first_frame_pad_shorter_poses(poses)
 
 
 class ReduceHolisticPoseProcessor(PoseProcessor):
@@ -112,12 +138,29 @@ class ReduceHolisticPoseProcessor(PoseProcessor):
 
 class ZeroFillMaskedValuesPoseProcessor(PoseProcessor):
     def __init__(self) -> None:
-        super().__init__(name="reduce_holistic")
+        super().__init__(name="zero_fill_masked")
 
     def process_pose(self, pose: Pose) -> Pose:
         pose = pose.copy()
         pose.body = pose.body.zero_filled()
         return pose
+
+
+class MaskInvalidValuesPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="mask_invalid_values")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose_mask_invalid_values(pose)
+
+
+class FillMaskedOrInvalidValuesPoseProcessor(PoseProcessor):
+    def __init__(self, masked_fill_value: float = 0.0) -> None:
+        super().__init__(name="fill_masked_or_invalid")
+        self.fill_val = masked_fill_value
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose_fill_masked_or_invalid(pose, self.fill_val)
 
 
 class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
@@ -134,7 +177,37 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
         return pose
 
 
-def get_standard_pose_processors(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+class GetHandsOnlyHolisticPoseProcessor(PoseProcessor):
+    def __init__(self) -> None:
+        super().__init__(name="get_hands_only")
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return pose.get_components(["LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"])
+
+
+class InterpolateAllToSetFPSPoseProcessor(PoseProcessor):
+    def __init__(self, fps=15, kind: str = "cubic") -> None:
+        super().__init__(name="interpolate_to_fps")
+        self.fps = fps
+        self.kind = kind
+
+    def process_pose(self, pose: Pose) -> Pose:
+        pose = pose.copy()
+        pose = pose.interpolate(new_fps=self.fps, kind=self.kind)
+        return pose
+
+
+class AddTOffsetsToZPoseProcessor(PoseProcessor):
+
+    def __init__(self, name="add_z_offsets", speed=1.0) -> None:
+        super().__init__(name)
+        self.speed = speed
+
+    def process_pose(self, pose: Pose) -> Pose:
+        return add_z_offsets_to_pose(pose)
+
+
+def get_standard_pose_processors(
     trim_meaningless_frames: bool = True,
     normalize_poses: bool = True,
     reduce_poses_to_common_components: bool = True,

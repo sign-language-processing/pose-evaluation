@@ -54,6 +54,9 @@ class DistanceMeasure(ABC):
         """Return the signature of the distance measure."""
         return self._SIGNATURE_TYPE(self.name, self.__dict__)
 
+    def set_default_distance(self, default_distance: float):
+        self.default_distance = default_distance
+
 
 class PowerDistanceSignature(DistanceMeasureSignature):
     """Signature for power distance measures."""
