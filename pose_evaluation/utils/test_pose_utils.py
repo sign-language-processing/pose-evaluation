@@ -169,9 +169,11 @@ def test_reduce_pose_components_to_intersection(
 
 def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
 
-    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (44, 1, 553, 3)
-    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (111, 1, 553, 3)
-    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (37, 1, 576, 3)
+    # they should be sorted alphabetically by name
+    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (37, 1, 576, 3) # 000017451997373907346-LIBRARY.pose
+    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (44, 1, 553, 3) # SbTU6uS4cc1tZpqCnE3g.pose
+    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (111, 1, 553, 3) # Ui9Nq58yYSgkJslO02za.pose
+    
 
     for pose in mediapipe_poses_test_data_mixed_shapes:
         c_names = [c.name for c in pose.header.components]

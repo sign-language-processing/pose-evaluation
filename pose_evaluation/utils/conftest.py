@@ -21,6 +21,7 @@ utils_standard_mediapipe_landmarks_test_data_dir = (
 @pytest.fixture(scope="function")
 def mediapipe_poses_test_data_paths() -> List[Path]:
     pose_file_paths = list(utils_standard_mediapipe_landmarks_test_data_dir.glob("*.pose"))
+    pose_file_paths.sort(key=lambda p: p.name)
     return pose_file_paths
 
 
