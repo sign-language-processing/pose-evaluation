@@ -1,3 +1,6 @@
+"""Creates metrics by composing various settings and preprocessors together with DistanceMeasures. 
+
+They are given names based on the settings. E.g. 'trimmed_dtw' would be dynamic time warping with trimming."""
 import itertools
 from typing import Literal, Optional, List
 from pathlib import Path
@@ -75,6 +78,7 @@ def construct_metric(
     fps: Optional[int] = None,
     name: Optional[str] = None,
     z_speed: Optional[float] = None,
+    reduce_poses_to_common_components: bool= True
 ):
     distance_measure = copy.deepcopy(distance_measure)
     name_pieces = []
@@ -145,12 +149,16 @@ def construct_metric(
         pose_preprocessors.append(FillMaskedOrInvalidValuesPoseProcessor(masked_fill_value))
         name_pieces.append(f"fillmasked{masked_fill_value}")
     else:
-        name_pieces.append("maskInvalidVals")
+        name_pieces.append("maskinvalidvals")
         pose_preprocessors.append(MaskInvalidValuesPoseProcessor())
 
     ###################################################################
     # Components/points Alignment
-    pose_preprocessors.append(ReducePosesToCommonComponentsProcessor())
+    if reduce_poses_to_common_components:
+        pose_preprocessors.append(ReducePosesToCommonComponentsProcessor())
+
+
+
     if "Measure" in distance_measure.name:
         name = f"{distance_measure.name}".replace("Measure", "Metric")
     else:
@@ -170,13 +178,15 @@ def get_embedding_metrics(df: pd.DataFrame) -> List:
         raise ValueError(f"No {DatasetDFCol.EMBEDDING_MODEL}")
 
 
-def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None):
+def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None, include_masked:bool=False):
     metrics = []
 
     if measures is None:
         measures = [
             DTWDTAIImplementationDistanceMeasure(name="dtaiDTWAggregatedDistanceMeasureFast", use_fast=True),
-            # DTWDTAIImplementationDistanceMeasure(name="dtaiDTWAggregatedDistanceMeasureSlow", use_fast=False), # super slow
+            # DTWDTAIImplementationDistanceMeasure(
+            #     name="dtaiDTWAggregatedDistanceMeasureSlow", use_fast=False
+            # # ),  # super slow
             # DTWOptimizedDistanceMeasure(),
             # DTWAggregatedPowerDistanceMeasure(),
             # DTWAggregatedScipyDistanceMeasure(),
@@ -195,56 +205,30 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         1000.0,
     ]
 
-    # round one precision@10 shows 0.0 seems to win, top 8/10 metrics
-    # but 1.0 could also work.
-    # Estimated effect on 'precision@10' of 'fillmasked0.0': +0.0048
-    # Estimated effect on 'precision@10' of 'fillmasked1.0': +0.0115
-    # fillmasked0.0 count within top 10 by precision@10: 8
-    # fillmasked0.0 count within top 5 by precision@10: 5
-    # fillmasked1.0 count within top 10 by precision@10: 2
-    # fillmasked1.0 count within top 5 by precision@10: 0
-    # but on recall...
-    # Estimated effect on 'recall@10' of 'fillmasked0.0': -0.0028
-    # Estimated effect on 'recall@10' of 'fillmasked1.0': +0.0055
-    # fillmasked0.0 count within top 10 by recall@10: 3
-    # fillmasked0.0 count within top 5 by recall@10: 0
-    # fillmasked1.0 count within top 10 by recall@10: 4
-    # fillmasked1.0 count within top 5 by recall@10: 4
+    
     masked_fill_values = [
         # None, # leads to nan values
+
         0.0,  # top 8/10 metrics
         1.0,  #
         10.0,
         100.0,
         1000.0,
     ]  # technically could also do None, but that leads to nan values slipping through
-    # trim_values = [True, False]
 
-    # round one:
-    # Trimming seems to help - Untrimmed generally worse, though not a whole lot:
-    # Estimated effect on 'recall@10' of 'untrimmed': -0.0103
-    # Estimated effect on 'precision@10' of 'untrimmed': -0.0125
-    # Estimated effect on 'mean_score_time' of 'untrimmed': +0.0087
-    # So trimmed is better...but not a whole lot
+    if include_masked:
+        masked_fill_values.append(None)
+        
+
+    
     trim_values = [True, False]
 
-    # round one:
-    # Normalizing seems to be worth it.
-    # Actually improves mean out/mean in if you don't normalize
-    # Estimated effect on 'mean_score_time' of 'unnormalized': -0.0018
-    # Estimated effect on 'precision@10' of 'unnormalized': -0.0020
-    # And none of the top 10 are unnormalized
+   
     normalize_values = [True, False]
 
     sequence_alignment_strategies = ["zeropad", "padwithfirstframe", "dtw"]
 
-    # round one precision@10, recall@10 clearly that hands-only seems to work best
-    # improves mean_score_time as well
-    # Estimated effect on 'precision@10' of 'hands': +0.0791
-    # hands count within top 100 by precision@10: 91
-    # hands count within top 10 by precision@10: 10
-    # hands count within top 5 by precision@10: 5
-    # and it's similar for recall
+    
     keypoint_selection_strategies = [
         "removelegsandworld",
         "reduceholistic",
@@ -259,8 +243,7 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         60,
         120,
     ]
-    # round one results suggest interp doesn't help, and takes longer
-    # fps_values = [None]
+
 
     # Create all combinations
     metric_combinations = itertools.product(
@@ -303,9 +286,6 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
             # e.g. "operands could not be broadcast together with shapes (620,1,48,3) (440,1,48,3)""
             continue
 
-        # print(
-        #     f"Measure: {measure.name}, Z Speed:{z_speed}, Default Distance: {default_distance}, Trim: {trim}, Normalize: {normalize}, Strategy: {strategy}, FPS: {fps}, Masked Fill: {masked_fill_value}, Sequence Alignment: {sequence_alignment}"
-        # )
 
         metric = construct_metric(
             distance_measure=measure,
