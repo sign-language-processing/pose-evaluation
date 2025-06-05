@@ -1,3 +1,6 @@
+"""For dealing with evaluation score outputs, includes column names,
+and how to load the score CSVs such that e.g. "TRUE" gloss doesn't become a bool type"""
+
 import warnings
 from pathlib import Path
 import pandas as pd

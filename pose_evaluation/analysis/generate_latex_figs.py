@@ -2,40 +2,16 @@ from pathlib import Path
 from typing import Optional
 
 
-# def generate_latex_figures(directory: Path, output_file: Path):
-#     with output_file.open("w", encoding="utf-8") as f:
-#         for file in sorted(directory.glob("*.png")):
-#             label = file.stem.replace(".", "_")  # Avoid issues with periods
-#             f.write(r"\begin{figure}[htbp]\n")
-#             f.write(r"    \centering\n")
-#             f.write(rf"    \includegraphics[width=0.9\linewidth]{{figures/{file.name}}}\n")
-#             f.write(r"    \caption{Caption}\n")
-#             f.write(rf"    \label{{fig:{label}}}\n")
-#             f.write(r"\end{figure}\n\n")
-
-
-# def generate_latex_figures(directory: Path, output_file: Path):
-#     with output_file.open("w", encoding="utf-8", newline="\n") as f:  # Ensure LF line endings
-#         for file in sorted(directory.glob("*.png")):
-#             label = file.stem.replace(".", "_")  # Avoid issues with periods
-#             f.write(r"\begin{figure}[htbp]\n")
-#             f.write(r"    \centering\n")
-#             f.write(rf"    \includegraphics[width=0.9\linewidth]{{figures/{file.name}}}\n")
-#             f.write(r"    \caption{Caption}\n")
-#             f.write(rf"    \label{{fig:{label}}}\n")
-#             f.write(r"\end{figure}\n\n")  # Ensure double newline for spacing
-
-
 def generate_latex_figures(
-    directory: Path,
+    fig_directory: Path,
     output_file: Path,
     figures_prefix="figures",
     pattern="*.png",
     default_caption=None,
-    cosine_count: int = None,
+    cosine_count: Optional[int] = None,
     add_clearpage_period: Optional[int] = None,
 ):
-    files = sorted(directory.rglob(pattern))
+    files = sorted(fig_directory.rglob(pattern))
     if cosine_count is not None:
         files = [f for f in files if f.name.count("cosine") == cosine_count]
 

@@ -10,7 +10,6 @@ pose_evaluation.egg-info/
 coverage.lcov
 
 *.csv
-*.zip
 **/out/*
 **out*.txt
 **metric_results**
@@ -22,3 +21,4 @@ coverage.lcov
 **/misc_out/*
 **/debug*/*
 *.tar.zst
+*.zip

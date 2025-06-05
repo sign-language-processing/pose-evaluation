@@ -9,7 +9,7 @@ from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
     file_paths_list_to_df,
     deduplicate_by_video_id,
     df_to_standardized_df,
-    DatasetDFCol,    
+    DatasetDFCol,
 )
 
 app = typer.Typer()
@@ -70,9 +70,7 @@ def collect(
     for prefix in ["POSE", "VIDEO"]:
 
         files_df = file_paths_list_to_df(result[f"{prefix}_FILES"], prefix=prefix)
-        files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(
-            lambda x: Path(x).stem.split("-")[0]
-        )
+        files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem.split("-")[0])
         # typer.echo(files_df.head())
         typer.echo(f"Merging {len(files_df)} {prefix} files into df")
         df = df.merge(files_df, on=DatasetDFCol.VIDEO_ID, how="left")
