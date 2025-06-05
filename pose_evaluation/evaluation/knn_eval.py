@@ -103,6 +103,7 @@ def compute_top_k_neighbors(
     query_label_col: str,
     neighbor_label_col: str,
     min_references_per_query: Optional[int] = None,
+    max_queries: Optional[int] = None,
 ) -> Tuple[Dict[Tuple[str, str], List[Tuple[float, str, str]]], Dict[str, int]]:
     """
     Compute top-k nearest neighbors from a PyArrow dataset, assuming lower scores are better (e.g., distances).
@@ -139,6 +140,10 @@ def compute_top_k_neighbors(
     for key, heap in top_k.items():
         if min_references_per_query is None or reference_counts[key] >= min_references_per_query:
             filtered_top_k[key] = sorted(heap)
+
+    if max_queries is not None:
+        # Truncate to the first N entries (dicts preserve insertion order in Python 3.7+)
+        filtered_top_k = dict(list(filtered_top_k.items())[:max_queries])
 
     stats = {
         "total": total,
@@ -226,6 +231,7 @@ def save_neighbors(
     neighbor_path_col: str,
     neighbor_label_col: str,
     score_col: str,
+    overwrite: bool = False,
 ) -> None:
     """
     Save top-k results from neighbor dict to Parquet.
@@ -252,7 +258,11 @@ def save_neighbors(
 
     if output_path.exists():
         typer.echo(f"\nFile {output_path} already exists.")
-        choice = typer.prompt("Choose an action: [o]verwrite / [n]ew name / [s]kip", default="s").lower()
+        if overwrite:
+            typer.echo(f"--overwrite give: Overwriting {output_path}")
+            choice = "o"
+        else:
+            choice = typer.prompt("Choose an action: [o]verwrite / [n]ew name / [s]kip", default="s").lower()
 
         if choice == "o":
             pass
@@ -327,11 +337,7 @@ def analyze_neighbors_command(
         for (query_path, query_label), group in grouped
     }
 
-    accuracy = evaluate_top_k_results(
-        top_k_results,
-        k=k,
-        verbose=verbose,
-    )
+    accuracy = evaluate_top_k_results(top_k_results, k=k, verbose=verbose)
 
     typer.echo(f"\nAccuracy from saved neighbors: {accuracy:.4f}")
 
@@ -348,6 +354,8 @@ def do_knn(
     output_path: Optional[Path] = typer.Option(None, help="Optional output path to save top-k results as Parquet."),
     verbose: bool = typer.Option(False, help="Print classification details."),
     metric: Optional[str] = typer.Option(None, help="Metric partition value to evaluate."),
+    max_queries: Optional[int] = typer.Option(None, help="If given, will only process this many query files"),
+    overwrite: bool = typer.Option(False, help="If given, will skip saving over existing files"),
 ):
     """
     Perform KNN classification using intra- or cross-split distances from a PyArrow dataset.
@@ -356,6 +364,7 @@ def do_knn(
     metric_datasets = get_metric_filtered_datasets(dataset_path, dataset, metric)
 
     for metric_name, dataset in metric_datasets:
+        typer.echo("-" * 60)
         typer.echo(f"\nEvaluating metric: {metric_name or 'None'}")
 
         summary_stats = summarize_distance_matrix(dataset)
@@ -372,6 +381,7 @@ def do_knn(
             query_label_col=query_label_col,
             neighbor_label_col=neighbor_label_col,
             min_references_per_query=summary_stats["num_references"],  # optional
+            max_queries=max_queries,
         )
 
         typer.echo(
@@ -379,7 +389,10 @@ def do_knn(
             f"(skipped {filter_stats['skipped']} under min_references={summary_stats['num_references']})"
         )
 
-        proposed_name = f"{metric_name}_{summary_stats['num_queries']}_hyps_top_{k}_neighbors.parquet"
+        proposed_name = f"{metric_name}_{summary_stats['num_queries']}_hyps_{summary_stats['num_references']}_refs_top_{k}_neighbors.parquet"
+        if max_queries is not None:
+            proposed_name = f"maxqueries_{max_queries}_{proposed_name}"
+
         if output_path is None:
             proposed_path = Path.cwd() / proposed_name
         else:
@@ -395,6 +408,7 @@ def do_knn(
             neighbor_path_col=neighbor_path_col,
             query_label_col=query_label_col,
             neighbor_label_col=neighbor_label_col,
+            overwrite=overwrite,
         )
 
         accuracy = evaluate_top_k_results(
@@ -402,8 +416,9 @@ def do_knn(
             k=k,
             verbose=verbose,
         )
-
-        typer.echo(f"\nTop-{k} Accuracy: {accuracy:.4f}")
+        typer.echo(
+            f"\nMetric: {metric_name}, k: {k}, Accuracy: {accuracy:.4f}, Queries: {filter_stats['kept']}, References: {summary_stats['num_references']})"
+        )
 
 
 if __name__ == "__main__":
@@ -422,3 +437,10 @@ if __name__ == "__main__":
 # 7040324327088798 is in ASL Citizen's train.csv
 # 04138050683379402 is in ASL Citizen's test.csv
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && /opt/home/cleong/projects/pose-evaluation# python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/knn_eval.py metric_results_full_matrix/pyarrow_dataset/asl-citizen/testvstrain/METRIC\=untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast/ --k 5 --verbose
+
+
+# full matrix 300 scores
+#
+# cd /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix && bash copy_first_200.sh
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/load_parquets.py /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/scores_200 --merge-dir /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/pyarrow_dataset_200
+# out_dir="knn_metric_analysis/5_27_84_metrics/" && kval=100 && mkdir -p "$out_dir" && python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/knn_eval.py compute /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/pyarrow_dataset_200 --k 100 --verbose --output-path "$out_dir" 2>&1 |tee "$out_dir/knn_analysis_out_k$kval.txt"
