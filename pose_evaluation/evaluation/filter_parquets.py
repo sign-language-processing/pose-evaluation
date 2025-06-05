@@ -2,68 +2,84 @@ import shutil
 import json
 from pathlib import Path
 from datetime import datetime
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 import typer
 
 app = typer.Typer()
 
-
 @app.command()
 def filter_parquet_files(
     in_path: Path = typer.Argument(..., help="Folder with input .parquet files"),
     out_path: Path = typer.Argument(..., help="Folder to save filtered .parquet files"),
-    min_hyp: int = typer.Option(5, help="Minimum number of unique GLOSS_A_PATH values"),
-    max_hyp: int = typer.Option(20, help="Maximum number of unique GLOSS_A_PATH values"),
-    glosses_to_include: str = typer.Option(None, help="Comma-separated list of glosses to include"),
+    glosses_to_include: str = typer.Option(..., help="Comma-separated list of glosses to include"),
     report_path: Path = typer.Option(None, help="Optional path to save a JSON report"),
 ):
-    """Filters .parquet files based on unique GLOSS_A_PATH count and copies them to a new folder."""
     glosses_set = set(g.strip().upper() for g in glosses_to_include.split(","))
     typer.echo(f"📂 Input path: {in_path}")
     typer.echo(f"📁 Output path: {out_path}")
-    typer.echo(f"Glosses to Include: {len(glosses_set)} glosses")
-    typer.echo(f"🔢 min_hyp: {min_hyp}, max_hyp: {max_hyp}")
-    if report_path:
-        typer.echo(f"📝 Report will be saved to: {report_path}")
-
+    typer.echo(f"📌 Glosses to include: {len(glosses_set)}")
+    
     out_path.mkdir(parents=True, exist_ok=True)
     parquet_files = sorted(in_path.glob("*.parquet"))
-    already_existing = list(out_path.glob("*parquet"))
-    typer.echo(f"🔍 Found {len(parquet_files)} .parquet files in source, {len(already_existing)} in target")
+    typer.echo(f"📁 Parquets found: {len(parquet_files)}")
 
-    copied_files = []
 
-    def process_file(file: Path) -> bool:
-        file_gloss = file.stem.split("_")[0]
-        destination = out_path / file.name
-        if file_gloss in glosses_set:
-            if not destination.exists():
-                shutil.copy(file, destination)
-                return True
+    # 1–3: Build metric → set of glosses
+    metric_to_glosses = defaultdict(set)
+    gloss_to_files = defaultdict(list)
+
+    for file in tqdm(parquet_files, desc="Filtering Parquets"):
+        fname = file.name.upper()
+        for gloss in glosses_set:
+            prefix = f"{gloss}_"
+            if fname.startswith(prefix) and "OUTGLOSS_4X_SCORE_RESULTS" in fname:
+                metric_part = fname[len(prefix):fname.index("OUTGLOSS_4X_SCORE_RESULTS")].rstrip("_")
+                metric_to_glosses[metric_part].add(gloss)
+                gloss_to_files[(gloss, metric_part)].append(file)
+
+    # 4. Keep only metrics that contain all requested glosses
+    valid_metrics = {metric for metric, glosses in metric_to_glosses.items()
+                     if glosses_set.issubset(glosses)}
+
+    typer.echo(f"📊 Metrics with all glosses: {len(valid_metrics)} found")
+
+    # Copy files for those metrics
+    def copy_file(file: Path, dest: Path):
+        if not dest.exists():
+            shutil.copy(file, dest)
+            return True
         return False
 
+    copied = 0
     with ThreadPoolExecutor() as executor:
-        results = list(tqdm(executor.map(process_file, parquet_files), total=len(parquet_files), desc="Copying files"))
+        futures = []
+        for metric in valid_metrics:
+            for gloss in glosses_set:
+                files = gloss_to_files.get((gloss, metric), [])
+                for file in files:
+                    dest = out_path / file.name
+                    futures.append(executor.submit(copy_file, file, dest))
+        for result in tqdm(futures, desc="Copying files"):
+            if result.result():
+                copied += 1
 
-    kept = sum(results)
-    skipped = len(results) - kept
-    typer.echo(f"✅ Copied: {kept}, Already Existed: {len(already_existing)}, ⏭️ Skipped: {skipped}")
+    typer.echo(f"✅ Total copied files: {copied}")
 
     if report_path:
         report = {
-            "already_existing": len(already_existing),
-            "copied": kept,
-            "skipped": skipped,
             "glosses_used": sorted(glosses_set),
+            "valid_metrics": sorted(valid_metrics),
+            "total_copied": copied,
             "timestamp": datetime.utcnow().isoformat(),
         }
         with report_path.open("w") as f:
             json.dump(report, f, indent=2)
 
-
 if __name__ == "__main__":
     app()
+
 
 
 # GLOSS	SAMPLES
@@ -318,5 +334,5 @@ if __name__ == "__main__":
 # ANIMAL	213
 # DIRTY	213
 
-
-# cd /data/petabyte/cleong/projects/pose-eval/metric_results_round_4 && conda activate /opt/home/cleong/envs/pose_eval_src && python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/filter_parquets.py scores 169_glosses/ --glosses-to-include "SORRY,MOTHER,BEER,CALIFORNIA,DEAFSCHOOL,GOVERNMENT,FRIDAY,CHEW1,WEDNESDAY,REPLACE,THRILLED,MEETING,YOUR,SEVERAL,HAWAII,DRUG,DECIDE2,SHARK2,VOTE,HARDOFHEARING,OHISEE,PERFUME1,SCREWDRIVER3,LIBRARY,FORK4,LIVE2,CALM,SHAME,CAFETERIA,BANANA2,MOOSE,MAIL1,SANTA,BEAR,THANKSGIVING,TIE1,PAIR,SPECIALIST,ARIZONA,NECKLACE4,PRINT,DRINK2,THURSDAY,SIX,CASTLE2,TOSS,WEIGH,PRACTICE,STARS,LEAF1,HUSBAND,BEAK,CHALLENGE,BINOCULARS,DOLPHIN2,VAMPIRE,PUMPKIN,BRAINWASH,COMMITTEE,TEA,TURBAN,PREFER,EASTER,HUG,BATHROOM,RUIN,SNAKE,PHILADELPHIA,CONVINCE2,DONTKNOW,EIGHT,COOKIE,TELL,DEAF2,PIPE2,SATURDAY,SEVEN,SILVER,ROOF,DRIP,DUTY,COUNSELOR,NINE,RECORDING,RAT,SALAD,EVERYTHING,SNOWSUIT,EACH,CHICAGO,BAG2,PRESIDENT,GALLAUDET,CLOSE,FEW,CELERY,EARN,PEPSI,SOCKS,MICROPHONE,LUCKY,PJS,TRUE,ROSE,GOTHROUGH,RESTAURANT,WEATHER,STADIUM,FISHING2,PERCENT,KNITTING3,EXPERIMENT,TAKEOFF1,ACCENT,OPINION1,PIE,RUSSIA,WEIGHT,DONTCARE,ROCKINGCHAIR1,CANDY1,SPICY,ENOUGH,GLASSES,TUESDAY,WIFE,WASHDISHES,NEWSTOME,WEST,APPEAR,INTRODUCE,DONTMIND,HERE,LEND,PHONE,ERASE1,THREE,ADVERTISE,BERRY,DART,WINE,PILL,FRIENDLY,DIP3,TRADITION,TOP,ADULT,TASTE,DISRUPT,VACATION,SENATE,NEWSPAPER,FOCUS,DEER,INVITE,BRAG,BUFFALO,SHAVE5,BUT,CHILD,NEWYORK,WORKSHOP,FINGERSPELL,ALASKA,ONION,VOMIT,WEAR,THANKYOU,HIGHSCHOOL"
+# gloss_list = ['CALM', 'DRIP', 'CALIFORNIA', 'WEIGH', 'RECORDING', 'MICROPHONE', 'THANKYOU', 'PRINT', 'SHAVE5', 'WEATHER', 'OPINION1', 'TASTE', 'SEVEN', 'BEER', 'PILL', 'FEW', 'MAIL1', 'ARIZONA', 'PRACTICE', 'VACATION', 'THRILLED', 'HIGHSCHOOL', 'CELERY', 'EACH', 'DECIDE2', 'NECKLACE4', 'COOKIE', 'DIP3', 'ROCKINGCHAIR1', 'WORKSHOP', 'COUNSELOR', 'SILVER', 'DISRUPT', 'SANTA', 'HUG', 'HARDOFHEARING', 'EIGHT', 'LEND', 'SPECIALIST', 'VOMIT', 'TRADITION', 'WINE', 'BERRY', 'SHARK2', 'PREFER', 'BINOCULARS', 'WEST', 'BEAR', 'BUT', 'DEAFSCHOOL', 'GALLAUDET', 'FOCUS', 'LIBRARY', 'BUFFALO', 'EXPERIMENT', 'STADIUM', 'BEAK', 'CASTLE2', 'OHISEE', 'PJS', 'DRINK2', 'SNAKE', 'MOTHER', 'TUESDAY', 'ERASE1', 'HUSBAND', 'FISHING2', 'SATURDAY', 'THREE', 'DONTKNOW', 'DRUG', 'ENOUGH', 'REPLACE', 'PUMPKIN', 'TIE1', 'APPEAR', 'THANKSGIVING', 'CHALLENGE', 'PHONE', 'DONTMIND', 'STARS', 'ADVERTISE', 'INVITE', 'WEAR', 'CLOSE', 'CAFETERIA', 'PERCENT', 'SENATE', 'SHAME', 'NEWSPAPER', 'EASTER', 'FRIDAY', 'BATHROOM', 'MEETING', 'TRUE', 'CHEW1', 'SPICY', 'YOUR', 'FRIENDLY', 'WEIGHT', 'SNOWSUIT', 'TURBAN', 'TOSS', 'SORRY', 'DART', 'ROOF', 'WIFE', 'SCREWDRIVER3', 'NINE', 'RUIN', 'PHILADELPHIA', 'TOP', 'THURSDAY', 'BRAINWASH', 'TEA', 'INTRODUCE', 'SOCKS', 'WASHDISHES', 'EVERYTHING', 'GLASSES', 'FINGERSPELL', 'DOLPHIN2', 'DEER', 'PERFUME1', 'RUSSIA', 'PAIR', 'LEAF1', 'TELL', 'WEDNESDAY', 'SALAD', 'RAT', 'BANANA2', 'DONTCARE', 'HERE', 'NEWYORK', 'PRESIDENT', 'LUCKY', 'VOTE', 'LIVE2', 'CHILD', 'BRAG', 'CONVINCE2', 'ROSE', 'RESTAURANT', 'CHICAGO', 'SIX', 'NEWSTOME', 'PIE', 'PIPE2', 'GOTHROUGH', 'FORK4', 'TAKEOFF1', 'KNITTING3', 'ADULT', 'GOVERNMENT', 'HAWAII', 'EARN', 'CANDY1', 'DUTY', 'ALASKA', 'PEPSI', 'MOOSE', 'BAG2', 'ACCENT', 'COMMITTEE', 'ONION', 'SEVERAL', 'VAMPIRE', 'DEAF2']
+# cd /data/petabyte/cleong/projects/pose-eval/metric_results_round_4 && conda activate /opt/home/cleong/envs/pose_eval_src && python /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/filter_parquets.py scores 169_glosses/scores/ --glosses-to-include "SORRY,MOTHER,BEER,CALIFORNIA,DEAFSCHOOL,GOVERNMENT,FRIDAY,CHEW1,WEDNESDAY,REPLACE,THRILLED,MEETING,YOUR,SEVERAL,HAWAII,DRUG,DECIDE2,SHARK2,VOTE,HARDOFHEARING,OHISEE,PERFUME1,SCREWDRIVER3,LIBRARY,FORK4,LIVE2,CALM,SHAME,CAFETERIA,BANANA2,MOOSE,MAIL1,SANTA,BEAR,THANKSGIVING,TIE1,PAIR,SPECIALIST,ARIZONA,NECKLACE4,PRINT,DRINK2,THURSDAY,SIX,CASTLE2,TOSS,WEIGH,PRACTICE,STARS,LEAF1,HUSBAND,BEAK,CHALLENGE,BINOCULARS,DOLPHIN2,VAMPIRE,PUMPKIN,BRAINWASH,COMMITTEE,TEA,TURBAN,PREFER,EASTER,HUG,BATHROOM,RUIN,SNAKE,PHILADELPHIA,CONVINCE2,DONTKNOW,EIGHT,COOKIE,TELL,DEAF2,PIPE2,SATURDAY,SEVEN,SILVER,ROOF,DRIP,DUTY,COUNSELOR,NINE,RECORDING,RAT,SALAD,EVERYTHING,SNOWSUIT,EACH,CHICAGO,BAG2,PRESIDENT,GALLAUDET,CLOSE,FEW,CELERY,EARN,PEPSI,SOCKS,MICROPHONE,LUCKY,PJS,TRUE,ROSE,GOTHROUGH,RESTAURANT,WEATHER,STADIUM,FISHING2,PERCENT,KNITTING3,EXPERIMENT,TAKEOFF1,ACCENT,OPINION1,PIE,RUSSIA,WEIGHT,DONTCARE,ROCKINGCHAIR1,CANDY1,SPICY,ENOUGH,GLASSES,TUESDAY,WIFE,WASHDISHES,NEWSTOME,WEST,APPEAR,INTRODUCE,DONTMIND,HERE,LEND,PHONE,ERASE1,THREE,ADVERTISE,BERRY,DART,WINE,PILL,FRIENDLY,DIP3,TRADITION,TOP,ADULT,TASTE,DISRUPT,VACATION,SENATE,NEWSPAPER,FOCUS,DEER,INVITE,BRAG,BUFFALO,SHAVE5,BUT,CHILD,NEWYORK,WORKSHOP,FINGERSPELL,ALASKA,ONION,VOMIT,WEAR,THANKYOU,HIGHSCHOOL"
