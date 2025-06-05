@@ -11,8 +11,9 @@ from tqdm import tqdm
 import seaborn as sns
 import gc
 import ast
-import hashlib
+from scipy.stats import pearsonr, spearmanr, kendalltau, ttest_rel
 import matplotlib.pyplot as plt
+
 
 sns.set_theme()
 
@@ -28,25 +29,63 @@ def classify_relation(row):
         return "Neither"
 
 
+def plot_metric_boxplot(
+    df: pd.DataFrame,
+    col: str,
+    metric: str,
+    show: bool = False,
+    out_path: Optional[Path] = None,
+):
+    df_filtered = df[df["METRIC"] == metric]
+
+    if df_filtered.empty:
+        print(f"No data found for metric: {metric}")
+        return
+
+    plt.figure(figsize=(7, 5))
+    sns.boxplot(
+        data=df_filtered,
+        x="relation_type",
+        y=col,
+        palette={"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"},
+    )
+
+    plt.title(f"{col} Distribution by Relation Type ({metric})", fontsize=14)
+    plt.xlabel("Relation Type", fontsize=12)
+    plt.ylabel(f"{col} Value", fontsize=12)
+
+    if out_path:
+        plt.tight_layout()
+        plt.savefig(out_path)
+    if show:
+        plt.show()
+
+    plt.close()
+
+
 def plot_metric_histogram(
     df: pd.DataFrame,
     col: str,
     metric: str,
     bins: int = 10,
     kde: bool = True,
-    color: str = "royalblue",
-    show=False,
+    show: bool = False,
     out_path: Optional[Path] = None,
+    overlay_by_relation: bool = False,  # NEW
 ):
     """
-    Plots a histogram of the 'mean' column, filtering the dataframe by the specified 'metric'.
+    Plots a histogram of the specified column, filtering the dataframe by the specified 'metric'.
+    Optionally overlays histograms by 'relation_type' if available.
 
     Parameters:
         df (pd.DataFrame): The input dataframe.
+        col (str): The column to plot.
         metric (str): The metric value to filter the dataframe.
         bins (int): Number of bins in the histogram.
         kde (bool): Whether to include the KDE curve.
-        color (str): Color of the histogram bars.
+        show (bool): Whether to show the plot immediately.
+        out_path (Optional[Path]): Where to save the plot if specified.
+        overlay_by_relation (bool): If True, overlay histograms by relation type.
     """
     # Filter dataframe by metric
     df_filtered = df[df["METRIC"] == metric]
@@ -55,84 +94,50 @@ def plot_metric_histogram(
         print(f"No data found for metric: {metric}")
         return
 
-    # Set seaborn style
-    # sns.set_style("whitegrid")
+    plt.figure(figsize=(8, 5))
 
-    # Create the plot
-    plt.figure(figsize=(7, 5))
-    sns.histplot(
-        df_filtered[col],
-        bins=bins,
-        kde=kde,
-        #  color=color, edgecolor="black"
-    )
+    if overlay_by_relation and "relation_type" in df_filtered.columns:
+        colors = ({"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"},)
+        labels = ["Lookalike", "Semantic", "Neither", "Both"]
 
-    # Labels and title
+        for relation in labels:
+            subset = df_filtered[df_filtered["relation_type"] == relation]
+            if not subset.empty:
+                sns.histplot(
+                    subset[col],
+                    bins=bins,
+                    kde=kde,
+                    label=relation,
+                    color=colors.get(relation, "black"),
+                    stat="density",
+                    element="step",
+                    fill=False,
+                    linewidth=2,
+                )
+        plt.legend()
+        plt.title(f"{col} Distribution by Relation Type ({metric})", fontsize=14)
+
+    else:
+        sns.histplot(
+            df_filtered[col],
+            bins=bins,
+            kde=kde,
+            color="royalblue",
+            edgecolor="black",
+        )
+        plt.title(f"{col} Distribution ({metric})", fontsize=14)
+
+    # Labels
     plt.xlabel(f"{col} Value", fontsize=12)
-    plt.ylabel("Frequency", fontsize=12)
-    plt.title(f"Mean Intergloss ({metric})", fontsize=14)
+    plt.ylabel("Density" if overlay_by_relation else "Frequency", fontsize=12)
 
-    if show:
-        plt.show()
     if out_path:
         plt.tight_layout()
         plt.savefig(out_path)
-    plt.close()
-
-
-def plot_metric_scatter_interactive(
-    df: pd.DataFrame, metric_x: str, metric_y: str, show: bool = False, html_path: Optional[Path] = None
-):
-    # Filter for the two specified metrics
-    df_x = df[df["METRIC"] == metric_x].rename(columns={"mean": "score_x"})
-    df_y = df[df["METRIC"] == metric_y].rename(columns={"mean": "score_y"})
-
-    # Merge on GLOSS_A and GLOSS_B
-    merged_df = df_x.merge(df_y, on=["GLOSS_A", "GLOSS_B"], suffixes=("", "_y"))
-
-    # Create labels
-    merged_df["label"] = merged_df["GLOSS_A"] + " / " + merged_df["GLOSS_B"]
-
-    custom_color_map = {"Both": "purple", "Lookalike": "blue", "Semantic": "green", "Neither": "lightgray"}
-
-    # Create scatter plot without labels
-    fig = px.scatter(
-        merged_df,
-        x="score_x",
-        y="score_y",
-        color="relation_type",
-        title=f"{metric_x} vs {metric_y}",
-        labels={"score_x": metric_x, "score_y": metric_y, "relation_type": "Relation Type"},
-        color_discrete_map=custom_color_map,
-    )
-
-    # Add text labels as a separate trace with legend entry
-    text_trace = go.Scatter(
-        x=merged_df["score_x"],
-        y=merged_df["score_y"],
-        text=merged_df["label"],
-        mode="text",
-        textposition="top center",
-        name="Labels",  # Separate legend entry
-        showlegend=True,  # Allow toggling via legend
-    )
-
-    fig.add_trace(text_trace)
-
-    # Improve layout
-    fig.update_traces(marker=dict(size=8, opacity=0.7))
-    fig.update_layout(
-        xaxis_title=metric_x,
-        yaxis_title=metric_y,
-        hovermode="closest",
-    )
-
     if show:
-        fig.show()
-    if html_path:
-        fig.write_html(html_path)
+        plt.show()
 
-    del fig
+    plt.close()
 
 
 def plot_metric_scatter(
@@ -153,20 +158,17 @@ def plot_metric_scatter(
     merged_df["label"] = merged_df["GLOSS_A"] + " / " + merged_df["GLOSS_B"]
 
     # Define custom palette
-    palette = {
-        "Both": "purple",
-        "Lookalike": "blue",
-        "Semantic": "green",
-        "Neither": "lightgray",
-    }
+    palette = {"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"}
 
     # Generate shortened names and hash
-    metric_x_short = metric_x[:20]
-    metric_y_short = metric_y[:20]
+    metric_x_short = metric_x[:15]
+    metric_y_short = metric_y[:15]
+    metric_x_hash = hashlib.md5(f"{metric_x}".encode()).hexdigest()[:8]
+    metric_y_hash = hashlib.md5(f"{metric_y}".encode()).hexdigest()[:8]
     name_hash = hashlib.md5(f"{metric_x}|{metric_y}".encode()).hexdigest()[:8]
 
     if png_path:
-        base_path = png_path.parent / f"{metric_x_short}__{metric_y_short}__{name_hash}"
+        base_path = png_path.parent / f"{metric_x_hash}_{metric_y_hash}_{name_hash}"
         png_file = base_path.with_suffix(".png")
         txt_file = base_path.with_suffix(".txt")
     else:
@@ -200,9 +202,9 @@ def plot_metric_scatter(
         linewidth=0.3,
     )
 
-    plt.xlabel(f"{metric_x_short}")
-    plt.ylabel(f"{metric_y_short}")
-    plt.title(f"Mean Intergloss Scores:\n{metric_x_short} vs\n {metric_y_short}")
+    plt.xlabel(f"{metric_x_hash}")
+    plt.ylabel(f"{metric_y_hash}")
+    plt.title(f"Mean Intergloss Scores:\n{metric_x_hash} vs\n {metric_y_hash}")
     plt.grid(True)
 
     if show:
@@ -217,6 +219,9 @@ def plot_metric_scatter(
         with open(txt_file, "w") as f:
             f.write(f"Full X Metric: {metric_x}\n")
             f.write(f"Full Y Metric: {metric_y}\n")
+            f.write(f"Hashed X Metric: {metric_x_hash}\n")
+            f.write(f"Hashed Y Metric: {metric_y_hash}\n")
+            f.write(f"Hashed Combination: {name_hash}\n")
             f.write(f"Timestamp: {datetime.now().isoformat()}\n")
             f.write(f"Number of points: {len(merged_df)}\n")
             f.write("Relation type counts:\n")
@@ -225,6 +230,147 @@ def plot_metric_scatter(
                 f.write(f"  {rel_type}: {count}\n")
 
     plt.close()
+
+
+def plot_overlay_histograms(
+    df_metric: pd.DataFrame, metric: str, save_plot_path: Optional[Path] = None, show_plot: bool = True
+) -> None:
+    plt.figure(figsize=(8, 5))
+
+    colors = {"Lookalike": "blue", "Semantic": "green", "Neither": "gray"}
+    labels = ["Lookalike", "Semantic", "Neither"]
+
+    for relation in labels:
+        scores = df_metric[df_metric["relation_type"] == relation]["score"]
+        if not scores.empty:
+            sns.histplot(
+                scores,
+                label=relation,
+                color=colors[relation],
+                stat="density",
+                kde=True,
+                bins=30,
+                element="step",
+                fill=False,
+                linewidth=2,
+            )
+
+    plt.title(f"Score Distributions (Overlayed) for {metric}")
+    plt.xlabel("Distance Score")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.tight_layout()
+
+    if save_plot_path:
+        plt.savefig(save_plot_path)
+    if show_plot:
+        plt.show()
+
+    plt.close()
+
+
+def analyze_metric_relationships(
+    df: pd.DataFrame,
+    metric_x: str,
+    metric_y: str,
+    show_plot: bool = True,
+    save_plot_path: Optional[Path] = None,
+) -> pd.DataFrame:
+    """
+    Analyze correlation and distance tendencies between two metrics.
+
+    Args:
+        df: DataFrame containing columns METRIC, GLOSS_A, GLOSS_B, mean, relation_type.
+        metric_x: First metric name.
+        metric_y: Second metric name.
+        show_plot: Whether to display the plot.
+        save_plot_path: Optional path to save the plot.
+
+    Returns:
+        summary_df: DataFrame summarizing correlations, means, and t-tests.
+    """
+    # Generate shortened names and hash
+    metric_x_short = metric_x[:15]
+    metric_y_short = metric_y[:15]
+    metric_x_hash = hashlib.md5(f"{metric_x}".encode()).hexdigest()[:8]
+    metric_y_hash = hashlib.md5(f"{metric_y}".encode()).hexdigest()[:8]
+    name_hash = hashlib.md5(f"{metric_x}|{metric_y}".encode()).hexdigest()[:8]
+
+    # Prepare merged dataframe
+    df_x = df[df["METRIC"] == metric_x].rename(columns={"mean": "score_x"})
+    df_y = df[df["METRIC"] == metric_y].rename(columns={"mean": "score_y"})
+    merged_df = df_x.merge(df_y, on=["GLOSS_A", "GLOSS_B"], suffixes=("", "_y"))
+
+    # Calculate correlations
+    pearson_corr, _ = pearsonr(merged_df["score_x"], merged_df["score_y"])
+    spearman_corr, _ = spearmanr(merged_df["score_x"], merged_df["score_y"])
+    kendall_corr, _ = kendalltau(merged_df["score_x"], merged_df["score_y"])
+
+    # Initialize summary dict
+    summary = {
+        "metric_x": metric_x,
+        "metric_y": metric_y,
+        "metric_x_hash": metric_x_hash,
+        "metric_y_hash": metric_y_hash,
+        "pearson_corr": pearson_corr,
+        "spearman_corr": spearman_corr,
+        "kendall_corr": kendall_corr,
+        "pearson_interpretation": interpret_correlation(pearson_corr),
+        "spearman_interpretation": interpret_correlation(spearman_corr),
+        "kendall_interpretation": interpret_correlation(kendall_corr),
+        # other stuff...
+    }
+
+    # For Lookalike and Semantic
+    for relation in ["Lookalike", "Semantic"]:
+        sub_df = merged_df[merged_df["relation_type"] == relation]
+        if len(sub_df) > 1:
+            mean_x = sub_df["score_x"].mean()
+            mean_y = sub_df["score_y"].mean()
+            t_stat, p_val = ttest_rel(sub_df["score_x"], sub_df["score_y"])
+        else:
+            mean_x = mean_y = t_stat = p_val = float("nan")
+
+        summary[f"{relation.lower()}_mean_x"] = mean_x
+        summary[f"{relation.lower()}_mean_y"] = mean_y
+        summary[f"{relation.lower()}_t_stat"] = t_stat
+        summary[f"{relation.lower()}_p_val"] = p_val
+
+    summary_df = pd.DataFrame([summary])
+
+    # Plotting
+    melted = pd.DataFrame(
+        {
+            "Relation": ["Lookalike", "Lookalike", "Semantic", "Semantic"],
+            "Metric": [metric_x, metric_y, metric_x, metric_y],
+            "Mean Distance": [
+                summary["lookalike_mean_x"],
+                summary["lookalike_mean_y"],
+                summary["semantic_mean_x"],
+                summary["semantic_mean_y"],
+            ],
+        }
+    )
+
+    plt.figure(figsize=(8, 6))
+    sns.barplot(data=melted, x="Relation", y="Mean Distance", hue="Metric")
+    plt.title(f"Mean Distances for {metric_x_hash} vs {metric_y_hash}")
+    plt.grid(True, axis="y")
+    plt.tight_layout()
+
+    if save_plot_path:
+        base_path = save_plot_path.parent / f"{metric_x_hash}_{metric_y_hash}_{name_hash}"
+        png_file = base_path.with_suffix(".png")
+        save_plot_path = base_path / png_file
+
+    if save_plot_path:
+        plt.savefig(save_plot_path)
+    if show_plot:
+        plt.show()
+    else:
+        plt.close()
+
+    return summary_df
 
 
 def create_gloss_tuple_aslkg(row):
@@ -252,12 +398,33 @@ def normalize_gloss_tuple(val):
         return tuple(parts)
 
 
+def interpret_correlation(coef: float) -> str:
+    if abs(coef) >= 0.9:
+        return "very strong correlation"
+    elif abs(coef) >= 0.7:
+        return "strong correlation"
+    elif abs(coef) >= 0.5:
+        return "moderate correlation"
+    elif abs(coef) >= 0.3:
+        return "weak correlation"
+    else:
+        return "very weak or no correlation"
+
+
 if __name__ == "__main__":
 
-    score_analysis_folder = Path("metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP")
+    # score_analysis_folder = Path("metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP")
     # score_analysis_folder = Path(
     #     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials"
     # )
+    # score_analysis_folder = Path(
+    #     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/5_12_2025_score_analysis_288_metrics_169_glosses"
+    # )
+    # score_analysis_folder = Path(
+    #     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4/5_12_2025_score_analysis_288_metrics_169_glosses"
+    # )
+
+    score_analysis_folder = Path("/data/petabyte/cleong/projects/pose-eval/Return4/score_analysis")
     aslkg_csv = Path("/opt/home/cleong/projects/semantic_and_visual_similarity/local_data/ASLKG/edges_v2_noweights.tsv")
     known_lookalikes_csv = Path(
         "/opt/home/cleong/projects/semantic_and_visual_similarity/local_data/SimilarSigns/deduped_sorted_similar_gloss_pairs.csv"
@@ -283,7 +450,7 @@ if __name__ == "__main__":
     print(scores_by_gloss_df.head())
 
     ################################################################
-    # Adding the ASL Knowledge Graph: alas, none of these are in here.
+    # Adding the ASL Knowledge Graph
     asl_knowledge_graph_df = pd.read_csv(aslkg_csv, delimiter="\t")
     # # get the "response" relation
     asl_knowledge_graph_df = asl_knowledge_graph_df[asl_knowledge_graph_df["relation"] == "response"]
@@ -312,7 +479,7 @@ if __name__ == "__main__":
     )
     print(set(asl_knowledge_graph_df["gloss_tuple"]).intersection(set(scores_by_gloss_df["gloss_tuple"])))
 
-    print("*" * 20)
+    print("*" * 50)
     print(scores_by_gloss_df[scores_by_gloss_df["semantically_related"] == True])
 
     #############################################
@@ -325,9 +492,26 @@ if __name__ == "__main__":
     scores_by_gloss_df["known_lookalikes"] = scores_by_gloss_df["gloss_tuple"].isin(
         set(known_lookalikes_df["gloss_tuple"])
     )
+
+    print(f"KNOWN LOOKALIKES")
     print(scores_by_gloss_df[scores_by_gloss_df["known_lookalikes"] == True])
+    print("*" * 50)
 
     scores_by_gloss_df["relation_type"] = scores_by_gloss_df.apply(classify_relation, axis=1)
+
+    for rel_type in scores_by_gloss_df["relation_type"].unique():
+        rel_type_df = scores_by_gloss_df[scores_by_gloss_df["relation_type"] == rel_type]
+        rel_type_df = rel_type_df[["GLOSS_A", "GLOSS_B", "relation_type"]].drop_duplicates()
+        rel_type_glosses = rel_type_df["GLOSS_A"].unique().tolist()
+        rel_type_glosses.extend(rel_type_df["GLOSS_B"].unique().tolist())
+        rel_type_glosses = list(set(rel_type_glosses))
+        rel_type_out = score_analysis_folder / f"glosses_{rel_type}_relation.csv"
+        print(f"Saving {len(rel_type_df)} {rel_type} tuples to {rel_type_out}")
+        print(rel_type_glosses)
+        rel_type_df.to_csv(rel_type_out)
+
+    print("*" * 50)
+    exit()
 
     # Example:EmbeddingDistanceMetric_sem-lex_cosine_out_of_class_scores_by_gloss.csv
     # gloss_tuple	count	mean	max	min	std	known_similar	metric	rank
@@ -345,30 +529,13 @@ if __name__ == "__main__":
     metrics = scores_by_gloss_df["METRIC"].unique().tolist()
     correlation_plots_folder = plots_folder / "metric_correlations"
     histogram_plots_folder = plots_folder / "metric_histograms"
+    bar_plots_folder = plots_folder / "bar_plots"
+    summaries_folder = plots_folder / "summaries"
+
     correlation_plots_folder.mkdir(exist_ok=True)
     histogram_plots_folder.mkdir(exist_ok=True)
-
-    combinations_count = math.comb(len(metrics), 2)
-    print(f"We have intergloss scores for {len(metrics)} metrics, so there are {combinations_count} combinations")
-
-    for metric1, metric2 in tqdm(
-        combinations(metrics, 2), desc="generating correlation plots", total=combinations_count
-    ):
-        plot_metric_scatter(
-            scores_by_gloss_df,
-            metric1,
-            metric2,
-            show=False,
-            png_path=correlation_plots_folder / f"{metric1}_versus_{metric2}.png",
-        )
-        # plot_metric_scatter_interactive(
-        #     scores_by_gloss_df,
-        #     metric1,
-        #     metric2,
-        #     show=False,
-        #     html_path=correlation_plots_folder / f"{metric1}_versus_{metric2}.html",
-        # )
-        gc.collect()
+    bar_plots_folder.mkdir(exist_ok=True)
+    summaries_folder.mkdir(exist_ok=True)
 
     for metric in tqdm(metrics, desc="Generating histogram plots"):
         plot_metric_histogram(
@@ -377,4 +544,63 @@ if __name__ == "__main__":
             col="mean",
             out_path=histogram_plots_folder / f"{metric}_intergloss_hist.png",
         )
+        plot_metric_boxplot(
+            scores_by_gloss_df,
+            metric=metric,
+            col="mean",
+            out_path=histogram_plots_folder / f"{metric}_intergloss_boxplot.png",
+        )
         gc.collect()
+    combinations_count = math.comb(len(metrics), 2)
+    print(f"We have intergloss scores for {len(metrics)} metrics, so there are {combinations_count} combinations")
+
+    metric_summaries = []
+
+    for metric1, metric2 in tqdm(
+        combinations(metrics, 2), desc="generating correlation plots", total=combinations_count
+    ):
+        metric1_hash = hashlib.md5(f"{metric1}".encode()).hexdigest()[:8]
+        metric2_hash = hashlib.md5(f"{metric2}".encode()).hexdigest()[:8]
+        name_hash = hashlib.md5(f"{metric1}|{metric2}".encode()).hexdigest()[:8]
+        summary = analyze_metric_relationships(
+            scores_by_gloss_df,
+            metric1,
+            metric2,
+            show_plot=False,
+            save_plot_path=bar_plots_folder / f"{metric1}_versus_{metric2}_{name_hash}.png",
+        )
+        plot_metric_scatter(
+            scores_by_gloss_df,
+            metric1,
+            metric2,
+            show=False,
+            png_path=correlation_plots_folder / f"{metric1}_versus_{metric2}.png",
+        )
+
+        # plot_metric_scatter_interactive(
+        #     scores_by_gloss_df,
+        #     metric1,
+        #     metric2,
+        #     show=False,
+        #     html_path=correlation_plots_folder / f"{metric1}_versus_{metric2}.html",
+        # )
+
+        # print(summary)
+
+        # if abs(summary["pearson_corr"].item()) > 0.7:
+        #     print("\nHIGHLY CORRELATED")
+        #     print(f"*metric1: {metric1}")
+        #     print(f"*metric1: {metric1_hash}")
+        #     print(f"*metric2: {metric2}")
+        #     print(f"*metric2: {metric2_hash}")
+        #     print(f"*hash: {name_hash}")
+        #     print(summary["pearson_corr"])
+
+        # summary.to_csv(summaries_folder / f"{name_hash}.csv")
+        summary["hash"] = name_hash
+        metric_summaries.append(summary)
+        gc.collect()
+
+    correlation_summary_df = pd.concat(metric_summaries)
+    correlation_summary_df = correlation_summary_df.sort_values(by="pearson_corr", ascending=False)
+    correlation_summary_df.to_csv(summaries_folder / "summary.csv")
