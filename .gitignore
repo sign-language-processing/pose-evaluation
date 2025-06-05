@@ -19,3 +19,6 @@ coverage.lcov
 *.png
 **/dtw_plots/*
 **/plots/*
+**/misc_out/*
+**/debug*/*
+*.tar.zst
