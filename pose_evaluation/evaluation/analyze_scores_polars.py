@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
     compute_score_by_metric(lf)
 
-    result = compute_map_by_metric_safe(pl.scan_parquet(args.path), limit_rows=300_000_000)
+    result = compute_map_by_metric_memory_efficient(pl.scan_parquet(args.path), limit_rows=300_000_000)
     print(result)
 
     for row in result.iter_rows():
