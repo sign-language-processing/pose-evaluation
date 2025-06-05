@@ -97,7 +97,7 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
             2) The dist input is a positive integer or None
     """
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         name="DTWOptimizedDistanceMeasure",
         default_distance: float = 0,
@@ -141,7 +141,7 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
 # https://forecastegy.com/posts/dynamic-time-warping-dtw-libraries-python-examples/
 class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name="dtaiDTWAggregatedDistanceMeasure",
         default_distance: float = 0,

@@ -27,7 +27,7 @@ torch.set_default_device(DEVICE)  # so that we get arrays on the same device
 @pytest.fixture(name="cosine_metric")
 def fixture_cosine_metric():
     """Fixture to create an EmbeddingDistanceMetric instance."""
-    return EmbeddingDistanceMetric(kind="cosine")
+    return EmbeddingDistanceMetric(model="unknown_embedding_model", kind="cosine")
 
 
 @pytest.fixture(name="embeddings")
@@ -64,7 +64,7 @@ def call_and_call_with_inputs_swapped(
     return score1, score2
 
 
-def call_with_both_input_orders_and_do_standard_checks(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def call_with_both_input_orders_and_do_standard_checks(
     hyps: torch.Tensor,
     refs: torch.Tensor,
     scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
@@ -414,16 +414,16 @@ def test_score_all_list_of_ndarray_input(cosine_metric, distance_range_checker, 
     )
 
 
-def test_device_handling(cosine_metric):
+def test_device_handling(cosine_metric):  # pylint: disable=protected-access
     """Test device handling for the metric."""
-    assert cosine_metric.device.type in [
+    assert cosine_metric.get_device().type in [
         "cuda",
         "cpu",
     ], "Device should be either 'cuda' or 'cpu'."
     if torch.cuda.is_available():
-        assert cosine_metric.device.type == "cuda", "Should use 'cuda' when available."
+        assert cosine_metric.get_device().type == "cuda", "Should use 'cuda' when available."
     else:
-        assert cosine_metric.device.type == "cpu", "Should use 'cpu' when CUDA is unavailable."
+        assert cosine_metric.get_device().type == "cpu", "Should use 'cpu' when CUDA is unavailable."
 
 
 def test_score_mixed_input_types(cosine_metric):

@@ -36,6 +36,8 @@ dev = [
     "black",
     # to plot metric evaluation results
     "matplotlib",
+    "pytest-cov",
+    "coverage-lcov",
 ]
 
 [tool.yapf]
@@ -59,5 +61,14 @@ line-length = 120
 packages = ["pose_evaluation", "pose_evaluation.metrics"]
 
 [tool.pytest.ini_options]
-addopts = "-v"
+addopts = "-v --cov=pose_evaluation --cov-report=term --cov-report=xml --cov-report=lcov --cov-report=html"
 testpaths = ["pose_evaluation"]
+
+[tool.coverage.run]
+omit = [
+  "pose_evaluation/*/test_*.py",
+  "pose_evaluation/*/conftest.py"
+]
+
+
+
