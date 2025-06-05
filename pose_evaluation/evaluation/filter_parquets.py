@@ -9,6 +9,7 @@ import typer
 
 app = typer.Typer()
 
+
 @app.command()
 def filter_parquet_files(
     in_path: Path = typer.Argument(..., help="Folder with input .parquet files"),
@@ -20,11 +21,10 @@ def filter_parquet_files(
     typer.echo(f"📂 Input path: {in_path}")
     typer.echo(f"📁 Output path: {out_path}")
     typer.echo(f"📌 Glosses to include: {len(glosses_set)}")
-    
+
     out_path.mkdir(parents=True, exist_ok=True)
     parquet_files = sorted(in_path.glob("*.parquet"))
     typer.echo(f"📁 Parquets found: {len(parquet_files)}")
-
 
     # 1–3: Build metric → set of glosses
     metric_to_glosses = defaultdict(set)
@@ -35,13 +35,12 @@ def filter_parquet_files(
         for gloss in glosses_set:
             prefix = f"{gloss}_"
             if fname.startswith(prefix) and "OUTGLOSS_4X_SCORE_RESULTS" in fname:
-                metric_part = fname[len(prefix):fname.index("OUTGLOSS_4X_SCORE_RESULTS")].rstrip("_")
+                metric_part = fname[len(prefix) : fname.index("OUTGLOSS_4X_SCORE_RESULTS")].rstrip("_")
                 metric_to_glosses[metric_part].add(gloss)
                 gloss_to_files[(gloss, metric_part)].append(file)
 
     # 4. Keep only metrics that contain all requested glosses
-    valid_metrics = {metric for metric, glosses in metric_to_glosses.items()
-                     if glosses_set.issubset(glosses)}
+    valid_metrics = {metric for metric, glosses in metric_to_glosses.items() if glosses_set.issubset(glosses)}
 
     typer.echo(f"📊 Metrics with all glosses: {len(valid_metrics)} found")
 
@@ -77,9 +76,9 @@ def filter_parquet_files(
         with report_path.open("w") as f:
             json.dump(report, f, indent=2)
 
+
 if __name__ == "__main__":
     app()
-
 
 
 # GLOSS	SAMPLES

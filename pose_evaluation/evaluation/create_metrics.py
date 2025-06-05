@@ -1,6 +1,7 @@
-"""Creates metrics by composing various settings and preprocessors together with DistanceMeasures. 
+"""Creates metrics by composing various settings and preprocessors together with DistanceMeasures.
 
 They are given names based on the settings. E.g. 'trimmed_dtw' would be dynamic time warping with trimming."""
+
 import itertools
 from typing import Literal, Optional, List
 from pathlib import Path
@@ -78,7 +79,7 @@ def construct_metric(
     fps: Optional[int] = None,
     name: Optional[str] = None,
     z_speed: Optional[float] = None,
-    reduce_poses_to_common_components: bool= True
+    reduce_poses_to_common_components: bool = True,
 ):
     distance_measure = copy.deepcopy(distance_measure)
     name_pieces = []
@@ -157,8 +158,6 @@ def construct_metric(
     if reduce_poses_to_common_components:
         pose_preprocessors.append(ReducePosesToCommonComponentsProcessor())
 
-
-
     if "Measure" in distance_measure.name:
         name = f"{distance_measure.name}".replace("Measure", "Metric")
     else:
@@ -178,7 +177,9 @@ def get_embedding_metrics(df: pd.DataFrame) -> List:
         raise ValueError(f"No {DatasetDFCol.EMBEDDING_MODEL}")
 
 
-def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None, include_masked:bool=False):
+def get_metrics(
+    measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None, include_masked: bool = False
+):
     metrics = []
 
     if measures is None:
@@ -205,10 +206,8 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         1000.0,
     ]
 
-    
     masked_fill_values = [
         # None, # leads to nan values
-
         0.0,  # top 8/10 metrics
         1.0,  #
         10.0,
@@ -218,17 +217,13 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
 
     if include_masked:
         masked_fill_values.append(None)
-        
 
-    
     trim_values = [True, False]
 
-   
     normalize_values = [True, False]
 
     sequence_alignment_strategies = ["zeropad", "padwithfirstframe", "dtw"]
 
-    
     keypoint_selection_strategies = [
         "removelegsandworld",
         "reduceholistic",
@@ -243,7 +238,6 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
         60,
         120,
     ]
-
 
     # Create all combinations
     metric_combinations = itertools.product(
@@ -285,7 +279,6 @@ def get_metrics(measures: List[DistanceMeasure] = None, include_return4=True, me
             # doesn't work, creates "dtw" metrics that just fail with ValueError:
             # e.g. "operands could not be broadcast together with shapes (620,1,48,3) (440,1,48,3)""
             continue
-
 
         metric = construct_metric(
             distance_measure=measure,

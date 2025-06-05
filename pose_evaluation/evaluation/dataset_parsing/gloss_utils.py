@@ -134,10 +134,9 @@ def test_gloss_matching():
             "asllex:hurdle_1",  # ASLKG
         ),
         (
-            "I_love_you", # ASL-LEX 2 EntryID (F_01_102)
-            "i_love_you", # ASL-LEX 2 LemmaID, Sem-Lex 'label' (F_01_102)
-            "ILOVEYOU", #ASL Citizen test set (F_01_102)
-            "asllex:i_love_you", # ASLKG
-            
-        )
+            "I_love_you",  # ASL-LEX 2 EntryID (F_01_102)
+            "i_love_you",  # ASL-LEX 2 LemmaID, Sem-Lex 'label' (F_01_102)
+            "ILOVEYOU",  # ASL Citizen test set (F_01_102)
+            "asllex:i_love_you",  # ASLKG
+        ),
     ]

@@ -32,7 +32,6 @@ class Ham2PoseMSEDistanceMeasure(AggregatedDistanceMeasure):
         return self._aggregate(trajectory_distances)
 
 
-
 class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
     def __init__():
         super().__init__(
@@ -54,72 +53,68 @@ class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
             sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1)
             trajectory_distances[i] = np.sqrt(sq_error).mean()  # Store distance in the preallocated array
         trajectory_distances = ma.array(trajectory_distances)
-        return self._aggregate(trajectory_distances)        
-
-
+        return self._aggregate(trajectory_distances)
 
 
 # class Ham2Pose_APE(AggregatedDistanceMetric):
 #     pass
 
 
-class Ham2PoseMetric(DistanceMetric):
-    def __init__(
-        self,
-        name: str,
+# class Ham2PoseMetric(DistanceMetric):
+#     def __init__(
+#         self,
+#         name: str,
 
-        **kwargs: Any,
-    ) -> None:
-        pose_preprocessors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
-        super().__init__(name=name, higher_is_better=False, pose_preprocessors, **kwargs)
+#         **kwargs: Any,
+#     ) -> None:
+#         pose_preprocessors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
+#         super().__init__(name=name, higher_is_better=False, pose_preprocessors, **kwargs)
 
 
-
-class Ham2PoseDTW(Ham2PoseMetric):
-    def __init__(
-        self,
-        name: str,
-        distance_measure: DistanceMeasure,
-        **kwargs: Any,
-    ) -> None:
+# class Ham2PoseDTW(Ham2PoseMetric):
+#     def __init__(
+#         self,
+#         name: str,
+#         distance_measure: DistanceMeasure,
+#         **kwargs: Any,
+#     ) -> None:
 
 # TODO: Masked Fill with zeros, then euclidean
 
 
-class Ham2PosenDTW(DistanceMetric):
-    pass
+# class Ham2PosenDTW(DistanceMetric):
+#     pass
 
 
+# class Ham2PoseMSEMetric(DistanceMetric):
+#     def __init__(normalize=False):
+#         name = "MSE"
+#         if normalize:
+#             name = f"n{name}"
+#         super().__init__(
+#             name=name,
+#         )
+
+#         # TODO: ZeroPad and MaskedFill and Reduce to Intersection
+#         # TODO: zero-fill positions where EITHER is masked???
+#         # TODO: Upper body and hands only https://github.com/J22Melody/iict-eval-private/blob/text2pose/metrics/ham2pose.py#L195
+#         # https://github.com/J22Melody/iict-eval-private/blob/text2pose/metrics/metrics.py#L22 maybe this?
+#         self.pose_preprocessors.append(processor)
+
+#         if normalize:
 
 
-class Ham2PoseMSEMetric(DistanceMetric):
-    def __init__(normalize=False):
-        name = "MSE"
-        if normalize:
-            name = f"n{name}"
-        super().__init__(
-            name=name,
-        )
-
-        # TODO: ZeroPad and MaskedFill and Reduce to Intersection
-        # TODO: zero-fill positions where EITHER is masked???
-        # TODO: Upper body and hands only https://github.com/J22Melody/iict-eval-private/blob/text2pose/metrics/ham2pose.py#L195 
-        # https://github.com/J22Melody/iict-eval-private/blob/text2pose/metrics/metrics.py#L22 maybe this?
-        self.pose_preprocessors.append(processor)
-
-        if normalize:
+# TODO: Distance Measure
 
 
-        # TODO: Distance Measure
+def ham2pose_mse_trajectory_distance(trajectory1, trajectory2):
+    sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1)
+    return sq_error
 
 
-def ham2pose_mse_trajectory_distance(trajectory1, trajectory2)
-   sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1) 
-   return sq_error
+def ham2pose_ape_trajectory_distance(trajectory1, trajectory2):
+    return np.sqrt(ham2pose_mse_trajectory_distance(trajectory1, trajectory2)).mean()
 
-
-def ham2pose_ape_trajectory_distance(trajectory1, trajectory2)
-   return np.sqrt(ham2pose_mse_trajectory_distance(trajectory1, trajectory2)).mean()
 
 # No need for this if we just do FillMasked
 # def ham2pose_unmasked_euclidean_point_distance(point1, point2):

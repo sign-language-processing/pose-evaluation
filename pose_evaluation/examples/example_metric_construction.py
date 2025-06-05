@@ -145,11 +145,11 @@ if __name__ == "__main__":
 
     # metrics = [EmbeddingDistanceMetric(model="ModelName")]
 
-    Ham2Pose_nMSE = DistanceMetric(
-        "nMSE",
-        distance_measure=
-        pose_processors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
-    )
+    # Ham2Pose_nMSE = DistanceMetric(
+    #     "nMSE",
+    #     distance_measure=
+    #     pose_processors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
+    # )
 
     # Evaluate each metric on the test poses
     for metric in metrics:

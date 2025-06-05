@@ -1,5 +1,5 @@
 import argparse
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from collections import defaultdict
 from pathlib import Path
 import json
@@ -9,10 +9,10 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import torch
-from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR
+from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
-from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol
+from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
 from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
@@ -31,7 +31,11 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
     # TODO: Fix. There are glosses with underscores, e.g. "WASH_DISHES". Workaround: convert to pyarrow first
     if "_outgloss_" not in stem or "_" not in stem:
         return None
-    _, rest = stem.split("_", 1)
+    possible_gloss, rest = stem.split("_", 1)
+    first_part = rest.split("_", 1)[0]
+    assert (
+        "Return4" in first_part or "trimmed" in first_part
+    ), f"Unexpected format: {rest}, possibly gloss has underscores? {possible_gloss}"
     metric, _ = rest.split("_outgloss_", 1)
     return metric
 
@@ -45,7 +49,7 @@ def extract_filename_dist(filename: str) -> Optional[float]:
     return float(m.group(1)) if m else None
 
 
-def extract_signature_distance(signature: str) -> Optional[float]:
+def extract_signature_distance(signature: str) -> Optional[str]:
     """
     From a signature string, extract the float following 'default_distance:'.
     Returns None if not found.
@@ -115,11 +119,25 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
         results["mean_average_precision"] = RetrievalMAP()(preds, targets, indexes).item()
         results["mean_reciprocal_rank"] = RetrievalMRR()(preds, targets, indexes).item()
 
-    print("Calculating @k-metrics")
+    print(f"Calculating @k-metrics")
     for k in tqdm(ks, desc="metrics at k"):
         results[f"precision@{k}"] = float(np.mean(per_k_stats[k]["precision"])) if per_k_stats[k]["precision"] else 0.0
         results[f"recall@{k}"] = float(np.mean(per_k_stats[k]["recall"])) if per_k_stats[k]["recall"] else 0.0
         results[f"match_count@{k}"] = per_k_stats[k]["match_count"]
+
+    # print(f"Calculating @k-metrics using TorchMetrics")
+    # for k in tqdm(ks, desc="torchmetrics at k"):
+    #     precision_at_k = RetrievalPrecision(top_k=k)
+    #     recall_at_k = RetrievalRecall(top_k=k)
+
+    #     results[f"precision@{k}(torch)"] = precision_at_k(preds, targets, indexes).item()
+    #     results[f"recall@{k}(torch)"] = recall_at_k(preds, targets, indexes).item()
+
+    # # Assertions for comparison
+    # for k in ks:
+    #     assert np.isclose(results[f"precision@{k}(torch)"], results[f"precision@{k}"], atol=1e-4), f"Precision@{k} mismatch: {results[f'precision@{k}(torch)']:.4f} vs {results[f'precision@{k}']:.4f}"
+    #     assert np.isclose(results[f"recall@{k}(torch)"], results[f"recall@{k}"], atol=1e-4), f"Recall@{k} mismatch: {results[f'recall@{k}(torch)']:.4f} vs {results[f'recall@{k}']:.4f}"
+
     return results
 
 
@@ -346,14 +364,23 @@ if __name__ == "__main__":
         default="pyarrow",
         help="Format of the score files to parse (pyarrow, parquets, or csvs). Defaults to pyarrow.",
     )
+
+    parser.add_argument("--query-gloss-list", type=str, help="query glosses to include, comma-separated")
     args = parser.parse_args()
+
     scores_folder = Path(args.scores_folder)
+    gloss_list = None
+    if args.query_gloss_list is not None:
+        gloss_list = list(set([s.strip() for s in args.query_gloss_list.split(",")]))
+        # "SORRY,MOTHER,BEER,CALIFORNIA,DEAFSCHOOL,GOVERNMENT,FRIDAY,CHEW1,WEDNESDAY,REPLACE,THRILLED,MEETING,YOUR,SEVERAL,HAWAII,DRUG,DECIDE2,SHARK2,VOTE,HARDOFHEARING,OHISEE,PERFUME1,SCREWDRIVER3,LIBRARY,FORK4,LIVE2,CALM,SHAME,CAFETERIA,BANANA2,MOOSE,MAIL1,SANTA,BEAR,THANKSGIVING,TIE1,PAIR,SPECIALIST,ARIZONA,NECKLACE4,PRINT,DRINK2,THURSDAY,SIX,CASTLE2,TOSS,WEIGH,PRACTICE,STARS,LEAF1,HUSBAND,BEAK,CHALLENGE,BINOCULARS,DOLPHIN2,VAMPIRE,PUMPKIN,BRAINWASH,COMMITTEE,TEA,TURBAN,PREFER,EASTER,HUG,BATHROOM,RUIN,SNAKE,PHILADELPHIA,CONVINCE2,DONTKNOW,EIGHT,COOKIE,TELL,DEAF2,PIPE2,SATURDAY,SEVEN,SILVER,ROOF,DRIP,DUTY,COUNSELOR,NINE,RECORDING,RAT,SALAD,EVERYTHING,SNOWSUIT,EACH,CHICAGO,BAG2,PRESIDENT,GALLAUDET,CLOSE,FEW,CELERY,EARN,PEPSI,SOCKS,MICROPHONE,LUCKY,PJS,TRUE,ROSE,GOTHROUGH,RESTAURANT,WEATHER,STADIUM,FISHING2,PERCENT,KNITTING3,EXPERIMENT,TAKEOFF1,ACCENT,OPINION1,PIE,RUSSIA,WEIGHT,DONTCARE,ROCKINGCHAIR1,CANDY1,SPICY,ENOUGH,GLASSES,TUESDAY,WIFE,WASHDISHES,NEWSTOME,WEST,APPEAR,INTRODUCE,DONTMIND,HERE,LEND,PHONE,ERASE1,THREE,ADVERTISE,BERRY,DART,WINE,PILL,FRIENDLY,DIP3,TRADITION,TOP,ADULT,TASTE,DISRUPT,VACATION,SENATE,NEWSPAPER,FOCUS,DEER,INVITE,BRAG,BUFFALO,SHAVE5,BUT,CHILD,NEWYORK,WORKSHOP,FINGERSPELL,ALASKA,ONION,VOMIT,WEAR,THANKYOU,HIGHSCHOOL"
+        print(f"Including results with the following {len(gloss_list)} query glosses: {gloss_list}")
 
     analysis_folder = scores_folder.parent / "score_analysis"
     analysis_folder.mkdir(exist_ok=True)
 
     score_files_index_path = analysis_folder / "score_files_index.json"
     metric_stats_out = analysis_folder / "stats_by_metric.csv"
+    metric_stats_out_temp = analysis_folder / "stats_by_metric_temp.csv"
     metric_by_gloss_stats_folder = analysis_folder / "metric_by_gloss_stats"
     metric_by_gloss_stats_folder.mkdir(exist_ok=True)
     ks = [1, 5, 10]
@@ -383,10 +410,10 @@ if __name__ == "__main__":
         and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores")
         == previous_stats_by_metric["total_count"].sum()
     ):
-        print("Score count has not changed, no need to re-analyze. Quitting now.")
+        print(f"Score count has not changed, no need to re-analyze. Quitting now.")
         exit()
     else:
-        print("Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
+        print(f"Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
         if score_files_index.get(ScoresIndexDFCol.SUMMARY):
             print("Index has")
             print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
@@ -448,17 +475,38 @@ if __name__ == "__main__":
         if reused_old:
             continue  # Skip actual re-analysis
 
+        if gloss_list is not None:
+
+            filtered_df = metric_df[metric_df["GLOSS_A"].isin(gloss_list)]
+            print(f"Filtering scores to those in query gloss list: {len(metric_df)} before, {len(filtered_df)} after")
+            metric_df = filtered_df
+            missing = set(gloss_list) - set(metric_df["GLOSS_A"].unique())
+            if missing:
+                print(f"Missing glosses from GLOSS_A: {missing} SKIPPING!!!!!")
+                continue
+
         print(f"Analyzed {len(metrics_analyzed)}, now analyzing metric #{i}: {metric}")
         metric_stats = analyze_metric(metric, metric_df, ks, out_folder=metric_by_gloss_stats_folder)
         for k, v in metric_stats.items():
             stats_by_metric[k].append(v)
         metrics_analyzed.add(metric)
+
+        if i % 10 == 0:
+            stats_by_metric_df = pd.DataFrame(stats_by_metric)
+            print(f"$" * 60)
+            print(f"INCREMENTAL SAVE: {i}")
+            print(
+                f"Saving {len(stats_by_metric_df)} to {metric_stats_out_temp}, of which {len(stats_by_metric_df) - analyzed} are reused"
+            )
+            stats_by_metric_df.to_csv(metric_stats_out_temp, index=False)
+            print(f"$" * 60)
+
         analyzed += 1
         print("*" * 50)
 
     if stats_by_metric:
         stats_by_metric_df = pd.DataFrame(stats_by_metric)
-        print(stats_by_metric_df)
+
         print(
             f"Saving {len(stats_by_metric_df)} to {metric_stats_out}, of which {len(stats_by_metric_df) - analyzed} are reused"
         )

@@ -737,9 +737,7 @@ if __name__ == "__main__":
     # print(f"Chunked:\n{result}")
     # for row in result.iter_rows():
     #     print(row)
-    result = compute_map_chunked_by_metric(
-        args.path, metrics_to_process=["metric1", "metric2"], chunk_size=500000
-    )
+    result = compute_map_chunked_by_metric(args.path, metrics_to_process=["metric1", "metric2"], chunk_size=500000)
     print(f"Chunked By Metric:\n{result}")
     for row in result.iter_rows():
         print(row)
