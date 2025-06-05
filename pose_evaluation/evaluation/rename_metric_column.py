@@ -1,3 +1,5 @@
+"""this script was intended to let me edit CSV files to e.g. fix metric names. I forgot that some other columns might also need fixing, e.g. the SIGNATURE"""
+
 import argparse
 from pathlib import Path
 
