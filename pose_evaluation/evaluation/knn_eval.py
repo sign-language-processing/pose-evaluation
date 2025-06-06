@@ -1,17 +1,18 @@
 import heapq
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
+import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
-import pyarrow.compute as pc
-import pandas as pd
 import typer
 from tqdm import tqdm
 
-from pose_evaluation.evaluation.load_pyarrow_dataset import summarize_metric_partitions
+from pose_evaluation.evaluation.load_pyarrow_dataset import \
+    summarize_metric_partitions
 
 app = typer.Typer()
 
@@ -417,7 +418,7 @@ def do_knn(
             verbose=verbose,
         )
         typer.echo(
-            f"\nMetric: {metric_name}, k: {k}, Accuracy: {accuracy:.4f}, Queries: {filter_stats['kept']}, References: {summary_stats['num_references']})"
+            f"\nMetric: {metric_name}, k: {k}, Accuracy: {accuracy:.4f}, Queries: {filter_stats['kept']}, References: {summary_stats['num_references']}"
         )
 
 

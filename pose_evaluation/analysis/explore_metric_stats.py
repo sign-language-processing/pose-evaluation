@@ -1,15 +1,15 @@
-from pathlib import Path
-from itertools import combinations
-import re
 import os
-import torch
-import streamlit as st
+import re
+from itertools import combinations
+from pathlib import Path
+from typing import List, Tuple
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-import io
-from typing import List, Tuple
+import streamlit as st
+import torch
 
 # pio.templates.default = "plotly"
 
@@ -19,7 +19,9 @@ torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import shorten_metric_name, descriptive_name, interpret_name
+from pose_evaluation.evaluation.interpret_name import (descriptive_name,
+                                                       interpret_name,
+                                                       shorten_metric_name)
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -62,6 +64,35 @@ def plot_pareto_frontier(df: pd.DataFrame):
     maximize_col2 = st.checkbox(f"Maximize {col2}?", value=False)
 
     frontier = get_pareto_frontier(plot_df, col1, col2, maximize_col1, maximize_col2)
+
+    if st.checkbox("Show data table for Pareto Frontier?"):
+        # Drop overlapping columns (except "METRIC") from df before merge
+        cols_to_drop = [col for col in df.columns if col in frontier.columns and col != "METRIC"]
+        
+        df_trimmed = df.drop(columns=cols_to_drop)
+
+
+
+        # Merge without causing _x/_y suffixes
+        frontier_download = frontier.merge(df_trimmed, on="METRIC", how="left")
+
+        first_cols = [DESCRIPTIVE_NAME_COL, col1, col2]
+        rest_cols = [c for c in frontier_download.columns if c not in first_cols]
+        frontier_download = frontier_download[first_cols + rest_cols]
+        cols_to_drop = ["RANK", "data_labels","_metric_lower","highlight"]
+        frontier_download = frontier_download.drop(columns=cols_to_drop)
+
+        st.dataframe(frontier_download)
+        
+        # Create and offer CSV for download
+        frontier_csv_data = frontier_download.to_csv(index=False)
+        st.download_button(
+            label="Download Pareto Frontier Data Table CSV",
+            data=frontier_csv_data,
+            file_name=f"pareto_frontier_{len(frontier)}of{len(df)}_metrics.csv",
+            mime="text/csv",
+        )
+
 
     fig = go.Figure()
 
@@ -428,6 +459,7 @@ csv_paths_default = [
     # /opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses/stats_by_metric.csv",
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_21_score_analysis_1206metrics_169glosses/stats_by_metric.csv",
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/2025-06-05_2887_metrics_169_glosses_comparable_score_analysis/stats_by_metric.csv"
 ]
 csv_paths_input = st.text_input(
     "Enter paths to your CSV files (comma-separated)",

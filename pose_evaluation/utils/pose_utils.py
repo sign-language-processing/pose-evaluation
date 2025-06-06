@@ -1,6 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Tuple, Dict, Iterable, Union, Set
+from typing import Dict, Iterable, List, Set, Tuple, Union
 
 import numpy as np
 from numpy import ma
@@ -47,33 +47,22 @@ def load_pose_file(pose_path: Path) -> Pose:
 def reduce_poses_to_intersection(
     poses: Iterable["Pose"],
     progress: bool = False,
-    debug: bool = False,
 ) -> List["Pose"]:
     poses = list(poses)  # Ensure it's a list so we can iterate multiple times
 
     if not poses:
-        if debug:
-            print("No poses provided, returning empty list.")
         return []
 
     # === Stage 1: Reduce to common components ===
     common_components: Set[str] = {comp.name for comp in poses[0].header.components}
-    if debug:
-        print(f"Initial components from first pose: {sorted(common_components)}")
+
 
     for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting components", disable=not progress)):
         current_components = {comp.name for comp in pose.header.components}
-        if debug:
-            print(f"Pose {i+1} components: {sorted(current_components)}")
         common_components.intersection_update(current_components)
-        if debug:
-            print(f"Updated common components: {sorted(common_components)}")
 
     common_components_list = sorted(common_components)
 
-    if debug:
-        print(f"Final list of common components: {common_components_list}")
-        print("Applying get_components to all poses...")
 
     # Apply component filtering
     poses = [pose.get_components(common_components_list) for pose in poses]
@@ -81,29 +70,14 @@ def reduce_poses_to_intersection(
     # === Stage 2: Reduce to common points within each component ===
     common_points: Dict[str, Set[str]] = {comp.name: set(comp.points) for comp in poses[0].header.components}
 
-    if debug:
-        print("Initial points per component:")
-        for name, pts in common_points.items():
-            print(f"  {name}: {sorted(pts)}")
 
     for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting points", disable=not progress)):
         current_points = {comp.name: set(comp.points) for comp in pose.header.components}
         for name in common_points:
-            if debug:
-                before = common_points[name]
-                current = current_points.get(name, set())
-                print(f"Pose {i+1}, component '{name}': intersecting {sorted(before)} with {sorted(current)}")
             common_points[name].intersection_update(current_points.get(name, set()))
-            if debug:
-                print(f"Updated points for '{name}': {sorted(common_points[name])}")
 
     # Final dictionary of intersected points
     final_points_dict: Dict[str, List[str]] = {name: sorted(list(pts)) for name, pts in common_points.items()}
-
-    if debug:
-        print("Final points per component to apply:")
-        for name, pts in final_points_dict.items():
-            print(f"  {name}: {pts}")
 
     # Apply final component + point reduction
     reduced_poses = [pose.get_components(common_components_list, points=final_points_dict) for pose in poses]

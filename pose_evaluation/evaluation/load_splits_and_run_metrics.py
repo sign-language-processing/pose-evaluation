@@ -943,7 +943,12 @@ if __name__ == "__main__":
 # all the metrics I've done so far
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 64 --batch-size 100 --specific-metrics-csv /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/metrics_for_testvstrain.csv --full-intersplit --out metric_results_full_matrix/ --full-matrix-max-hyp 1000 2>&1|tee out/full_matrix$(date +%s).txt
 
+# 24 Pareto Frontier Metrics, 1100 hyps
+# conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/load_splits_and_run_metrics.py dataset_dfs/asl-citizen.csv --splits "train,test" --full --max-workers 64 --batch-size 100 --specific-metrics-csv /opt/home/cleong/projects/pose-evaluation/metric_results_full_matrix/pareto_frontier_24of2880_metrics.csv --full-intersplit --out metric_results_full_matrix/ --full-matrix-max-hyp 1000 2>&1|tee out/full_matrix_pareto$(date +%s).txt
+
 # monitor progress:
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_train/ --target-count 40401
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py metric_results_full_matrix/scores/batches_untrimmed_zspeed1.0_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast_asl-citizen_testvstrain --target-count 132660
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && watch python pose_evaluation/evaluation/count_files_by_hour.py --target-count 4422 metric_results_full_matrix/scores/batches_untrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric_asl-citizen_testvstrain
+
+
