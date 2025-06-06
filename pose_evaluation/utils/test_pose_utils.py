@@ -1,25 +1,19 @@
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 import numpy.ma as ma
-
 import pytest
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
 
 from pose_evaluation.utils.pose_utils import (
-    load_pose_file,
-    pose_remove_world_landmarks,
-    pose_hide_low_conf,
-    get_face_and_hands_from_pose,
-    reduce_poses_to_intersection,
-    get_component_names_and_points_dict,
-    zero_pad_shorter_poses,
-    first_frame_pad_shorter_poses,
-    pose_fill_masked_or_invalid,
-    get_youtube_asl_mediapipe_keypoints,
-)
+    add_z_offsets_to_pose, first_frame_pad_shorter_poses,
+    get_component_names_and_points_dict, get_face_and_hands_from_pose,
+    get_youtube_asl_mediapipe_keypoints, load_pose_file,
+    pose_fill_masked_or_invalid, pose_hide_low_conf,
+    pose_remove_world_landmarks, reduce_poses_to_intersection,
+    zero_pad_shorter_poses)
 
 
 def test_load_poses_mediapipe(
@@ -165,6 +159,8 @@ def test_reduce_pose_components_to_intersection(
 
     # check if the originals are unaffected
     assert all(len(pose.header.components) == original_component_count for pose in mediapipe_poses_test_data)
+
+    # with pytest.raises()
 
 
 def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
@@ -330,7 +326,7 @@ def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe
 
 
 def test_youtube_points(
-    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data, fake_openpose_135_poses
+    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data: List[Pose], fake_openpose_135_poses
 ):
 
     for pose in mediapipe_poses_test_data_refined:
@@ -344,3 +340,66 @@ def test_youtube_points(
     for pose in fake_openpose_135_poses:
         processed = get_youtube_asl_mediapipe_keypoints(pose)
         assert pose.body.data.shape[2] == processed.body.data.shape[2]
+
+
+from typing import List
+
+import numpy as np
+import numpy.ma as ma
+import pytest
+
+
+@pytest.mark.parametrize("speed_multiplier", [0.0, 0.5, 1.0, 2.0, "match_fps"])
+def test_add_z_offsets_to_pose_varied_speeds(
+    speed_multiplier,
+    mediapipe_poses_test_data_refined: List[Pose],
+    mediapipe_poses_test_data: List[Pose]
+):
+    all_poses = mediapipe_poses_test_data_refined + mediapipe_poses_test_data
+
+    for pose in all_poses:
+        fps = pose.body.fps
+        speed = fps if speed_multiplier == "match_fps" else speed_multiplier
+
+        # Deep copy pose data for comparison
+        original_data = pose.body.data.copy()
+
+        # Apply function
+        updated_pose = add_z_offsets_to_pose(pose, speed=speed)
+        updated_data = updated_pose.body.data
+
+        # Validate shape consistency
+        assert updated_data.shape == original_data.shape
+
+        # Check Z-axis offset is as expected
+        for frame_idx in range(updated_data.shape[0]):
+            expected_offset = (speed / fps) * frame_idx
+
+            original_z = original_data[frame_idx, :, :, 2]
+            updated_z = updated_data[frame_idx, :, :, 2]
+
+            # Only test unmasked values
+            mask = ma.getmaskarray(original_z)
+            delta = (updated_z - original_z).compressed()
+
+            assert np.allclose(
+                delta, expected_offset
+            ), f"Speed {speed}, frame {frame_idx}: expected offset {expected_offset}, got {delta}"
+
+        # X and Y axes should be unchanged
+        for axis in [0, 1]:
+            assert np.allclose(
+                updated_data[:, :, :, axis],
+                original_data[:, :, :, axis],
+                equal_nan=True
+            ), f"Speed {speed}: axis {axis} (X/Y) changed unexpectedly"
+
+        # Mask should be preserved
+        assert np.array_equal(
+            ma.getmaskarray(updated_data),
+            ma.getmaskarray(original_data)
+        ), f"Speed {speed}: mask was modified"
+
+
+
+    

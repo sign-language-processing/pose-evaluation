@@ -42,7 +42,6 @@ def test_score_all_returns_matrix(dummy_metric):
     h_list = [make_fake_pose() for _ in range(2)]
     r_list = [make_fake_pose() for _ in range(3)]
 
-    # dummy_metric.process_poses = MagicMock(return_value=h_list + r_list)
     matrix = dummy_metric.score_all(h_list, r_list)
 
     assert len(matrix) == 2
