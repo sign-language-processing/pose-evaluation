@@ -45,7 +45,17 @@ def mediapipe_poses_test_data_refined() -> List[Pose]:  # pylint: disable=redefi
 @pytest.fixture(scope="function")
 def mediapipe_poses_test_data_mixed_shapes() -> List[Pose]:  # pylint: disable=redefined-outer-name
     mixed_pair_path = utils_standard_mediapipe_landmarks_test_data_dir.parent / "mixed"
-    pose_paths = mixed_pair_path.glob("*.pose")
+
+    # Data: <class 'numpy.ma.core.MaskedArray'> (37, 1, 576, 3), float32
+    pose1 = "000017451997373907346-LIBRARY.pose" 
+
+    # Data: <class 'numpy.ma.core.MaskedArray'> (44, 1, 553, 3), float32
+    pose2 = "SbTU6uS4cc1tZpqCnE3g.pose"
+
+    # Data: <class 'numpy.ma.core.MaskedArray'> (111, 1, 553, 3), float32
+    pose3 = "Ui9Nq58yYSgkJslO02za.pose"
+    # pose_paths = mixed_pair_path.glob("*.pose")
+    pose_paths = [mixed_pair_path/fname for fname in [pose1, pose2, pose3]]
     original_poses = [load_pose_file(pose_path) for pose_path in pose_paths]
     return copy.deepcopy(original_poses)
 
