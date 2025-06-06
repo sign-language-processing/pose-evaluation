@@ -1,16 +1,19 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from pose_format import Pose
-from pose_evaluation.metrics.base_pose_metric import PoseMetric
+
 from pose_evaluation.metrics.base import Score
+from pose_evaluation.metrics.base_pose_metric import PoseMetric
 from pose_evaluation.metrics.pose_processors import PoseProcessor
 
 # --- Dummy setup ---
 
+
 def make_fake_pose():
     """Returns a mocked Pose object."""
     return MagicMock(spec=Pose)
+
 
 class DummyPoseMetric(PoseMetric):
     def _pose_score(self, processed_hypothesis: Pose, processed_reference: Pose):
@@ -21,7 +24,9 @@ class DummyPoseMetric(PoseMetric):
 def dummy_metric():
     return DummyPoseMetric(name="Dummy", higher_is_better=True, pose_preprocessors=[])
 
+
 # --- Tests ---
+
 
 def test_score_calls_internal_pose_score(dummy_metric):
     h = make_fake_pose()
@@ -31,6 +36,7 @@ def test_score_calls_internal_pose_score(dummy_metric):
     result = dummy_metric.score(h, r)
 
     assert result == 1.23
+
 
 def test_score_all_returns_matrix(dummy_metric):
     h_list = [make_fake_pose() for _ in range(2)]
@@ -43,6 +49,7 @@ def test_score_all_returns_matrix(dummy_metric):
     assert all(len(row) == 3 for row in matrix)
     assert all(score == 1.23 for row in matrix for score in row)
 
+
 def test_score_with_signature_returns_score(dummy_metric):
     h = make_fake_pose()
     r = make_fake_pose()
@@ -53,6 +60,7 @@ def test_score_with_signature_returns_score(dummy_metric):
     assert score_obj.score == 1.23
     assert "Dummy" in score_obj.name
 
+
 def test_score_all_with_signature(dummy_metric):
     h_list = [make_fake_pose()]
     r_list = [make_fake_pose(), make_fake_pose()]
@@ -62,11 +70,13 @@ def test_score_all_with_signature(dummy_metric):
     assert len(results) == 1
     assert all(isinstance(score, Score) for score in results[0])
 
+
 def test_add_preprocessor_appends_to_list(dummy_metric):
     proc = MagicMock(spec=PoseProcessor)
     dummy_metric.add_preprocessor(proc)
 
     assert proc in dummy_metric.pose_preprocessors
+
 
 def test_process_poses_applies_all_preprocessors(dummy_metric):
     poses = [make_fake_pose(), make_fake_pose()]
@@ -86,7 +96,6 @@ def test_process_poses_applies_all_preprocessors(dummy_metric):
     proc2.process_poses.assert_called_once()
 
 
-
 def test_pose_metric_pose_score_not_implemented():
     class IncompletePoseMetric(PoseMetric):
         def _pose_score(self, processed_hypothesis: Pose, processed_reference: Pose):
@@ -99,7 +108,6 @@ def test_pose_metric_pose_score_not_implemented():
 
     with pytest.raises(NotImplementedError, match="Subclasses must implement _pose_score"):
         metric.score(h, r)
-
 
 
 def test_constructor_defaults_to_standard_pose_processors():
