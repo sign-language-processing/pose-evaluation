@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Dict
 
 import numpy as np
+import numpy.ma as ma
 
 import pytest
 from pose_format import Pose
@@ -15,6 +16,9 @@ from pose_evaluation.utils.pose_utils import (
     reduce_poses_to_intersection,
     get_component_names_and_points_dict,
     zero_pad_shorter_poses,
+    first_frame_pad_shorter_poses,
+    pose_fill_masked_or_invalid,
+    get_youtube_asl_mediapipe_keypoints,
 )
 
 
@@ -163,6 +167,33 @@ def test_reduce_pose_components_to_intersection(
     assert all(len(pose.header.components) == original_component_count for pose in mediapipe_poses_test_data)
 
 
+def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
+
+    # they should be sorted alphabetically by name
+    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (37, 1, 576, 3) # 000017451997373907346-LIBRARY.pose
+    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (44, 1, 553, 3) # SbTU6uS4cc1tZpqCnE3g.pose
+    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (111, 1, 553, 3) # Ui9Nq58yYSgkJslO02za.pose
+    
+
+    for pose in mediapipe_poses_test_data_mixed_shapes:
+        c_names = [c.name for c in pose.header.components]
+        if pose.body.data.shape[2] == 553:
+            assert c_names == ["POSE_LANDMARKS", "FACE_LANDMARKS", "LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"]
+        if pose.body.data.shape[2] == 576:
+            assert c_names == [
+                "POSE_LANDMARKS",
+                "FACE_LANDMARKS",
+                "LEFT_HAND_LANDMARKS",
+                "RIGHT_HAND_LANDMARKS",
+                "POSE_WORLD_LANDMARKS",
+            ]
+
+    reduced_poses = reduce_poses_to_intersection(mediapipe_poses_test_data_mixed_shapes)
+
+    keypoint_shapes = [p.body.data.shape[2] for p in reduced_poses]
+    assert keypoint_shapes == [543, 543, 543]
+
+
 def test_remove_world_landmarks(mediapipe_poses_test_data: List[Pose]):
     for pose in mediapipe_poses_test_data:
         component_names = [c.name for c in pose.header.components]
@@ -238,3 +269,78 @@ def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
 
         # does the confidence match?
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
+
+
+def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
+    copies = [pose.copy() for pose in mediapipe_poses_test_data]
+    max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
+
+    padded_poses = first_frame_pad_shorter_poses(mediapipe_poses_test_data)
+
+    for i, padded_pose in enumerate(padded_poses):
+        original_pose = copies[i]
+        assert original_pose != padded_pose, "shouldn't be the same object"
+
+        old_length = len(original_pose.body.data)
+        new_length = len(padded_pose.body.data)
+        assert new_length == max_len
+
+        if old_length < max_len:
+            pad_count = max_len - old_length
+
+            # The first `pad_count` frames should match the original first frame
+            expected_frame = original_pose.body.data[0]
+            expected_conf = original_pose.body.confidence[0]
+
+            padding_frames = padded_pose.body.data[:pad_count]
+            padding_confs = padded_pose.body.confidence[:pad_count]
+
+            for f in padding_frames:
+                assert ma.allclose(f, expected_frame), "Padding frames should match original first frame"
+            for c in padding_confs:
+                assert ma.allclose(c, expected_conf), "Padding confidence should match original first frame"
+
+            # Remaining frames should be the original pose data
+            assert ma.allclose(
+                padded_pose.body.data[pad_count:], original_pose.body.data
+            ), "Original frames should be unchanged after padding"
+            assert ma.allclose(
+                padded_pose.body.confidence[pad_count:], original_pose.body.confidence
+            ), "Original confidence should be unchanged after padding"
+        else:
+            assert old_length == max_len
+
+        # Shape check
+        assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
+
+
+def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe_poses_test_data_mixed_shapes):
+    poses = mediapipe_poses_test_data
+    poses.extend(mediapipe_poses_test_data_mixed_shapes)
+
+    for pose in poses:
+        # assert ma.count_masked(pose.body.data) != 0
+        filled_pose = pose_fill_masked_or_invalid(pose, fill_val=1.1)
+        assert filled_pose != pose
+        assert ma.count_masked(filled_pose.body.data) <= ma.count_masked(pose.body.data)
+        assert np.isnan(filled_pose.body.data).sum() <= np.isnan(pose.body.data).sum()
+        assert np.isnan(filled_pose.body.data).sum() == 0
+        assert ma.count_masked(filled_pose.body.data) == 0
+        assert filled_pose.body.data.mask.shape == pose.body.data.mask.shape
+
+
+def test_youtube_points(
+    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data, fake_openpose_135_poses
+):
+
+    for pose in mediapipe_poses_test_data_refined:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert processed.body.data.shape[2] == 85
+
+    for pose in mediapipe_poses_test_data:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert processed.body.data.shape[2] == 83
+
+    for pose in fake_openpose_135_poses:
+        processed = get_youtube_asl_mediapipe_keypoints(pose)
+        assert pose.body.data.shape[2] == processed.body.data.shape[2]

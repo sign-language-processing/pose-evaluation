@@ -3,6 +3,8 @@
 The lack of automatic pose evaluation metrics is a major obstacle in the development of
 sign language generation models.
 
+![Distribution of scores](assets/pose-eval-title-picture.png)
+
 ## Goals
 
 The primary objective of this repository is to house a suite of
@@ -12,49 +14,41 @@ as well as custom-developed metrics unique to our approach.
 We recognize the distinct challenges in evaluating single signs versus continuous signing,
 and our methods reflect this differentiation.
 
-
 ---
 
-# TODO:
+<!-- ## Usage
 
-- [ ] Qualitative Evaluation
-- [ ] Quantitative Evaluation
-
-## Qualitative Evaluation
-
-To qualitatively demonstrate the efficacy of these evaluation metrics,
-we implement a nearest-neighbor search for selected signs from the **TODO** corpus.
-The rationale is straightforward: the closer the sign is to its nearest neighbor in the corpus,
-the more effective the evaluation metric is in capturing the nuances of sign language transcription and translation.
-
-### Distribution of Scores
-
-Using a sample of the corpus, we compute the any-to-any scores for each metric.
-Intuitively, we expect a good metric given any two random signs to produce a bad score, since most signs are unrelated.
-This should be reflected in the distribution of scores, which should be skewed towards lower scores.
-
-![Distribution of scores](assets/distribution/all.png)
-
-### Nearest Neighbor Search
-
-INSERT TABLE HERE
+```bash
+# (TODO) pip install the package
+# (TODO) how to construct a metric
+# Metric signatures, preprocessors
+``` -->
 
 ## Quantitative Evaluation
 
 ### Isolated Sign Evaluation
 
-Given an isolated sign corpus such as AUTSL[^2], we repeat the evaluation of Ham2Pose[^1] on our metrics.
+Given an isolated sign corpus such as ASL Citizen[^2], we repeat the evaluation of Ham2Pose[^1] on our metrics, ranking distance metrics by retrieval performance.
 
-We also repeat the experiments of Atwell et al.[^3] to evaluate the bias of our metrics on different protected attributes.
+Evaluation is conducted on a combined dataset of ASL Citizen, Sem-Lex[^3], and PopSign ASL[^4].
 
-### Continuous Sign Evaluation
+For each sign class, we use all available samples as targets and sample four times as many distractors, yielding a 1:4 target-to-distractor ratio.
 
-We evaluate each metric in the context of continuous signing with our continuous metrics alongside our segmented metrics
-and correlate to human judgments.
+For instance, for the sign _HOUSE_ with 40 samples (11 from ASL Citizen, 29 from Sem-Lex), we add 160 distractors and compute pairwise metrics from each target to all 199 other examples (We consistently discard scores for pose files where either the target or distractor could not be embedded with SignCLIP.).
+
+Retrieval quality is measured using Mean Average Precision (`mAP↑`) and Precision@10 (`P@10↑`). The complete evaluation covers 5,362 unique sign classes and 82,099 pose sequences.
+
+After several pilot runs, we finalized a subset of 169 sign classes with at most 20 samples each, ensuring consistent metric coverage. We evaluated 1200 distance-based variants and SignCLIP models with different checkpoints provided by the authors on this subset.
+
+The overall results show that DTW-based metrics outperform padding-based baselines. Embedding-based methods, particularly SignCLIP models fine-tuned on in-domain ASL data, achieve the strongest retrieval scores.
+
+<!-- Atwell style evaluations didn't get done. Nor did AUTSL -->
 
 ## Evaluation Metrics
 
-**TODO** list evaluation metrics here.
+For the study, we evaluated over 1200 Pose distance metrics, recording mAP and other retrieval performance characteristics.
+
+We find that the top metric
 
 ### Contributing
 
@@ -65,24 +59,34 @@ Please make sure to run `black pose_evaluation` before submitting a pull request
 If you use our toolkit in your research or projects, please consider citing the work.
 
 ```bib
-@misc{pose-evaluation2024,
-    title={Pose Evaluation: Metrics for Evaluating Sign Langauge Generation Models},
-    author={Zifan Jiang, Colin Leong, Amit Moryossef},
+@misc{pose-evaluation2025,
+    title={Meaningful Pose-Based Sign Language Evaluation},
+    author={Zifan Jiang, Colin Leong, Amit Moryossef, Anne Göhring, Annette Rios, Oliver Cory, Maksym Ivashechkin, Neha Tarigopula, Biao Zhang, Rico Sennrich, Sarah Ebling},
     howpublished={\url{https://github.com/sign-language-processing/pose-evaluation}},
-    year={2024}
+    year={2025}
 }
 ```
 
-#### Contributions:
-- Zifan, Colin, and Amit developed the evaluation metrics and tools.
+### Contributions
+
+- Zifan, Colin, and Amit developed the evaluation metrics and tools. Zifan did correlation and human evaluations, Colin did automated meta-eval, KNN, etc.
+- Colin and Amit developed the library code.
 - Zifan, Anne, and Lisa conducted the qualitative and quantitative evaluations.
 
 ## References
 
-[^1]: Rotem Shalev-Arkushin, Amit Moryossef, and Ohad Fried.
-2022. [Ham2Pose: Animating Sign Language Notation into Pose Sequences](https://arxiv.org/abs/2211.13613).
-[^2]: Ozge Mercanoglu Sincan and Hacer Yalim Keles.
-2020. [AUTSL: A Large Scale Multi-modal Turkish Sign Language Dataset and Baseline Methods](https://arxiv.org/abs/2008.00932).
-[^3]: Katherine Atwell, Danielle Bragg, and Malihe Alikhani. 
-2024. [Studying and Mitigating Biases in Sign Language Understanding Models.](https://aclanthology.org/2024.emnlp-main.17/)
-In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing, pages 268–283, Miami, Florida, USA. Association for Computational Linguistics.
+[^1]: Rotem Shalev-Arkushin, Amit Moryossef, and Ohad Fried. 2022. [Ham2Pose: Animating Sign Language Notation into Pose Sequences](https://arxiv.org/abs/2211.13613).
+[^2]:
+    Aashaka Desai, Lauren Berger, Fyodor O. Minakov, Vanessa Milan, Chinmay Singh, Kriston Pumphrey, Richard E. Ladner, Hal Daumé III, Alex X. Lu, Naomi K. Caselli, and Danielle Bragg.  
+    2023. [ASL Citizen: A Community-Sourced Dataset for Advancing Isolated Sign Language Recognition](https://arxiv.org/abs/2304.05934).  
+    _ArXiv_, abs/2304.05934.
+
+[^3]:
+    Lee Kezar, Elana Pontecorvo, Adele Daniels, Connor Baer, Ruth Ferster, Lauren Berger, Jesse Thomason, Zed Sevcikova Sehyr, and Naomi Caselli.  
+    2023. [The Sem-Lex Benchmark: Modeling ASL Signs and Their Phonemes](https://api.semanticscholar.org/CorpusID:263334197).  
+    _Proceedings of the 25th International ACM SIGACCESS Conference on Computers and Accessibility_.
+
+[^4]:
+    Thad Starner, Sean Forbes, Matthew So, David Martin, Rohit Sridhar, Gururaj Deshpande, Sam S. Sepah, Sahir Shahryar, Khushi Bhardwaj, Tyler Kwok, Daksh Sehgal, Saad Hassan, Bill Neubauer, Sofia Anandi Vempala, Alec Tan, Jocelyn Heath, Unnathi Kumar, Priyanka Mosur, Tavenner Hall, Rajandeep Singh, Christopher Cui, Glenn Cameron, Sohier Dane, and Garrett Tanzer.  
+    2023. [PopSign ASL v1.0: An Isolated American Sign Language Dataset Collected via Smartphones](https://api.semanticscholar.org/CorpusID:268030720).  
+    _Neural Information Processing Systems_.

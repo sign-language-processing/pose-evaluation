@@ -7,6 +7,7 @@ from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.dtw_metric import (
     DTWAggregatedPowerDistanceMeasure,
     DTWAggregatedScipyDistanceMeasure,
+    DTWDTAIImplementationDistanceMeasure,
 )
 from pose_evaluation.metrics.test_distance_metric import get_poses
 from pose_evaluation.metrics.pose_processors import (
@@ -17,9 +18,16 @@ from pose_evaluation.metrics.pose_processors import (
     get_standard_pose_processors,
 )
 
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+
+from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
+
 if __name__ == "__main__":
     # Define file paths for test pose data
-    test_data_path = Path("pose_evaluation") / "utils" / "test" / "test_data"
+    # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
+    test_data_path = (
+        Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+    )
     reference_file = test_data_path / "colin-1-HOUSE.pose"
     hypothesis_file = test_data_path / "colin-2-HOUSE.pose"
 
@@ -108,25 +116,40 @@ if __name__ == "__main__":
         ),
         # Recreating Dynamic Time Warping - Mean Joint Error
         # As before, only now we use the Dynamic Time Warping version!
-        DistanceMetric(
-            "DTWPowerDistance",
-            DTWAggregatedPowerDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, order=2),
-            pose_preprocessors=get_standard_pose_processors(
-                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
-            ),
-        ),
+        # DistanceMetric(
+        #     "DTWPowerDistance",
+        #     DTWAggregatedPowerDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, order=2),
+        #     pose_preprocessors=get_standard_pose_processors(
+        #         zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+        #     ),
+        # ),
         # We can also implement a version that uses scipy distances "cdist"
         # This lets us experiment with e.g. jaccard
         # Options are listed at the documentation for scipy:
         # https://docs.scipy.org/doc/scipy-1.15.0/reference/generated/scipy.spatial.distance.cdist.html
+        # DistanceMetric(
+        #     "DTWScipyDistance",
+        #     DTWAggregatedScipyDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, metric="jaccard"),
+        #     pose_preprocessors=get_standard_pose_processors(
+        #         zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+        #     ),
+        # ),
         DistanceMetric(
-            "DTWScipyDistance",
-            DTWAggregatedScipyDistanceMeasure(aggregation_strategy="mean", default_distance=0.0, metric="jaccard"),
+            "n-dtai-DTW-MJE (fast)",
+            distance_measure=DTWDTAIImplementationDistanceMeasure(use_fast=True),
             pose_preprocessors=get_standard_pose_processors(
-                zero_pad_shorter=False, reduce_holistic_to_face_and_upper_body=True
+                reduce_holistic_to_face_and_upper_body=True, zero_pad_shorter=False
             ),
         ),
     ]
+
+    # metrics = [EmbeddingDistanceMetric(model="ModelName")]
+
+    # Ham2Pose_nMSE = DistanceMetric(
+    #     "nMSE",
+    #     distance_measure=
+    #     pose_processors = [RemoveWorldLandmarksProcessor(), ReduceHolisticProcessor(), NormalizePosesProcessor()]
+    # )
 
     # Evaluate each metric on the test poses
     for metric in metrics:
@@ -146,6 +169,11 @@ if __name__ == "__main__":
         print(metric.get_signature().format(short=True))
 
         try:
+            if isinstance(metric, EmbeddingDistanceMetric):
+                print(
+                    "Sorry, this is an embedding metric, it can't handle poses! You need to load the .npy files to arrays of shape (768,) first!"
+                )
+                continue
             #
             print("\nSCORE ALL with Signature (short):")
             print(metric.score_all_with_signature(hypotheses, references, short=True, progress_bar=True))

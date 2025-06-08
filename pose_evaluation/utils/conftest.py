@@ -21,6 +21,7 @@ utils_standard_mediapipe_landmarks_test_data_dir = (
 @pytest.fixture(scope="function")
 def mediapipe_poses_test_data_paths() -> List[Path]:
     pose_file_paths = list(utils_standard_mediapipe_landmarks_test_data_dir.glob("*.pose"))
+    pose_file_paths.sort(key=lambda p: p.name)
     return pose_file_paths
 
 
@@ -30,6 +31,22 @@ def mediapipe_poses_test_data(mediapipe_poses_test_data_paths) -> List[Pose]:  #
     # I ran into issues where if one test would modify a Pose, it would affect other tests.
     # specifically, pose.header.components[0].name = unsupported_component_name in test_detect_format
     # this ensures we get a fresh object each time.
+    return copy.deepcopy(original_poses)
+
+
+@pytest.fixture(scope="function")
+def mediapipe_poses_test_data_refined() -> List[Pose]:  # pylint: disable=redefined-outer-name
+    refined_path = utils_standard_mediapipe_landmarks_test_data_dir.parent / "refined_landmarks"
+    pose_paths = refined_path.glob("*.pose")
+    original_poses = [load_pose_file(pose_path) for pose_path in pose_paths]
+    return copy.deepcopy(original_poses)
+
+
+@pytest.fixture(scope="function")
+def mediapipe_poses_test_data_mixed_shapes() -> List[Pose]:  # pylint: disable=redefined-outer-name
+    mixed_pair_path = utils_standard_mediapipe_landmarks_test_data_dir.parent / "mixed"
+    pose_paths = mixed_pair_path.glob("*.pose")
+    original_poses = [load_pose_file(pose_path) for pose_path in pose_paths]
     return copy.deepcopy(original_poses)
 
 
