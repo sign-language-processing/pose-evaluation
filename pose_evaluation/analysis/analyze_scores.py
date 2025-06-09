@@ -1,26 +1,17 @@
 import argparse
 import json
-import re
-from collections import defaultdict
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
 import numpy as np
 import pandas as pd
+import re
 import torch
-from torchmetrics.retrieval import (
-    RetrievalMAP,
-    RetrievalMRR,
-    RetrievalPrecision,
-    RetrievalRecall,
-)
+from collections import defaultdict
+from pathlib import Path
+from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
 from tqdm import tqdm
+from typing import Optional, List, Dict, Tuple
 
 from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
-from pose_evaluation.evaluation.load_pyarrow_dataset import (
-    load_dataset,
-    load_metric_dfs,
-)
+from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
