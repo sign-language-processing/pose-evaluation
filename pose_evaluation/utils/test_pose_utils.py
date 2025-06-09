@@ -21,8 +21,8 @@ from pose_evaluation.utils.pose_utils import (
 
 
 def test_load_poses_mediapipe(
-        mediapipe_poses_test_data_paths: List[Path],
-        standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data_paths: List[Path],
+    standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
     poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
 
@@ -49,8 +49,8 @@ def test_load_poses_mediapipe(
 
 
 def test_remove_specific_landmarks_mediapipe(
-        mediapipe_poses_test_data: List[Pose],
-        standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data: List[Pose],
+    standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
     for pose in mediapipe_poses_test_data:
         component_count = len(pose.header.components)
@@ -129,8 +129,8 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
 
 
 def test_reduce_pose_components_to_intersection(
-        mediapipe_poses_test_data: List[Pose],
-        standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data: List[Pose],
+    standard_mediapipe_components_dict: Dict[str, List[str]],
 ):
     test_poses_with_one_reduced = [pose.copy() for pose in mediapipe_poses_test_data]
 
@@ -167,8 +167,12 @@ def test_reduce_pose_components_to_intersection(
 
 def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
     # they should be sorted alphabetically by name
-    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (37, 1, 576,
-                                                                         3)  # 000017451997373907346-LIBRARY.pose
+    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (
+        37,
+        1,
+        576,
+        3,
+    )  # 000017451997373907346-LIBRARY.pose
     assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (44, 1, 553, 3)  # SbTU6uS4cc1tZpqCnE3g.pose
     assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (111, 1, 553, 3)  # Ui9Nq58yYSgkJslO02za.pose
 
@@ -236,8 +240,8 @@ def test_detect_format(fake_openpose_poses, fake_openpose_135_poses, mediapipe_p
         assert len(pose.header.components) == 1
 
         with pytest.raises(
-                ValueError,
-                match="Could not detect pose format, unknown pose header schema with component names",
+            ValueError,
+            match="Could not detect pose format, unknown pose header schema with component names",
         ):
             detect_known_pose_format(pose)
 
@@ -327,7 +331,7 @@ def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe
 
 
 def test_youtube_points(
-        mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data, fake_openpose_135_poses
+    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data, fake_openpose_135_poses
 ):
     for pose in mediapipe_poses_test_data_refined:
         processed = get_youtube_asl_mediapipe_keypoints(pose)

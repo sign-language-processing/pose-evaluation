@@ -17,7 +17,7 @@ class DatasetDFCol:
 
 
 def file_paths_list_to_df(
-        file_paths: List[Path], prefix="", parse_metatadata_from_folder_structure=False
+    file_paths: List[Path], prefix="", parse_metatadata_from_folder_structure=False
 ) -> pd.DataFrame:
     # Define the column names dynamically based on the prefix
     columns = {
@@ -47,11 +47,11 @@ def parse_split_and_gloss_from_file_paths(file_paths: List[Path], gloss_level=0,
 
 
 def df_to_standardized_df(
-        df: pd.DataFrame,
-        video_id_col="video_id",
-        split_col="split",
-        gloss_col="gloss",
-        signer_id_col="signer_id",
+    df: pd.DataFrame,
+    video_id_col="video_id",
+    split_col="split",
+    gloss_col="gloss",
+    signer_id_col="signer_id",
 ):
     # Standardize to specific predictable names: "Video ID" or "video_id" for example,  becomes "VIDEO_ID"
 

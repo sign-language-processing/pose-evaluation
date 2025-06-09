@@ -15,10 +15,10 @@ from pose_evaluation.metrics.distance_measure import (
 
 class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
     def __init__(
-            self,
-            name="DTWAggregatedDistanceMeasure",
-            default_distance: float = 0,
-            aggregation_strategy: AggregationStrategy = "mean",
+        self,
+        name="DTWAggregatedDistanceMeasure",
+        default_distance: float = 0,
+        aggregation_strategy: AggregationStrategy = "mean",
     ) -> None:
         super().__init__(
             name=name,
@@ -31,10 +31,10 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
         trajectory_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
-                enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
-                desc="getting dtw distances for trajectories",
-                total=keypoint_count,
-                disable=not progress,
+            enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
+            desc="getting dtw distances for trajectories",
+            total=keypoint_count,
+            disable=not progress,
         ):
             distance, _ = fastdtw(hyp_trajectory, ref_trajectory, dist=self._calculate_pointwise_distances)
             # distance is an ndarray of shape (1,)
@@ -48,11 +48,11 @@ class DTWAggregatedDistanceMeasure(AggregatedDistanceMeasure):
 
 class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
     def __init__(
-            self,
-            name="DTWAggregatedDistanceMeasure",
-            default_distance: float = 0,
-            aggregation_strategy: AggregationStrategy = "mean",
-            order=2,
+        self,
+        name="DTWAggregatedDistanceMeasure",
+        default_distance: float = 0,
+        aggregation_strategy: AggregationStrategy = "mean",
+        order=2,
     ) -> None:
         super().__init__(
             name=name,
@@ -69,11 +69,11 @@ class DTWAggregatedPowerDistanceMeasure(DTWAggregatedDistanceMeasure):
 
 class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
     def __init__(
-            self,
-            name="DTWAggregatedScipyDistanceMeasure",
-            default_distance: float = 0,
-            aggregation_strategy: AggregationStrategy = "mean",
-            metric: str = "euclidean",
+        self,
+        name="DTWAggregatedScipyDistanceMeasure",
+        default_distance: float = 0,
+        aggregation_strategy: AggregationStrategy = "mean",
+        metric: str = "euclidean",
     ) -> None:
         super().__init__(
             name=name,
@@ -98,12 +98,12 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
     """
 
     def __init__(  # pylint: disable=too-many-arguments
-            self,
-            name="DTWOptimizedDistanceMeasure",
-            default_distance: float = 0,
-            aggregation_strategy: AggregationStrategy = "mean",
-            power=2,
-            masked_fill_value=0,
+        self,
+        name="DTWOptimizedDistanceMeasure",
+        default_distance: float = 0,
+        aggregation_strategy: AggregationStrategy = "mean",
+        power=2,
+        masked_fill_value=0,
     ) -> None:
         super().__init__(
             name=name,
@@ -127,10 +127,10 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
         trajectory_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
-                enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
-                desc="getting dtw distances for trajectories",
-                total=keypoint_count,
-                disable=not progress,
+            enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
+            desc="getting dtw distances for trajectories",
+            total=keypoint_count,
+            disable=not progress,
         ):
             distance, _ = fastdtw(hyp_trajectory, ref_trajectory, self.power)
             trajectory_distances[i] = distance  # Store distance in the preallocated array
@@ -142,11 +142,11 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
 class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
 
     def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
-            self,
-            name="dtaiDTWAggregatedDistanceMeasure",
-            default_distance: float = 0,
-            aggregation_strategy: AggregationStrategy = "mean",
-            use_fast=True,
+        self,
+        name="dtaiDTWAggregatedDistanceMeasure",
+        default_distance: float = 0,
+        aggregation_strategy: AggregationStrategy = "mean",
+        use_fast=True,
     ) -> None:
         super().__init__(
             name=name,
@@ -163,10 +163,10 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
         )
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
-                enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
-                desc="getting dtw distances for trajectories",
-                total=keypoint_count,
-                disable=not progress,
+            enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
+            desc="getting dtw distances for trajectories",
+            total=keypoint_count,
+            disable=not progress,
         ):
             hyp_trajectory = np.asarray(hyp_trajectory, dtype=np.float64)
             ref_trajectory = np.asarray(ref_trajectory, dtype=np.float64)

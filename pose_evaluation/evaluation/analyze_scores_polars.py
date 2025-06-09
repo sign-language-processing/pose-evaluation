@@ -41,7 +41,7 @@ def run_experiments(path: Path, limit_rows: int = 100_000_000, runs: int = 10):
 
 
 def compute_map_by_metric_with_profiling(
-        path: Path, limit_rows: int = 10_000, streaming: bool = False
+    path: Path, limit_rows: int = 10_000, streaming: bool = False
 ) -> pl.DataFrame | None:
     """
     Load a limited number of rows from a LazyFrame and compute mean average precision (mAP) per METRIC.
@@ -224,7 +224,7 @@ def compute_map_by_metric_safe(lf: pl.LazyFrame, limit_rows: None | int = None) 
 
 
 def compute_map_by_metric_safe_chunked(
-        lf: pl.LazyFrame, limit_rows: None | int = None, chunk_size: int = 1000000
+    lf: pl.LazyFrame, limit_rows: None | int = None, chunk_size: int = 1000000
 ) -> pl.LazyFrame:
     """
     Memory-efficient version that processes data in chunks by METRIC to avoid OOM.
@@ -264,7 +264,7 @@ def compute_map_by_metric_safe_chunked(
         batch_size = max(1, chunk_size // 10000)  # Adjust based on expected comparisons per path
 
         for i in range(0, len(gloss_a_paths), batch_size):
-            batch_paths = gloss_a_paths[i: i + batch_size]
+            batch_paths = gloss_a_paths[i : i + batch_size]
             print(
                 f"  📁 Processing batch {i // batch_size + 1}/{(len(gloss_a_paths) + batch_size - 1) // batch_size} ({len(batch_paths)} paths)"
             )
@@ -380,7 +380,7 @@ def compute_map_by_metric_memory_efficient(lf: pl.LazyFrame, limit_rows: None | 
 
 
 def compute_map_aggressive_chunking(
-        dataset_path: str, metrics_to_process: list[str] = None, max_queries_per_chunk: int = 1000
+    dataset_path: str, metrics_to_process: list[str] = None, max_queries_per_chunk: int = 1000
 ) -> pl.DataFrame:
     """
     Aggressively chunk by both metric AND query paths to minimize memory usage.
@@ -417,7 +417,7 @@ def compute_map_aggressive_chunking(
 
         # Process queries in small chunks
         for i in range(0, len(unique_paths), max_queries_per_chunk):
-            chunk_paths = unique_paths[i: i + max_queries_per_chunk]
+            chunk_paths = unique_paths[i : i + max_queries_per_chunk]
             chunk_num = i // max_queries_per_chunk + 1
             total_chunks = (len(unique_paths) + max_queries_per_chunk - 1) // max_queries_per_chunk
 
@@ -495,7 +495,7 @@ def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[
 
 
 def compute_map_chunked_by_metric(
-        dataset_path: str, metrics_to_process: list[str] = None, chunk_size: int = 1000000
+    dataset_path: str, metrics_to_process: list[str] = None, chunk_size: int = 1000000
 ) -> pl.DataFrame:
     """
     Process each metric separately to minimize memory usage.
@@ -551,7 +551,7 @@ def compute_map_single_metric_chunked(lf: pl.LazyFrame, metric_name: str, chunk_
 
     # Process paths in chunks
     for i in range(0, len(unique_paths), chunk_size):
-        chunk_paths = unique_paths[i: i + chunk_size]
+        chunk_paths = unique_paths[i : i + chunk_size]
         print(
             f"  📦 Processing chunk {i // chunk_size + 1}/{(len(unique_paths) + chunk_size - 1) // chunk_size} "
             f"({len(chunk_paths)} paths)"

@@ -9,10 +9,10 @@ class DistanceMetric(PoseMetric):
     """Computes the distance between two poses using the provided distance measure."""
 
     def __init__(
-            self,
-            name: str,
-            distance_measure: DistanceMeasure,
-            **kwargs: Any,
+        self,
+        name: str,
+        distance_measure: DistanceMeasure,
+        **kwargs: Any,
     ) -> None:
         super().__init__(name=name, higher_is_better=False, **kwargs)
 

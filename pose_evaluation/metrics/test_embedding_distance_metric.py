@@ -54,9 +54,9 @@ def test_shape_checker(distance_matrix_shape_checker):
 
 
 def call_and_call_with_inputs_swapped(
-        hyps: torch.Tensor,
-        refs: torch.Tensor,
-        scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    hyps: torch.Tensor,
+    refs: torch.Tensor,
+    scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     score1 = scoring_function(hyps, refs)
     score2 = scoring_function(refs, hyps)
@@ -64,12 +64,12 @@ def call_and_call_with_inputs_swapped(
 
 
 def call_with_both_input_orders_and_do_standard_checks(
-        hyps: torch.Tensor,
-        refs: torch.Tensor,
-        scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        distance_range_checker,
-        distance_matrix_shape_checker,
-        expected_shape: Optional[Tuple] = None,
+    hyps: torch.Tensor,
+    refs: torch.Tensor,
+    scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    distance_range_checker,
+    distance_matrix_shape_checker,
+    expected_shape: Optional[Tuple] = None,
 ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
@@ -130,9 +130,9 @@ def generate_orthogonal_rows_with_repeats(num_rows: int, dim: int) -> torch.Tens
         random_vector = torch.randn(1, dim)
         if orthogonal_rows.shape[0] > 0:
             random_vector -= (
-                    torch.matmul(random_vector, orthogonal_rows.T)
-                    @ orthogonal_rows
-                    / torch.norm(orthogonal_rows, dim=1, keepdim=True) ** 2
+                torch.matmul(random_vector, orthogonal_rows.T)
+                @ orthogonal_rows
+                / torch.norm(orthogonal_rows, dim=1, keepdim=True) ** 2
             )
         orthogonal_rows = torch.cat([orthogonal_rows, random_vector / torch.norm(random_vector)])
     if num_rows > dim:
@@ -234,10 +234,10 @@ def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path)
 
 
 def test_score_all_against_self(
-        cosine_metric: EmbeddingDistanceMetric,
-        embeddings: List[torch.Tensor],
-        distance_range_checker,
-        distance_matrix_shape_checker,
+    cosine_metric: EmbeddingDistanceMetric,
+    embeddings: List[torch.Tensor],
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ) -> None:
     """Test the score_all function."""
     scores = cosine_metric.score_all(embeddings, embeddings)
@@ -286,7 +286,7 @@ def test_score_all_with_different_sizes(cosine_metric, distance_range_checker, d
 
 
 def test_score_with_invalid_input_mismatched_embedding_sizes(
-        cosine_metric: EmbeddingDistanceMetric,
+    cosine_metric: EmbeddingDistanceMetric,
 ) -> None:
     hyp = random_tensor(768)
     ref = random_tensor(769)
@@ -298,7 +298,7 @@ def test_score_with_invalid_input_mismatched_embedding_sizes(
 
 
 def test_score_with_invalid_input_single_number(
-        cosine_metric: EmbeddingDistanceMetric,
+    cosine_metric: EmbeddingDistanceMetric,
 ) -> None:
     hyp = random_tensor(768)
     for ref in range(-2, 2):
@@ -311,7 +311,7 @@ def test_score_with_invalid_input_single_number(
 
 
 def test_score_with_invalid_input_string(
-        cosine_metric: EmbeddingDistanceMetric,
+    cosine_metric: EmbeddingDistanceMetric,
 ) -> None:
     hyp = "invalid input"
     ref = random_tensor(768)
@@ -329,7 +329,7 @@ def test_score_with_invalid_input_bool(cosine_metric: EmbeddingDistanceMetric) -
 
 
 def test_score_with_invalid_input_empty_containers(
-        cosine_metric: EmbeddingDistanceMetric,
+    cosine_metric: EmbeddingDistanceMetric,
 ) -> None:
     """Test the metric with invalid inputs."""
     emb1 = random_tensor(768)
@@ -453,11 +453,11 @@ def test_score_all_mixed_input_types(cosine_metric, distance_range_checker, dist
 
 @pytest.mark.parametrize("num_points, dim", [(16, 2)])
 def test_unit_circle_points(
-        cosine_metric,
-        num_points,
-        dim,
-        distance_range_checker,
-        distance_matrix_shape_checker,
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ):
     embeddings = generate_unit_circle_points(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
@@ -492,11 +492,11 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
 def test_orthogonal_rows_in_pairs(
-        cosine_metric,
-        num_points,
-        dim,
-        distance_range_checker,
-        distance_matrix_shape_checker,
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ):
     embeddings = generate_orthogonal_rows_in_pairs(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
@@ -507,11 +507,11 @@ def test_orthogonal_rows_in_pairs(
 
 @pytest.mark.parametrize("num_points, dim", [(10, 5)])
 def test_ones_tensor(
-        cosine_metric,
-        num_points,
-        dim,
-        distance_range_checker,
-        distance_matrix_shape_checker,
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ):
     embeddings = generate_ones_tensor(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)
@@ -522,11 +522,11 @@ def test_ones_tensor(
 
 @pytest.mark.parametrize("num_points, dim", [(15, 15)])  # dim should be equal to num_points for identity matrix
 def test_identity_matrix_rows(
-        cosine_metric,
-        num_points,
-        dim,
-        distance_range_checker,
-        distance_matrix_shape_checker,
+    cosine_metric,
+    num_points,
+    dim,
+    distance_range_checker,
+    distance_matrix_shape_checker,
 ):
     embeddings = generate_identity_matrix_rows(num_points, dim)
     distances = cosine_metric.score_all(embeddings, embeddings)

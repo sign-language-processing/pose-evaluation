@@ -65,19 +65,19 @@ def extract_metric_name_dist(metric_name: str) -> Optional[float]:
 
 
 def construct_metric(
-        distance_measure: DistanceMeasure,
-        default_distance=0.0,
-        trim_meaningless_frames: bool = True,
-        normalize: bool = True,
-        sequence_alignment: Literal["zeropad", "dtw", "padwithfirstframe"] = "padwithfirstframe",
-        keypoint_selection: Literal[
-            "removelegsandworld", "reduceholistic", "hands", "youtubeaslkeypoints"
-        ] = "removelegsandworld",
-        masked_fill_value: Optional[float] = None,
-        fps: Optional[int] = None,
-        name: Optional[str] = None,
-        z_speed: Optional[float] = None,
-        reduce_poses_to_common_components: bool = True,
+    distance_measure: DistanceMeasure,
+    default_distance=0.0,
+    trim_meaningless_frames: bool = True,
+    normalize: bool = True,
+    sequence_alignment: Literal["zeropad", "dtw", "padwithfirstframe"] = "padwithfirstframe",
+    keypoint_selection: Literal[
+        "removelegsandworld", "reduceholistic", "hands", "youtubeaslkeypoints"
+    ] = "removelegsandworld",
+    masked_fill_value: Optional[float] = None,
+    fps: Optional[int] = None,
+    name: Optional[str] = None,
+    z_speed: Optional[float] = None,
+    reduce_poses_to_common_components: bool = True,
 ):
     distance_measure = copy.deepcopy(distance_measure)
     name_pieces = []
@@ -120,7 +120,7 @@ def construct_metric(
     name_pieces.append(f"defaultdist{default_distance}")
     distance_measure.set_default_distance(default_distance)
     assert (
-            f"default_distance:{default_distance}" in distance_measure.get_signature().format()
+        f"default_distance:{default_distance}" in distance_measure.get_signature().format()
     ), f"{distance_measure.default_distance}, {default_distance}"
 
     ##########################################
@@ -176,8 +176,7 @@ def get_embedding_metrics(df: pd.DataFrame) -> List:
 
 
 def get_metrics(
-        measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None,
-        include_masked: bool = False
+    measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None, include_masked: bool = False
 ):
     metrics = []
 
@@ -255,15 +254,15 @@ def get_metrics(
 
     # Iterate over them
     for (
-            measure,
-            z_speed,
-            default_distance,
-            trim,
-            normalize,
-            strategy,
-            fps,
-            masked_fill_value,
-            sequence_alignment,
+        measure,
+        z_speed,
+        default_distance,
+        trim,
+        normalize,
+        strategy,
+        fps,
+        masked_fill_value,
+        sequence_alignment,
     ) in metric_combinations:
 
         #############

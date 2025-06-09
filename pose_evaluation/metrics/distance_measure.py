@@ -69,10 +69,10 @@ class PowerDistanceSignature(DistanceMeasureSignature):
 
 class AggregatedDistanceMeasure(DistanceMeasure):
     def __init__(
-            self,
-            name: str,
-            default_distance: float = 0.0,
-            aggregation_strategy: AggregationStrategy = "mean",
+        self,
+        name: str,
+        default_distance: float = 0.0,
+        aggregation_strategy: AggregationStrategy = "mean",
     ) -> None:
         super().__init__(name, default_distance=default_distance)
         self.aggregation_strategy = aggregation_strategy
@@ -107,11 +107,11 @@ class AggregatedPowerDistance(AggregatedDistanceMeasure):
     _SIGNATURE_TYPE = PowerDistanceSignature
 
     def __init__(
-            self,
-            name="AggregatedPowerDistance",
-            order: int = 2,
-            default_distance: float = 0.0,
-            aggregation_strategy: AggregationStrategy = "mean",
+        self,
+        name="AggregatedPowerDistance",
+        order: int = 2,
+        default_distance: float = 0.0,
+        aggregation_strategy: AggregationStrategy = "mean",
     ) -> None:
         """
         Initialize the aggregated power distance metric.
@@ -134,7 +134,7 @@ class AggregatedPowerDistance(AggregatedDistanceMeasure):
 
 
 def masked_array_power_distance(
-        hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray, power: float, default_distance: float
+    hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray, power: float, default_distance: float
 ) -> ma.MaskedArray:
     """
     Compute element-wise distances between hypothesis and reference data.

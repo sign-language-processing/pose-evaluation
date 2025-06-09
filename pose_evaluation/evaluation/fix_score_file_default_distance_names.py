@@ -57,7 +57,7 @@ def build_new_metric_name(old_metric: str, signature_dist: Optional[str]) -> str
     metric = old_metric
     # 1) trimmed -> startendtrimmed
     if metric.startswith("trimmed"):
-        metric = "startendtrimmed" + metric[len("trimmed"):]
+        metric = "startendtrimmed" + metric[len("trimmed") :]
     # 2) exact replace normalized
     metric = metric.replace("_normalized_", "_normalizedbyshoulders_")
     # 3) defaultdist logic only if signature provided

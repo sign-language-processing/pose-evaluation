@@ -19,10 +19,10 @@ class PoseMetric(BaseMetric[Pose], ABC):
     _SIGNATURE_TYPE = PoseMetricSignature
 
     def __init__(
-            self,
-            name: str = "PoseMetric",
-            higher_is_better: bool = False,
-            pose_preprocessors: Union[None, List[PoseProcessor]] = None,
+        self,
+        name: str = "PoseMetric",
+        higher_is_better: bool = False,
+        pose_preprocessors: Union[None, List[PoseProcessor]] = None,
     ):
 
         super().__init__(name, higher_is_better)
@@ -41,7 +41,7 @@ class PoseMetric(BaseMetric[Pose], ABC):
         return self._pose_score(hypothesis, reference)
 
     def score_all(
-            self, hypotheses: Sequence[Pose], references: Sequence[Pose], progress_bar=False
+        self, hypotheses: Sequence[Pose], references: Sequence[Pose], progress_bar=False
     ) -> List[List[float]]:
         hyp_len = len(hypotheses)
         ref_len = len(references)
@@ -50,7 +50,7 @@ class PoseMetric(BaseMetric[Pose], ABC):
 
         # Recover original lists if needed
         hypotheses = all_poses[:hyp_len]
-        references = all_poses[hyp_len: hyp_len + ref_len]
+        references = all_poses[hyp_len : hyp_len + ref_len]
         return [
             [self.score(h, r) for r in references]
             for h in tqdm(hypotheses, disable=not progress_bar or len(hypotheses) == 1)
@@ -64,11 +64,11 @@ class PoseMetric(BaseMetric[Pose], ABC):
         )
 
     def score_all_with_signature(
-            self,
-            hypotheses: Sequence[Pose],
-            references: Sequence[Pose],
-            progress_bar=False,
-            short: bool = False,
+        self,
+        hypotheses: Sequence[Pose],
+        references: Sequence[Pose],
+        progress_bar=False,
+        short: bool = False,
     ) -> list[list[Score]]:
 
         return [

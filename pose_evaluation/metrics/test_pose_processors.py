@@ -18,10 +18,10 @@ def test_trim_pose(real_refined_landmark_pose_file_paths: List[Path]):
 
             # not expecting it to edit the original
             assert (
-                    pose.body.data.shape[0] == original_frame_count
+                pose.body.data.shape[0] == original_frame_count
             ), f"Original data changed! Frames before: {original_frame_count}. Now: {pose.body.data.shape[0]}"
 
             # should have fewer frames
             assert (
-                    processed_pose.body.data.shape[0] < pose.body.data.shape[0]
+                processed_pose.body.data.shape[0] < pose.body.data.shape[0]
             ), f"{pose_path}, {pose.body}, {processed_pose.body}"

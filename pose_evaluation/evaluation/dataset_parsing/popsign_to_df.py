@@ -16,11 +16,11 @@ app = typer.Typer()
 
 @app.command()
 def collect(
-        dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-        pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        asl_knowledge_graph_path: Optional[Path] = typer.Option(None, exists=True, file_okay=True, readable=True),
-        out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+    dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
+    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    asl_knowledge_graph_path: Optional[Path] = typer.Option(None, exists=True, file_okay=True, readable=True),
+    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     # pylint: disable=duplicate-code
     result = collect_files_main(
@@ -52,10 +52,10 @@ def collect(
 
         # Assert that SPLIT and GLOSS columns match
         assert (
-                merged_check[f"{DatasetDFCol.SPLIT}_x"] == merged_check[f"{DatasetDFCol.SPLIT}_y"]
+            merged_check[f"{DatasetDFCol.SPLIT}_x"] == merged_check[f"{DatasetDFCol.SPLIT}_y"]
         ).all(), f"{DatasetDFCol.SPLIT} values do not match"
         assert (
-                merged_check[f"{DatasetDFCol.GLOSS}_x"] == merged_check[f"{DatasetDFCol.GLOSS}_y"]
+            merged_check[f"{DatasetDFCol.GLOSS}_x"] == merged_check[f"{DatasetDFCol.GLOSS}_y"]
         ).all(), f"{DatasetDFCol.GLOSS} values do not match"
 
         files_df = files_df.drop(columns=["GLOSS", "SPLIT"])

@@ -29,11 +29,11 @@ def classify_relation(row):
 
 
 def plot_metric_boxplot(
-        df: pd.DataFrame,
-        col: str,
-        metric: str,
-        show: bool = False,
-        out_path: Optional[Path] = None,
+    df: pd.DataFrame,
+    col: str,
+    metric: str,
+    show: bool = False,
+    out_path: Optional[Path] = None,
 ):
     df_filtered = df[df["METRIC"] == metric]
 
@@ -63,14 +63,14 @@ def plot_metric_boxplot(
 
 
 def plot_metric_histogram(
-        df: pd.DataFrame,
-        col: str,
-        metric: str,
-        bins: int = 10,
-        kde: bool = True,
-        show: bool = False,
-        out_path: Optional[Path] = None,
-        overlay_by_relation: bool = False,  # NEW
+    df: pd.DataFrame,
+    col: str,
+    metric: str,
+    bins: int = 10,
+    kde: bool = True,
+    show: bool = False,
+    out_path: Optional[Path] = None,
+    overlay_by_relation: bool = False,  # NEW
 ):
     """
     Plots a histogram of the specified column, filtering the dataframe by the specified 'metric'.
@@ -140,11 +140,11 @@ def plot_metric_histogram(
 
 
 def plot_metric_scatter(
-        df: pd.DataFrame,
-        metric_x: str,
-        metric_y: str,
-        show: bool = False,
-        png_path: Optional[Path] = None,
+    df: pd.DataFrame,
+    metric_x: str,
+    metric_y: str,
+    show: bool = False,
+    png_path: Optional[Path] = None,
 ):
     # Filter for the two specified metrics
     df_x = df[df["METRIC"] == metric_x].rename(columns={"mean": "score_x"})
@@ -232,7 +232,7 @@ def plot_metric_scatter(
 
 
 def plot_overlay_histograms(
-        df_metric: pd.DataFrame, metric: str, save_plot_path: Optional[Path] = None, show_plot: bool = True
+    df_metric: pd.DataFrame, metric: str, save_plot_path: Optional[Path] = None, show_plot: bool = True
 ) -> None:
     plt.figure(figsize=(8, 5))
 
@@ -269,11 +269,11 @@ def plot_overlay_histograms(
 
 
 def analyze_metric_relationships(
-        df: pd.DataFrame,
-        metric_x: str,
-        metric_y: str,
-        show_plot: bool = True,
-        save_plot_path: Optional[Path] = None,
+    df: pd.DataFrame,
+    metric_x: str,
+    metric_y: str,
+    show_plot: bool = True,
+    save_plot_path: Optional[Path] = None,
 ) -> pd.DataFrame:
     """
     Analyze correlation and distance tendencies between two metrics.
@@ -556,7 +556,7 @@ if __name__ == "__main__":
     metric_summaries = []
 
     for metric1, metric2 in tqdm(
-            combinations(metrics, 2), desc="generating correlation plots", total=combinations_count
+        combinations(metrics, 2), desc="generating correlation plots", total=combinations_count
     ):
         metric1_hash = hashlib.md5(f"{metric1}".encode()).hexdigest()[:8]
         metric2_hash = hashlib.md5(f"{metric2}".encode()).hexdigest()[:8]

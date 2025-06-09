@@ -16,11 +16,11 @@ app = typer.Typer()
 
 @app.command()
 def collect(
-        dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-        pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+    dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
+    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     """Read in Sem-Lex files and metadata, combine to one dataframe, and save out to csv"""
     # pylint: disable=duplicate-code

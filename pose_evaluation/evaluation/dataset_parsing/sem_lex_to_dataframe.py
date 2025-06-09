@@ -16,11 +16,11 @@ app = typer.Typer()
 
 @app.command()
 def collect_semlex(
-        dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-        pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-        out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+    dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
+    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     """Read in files and metadata, combine to one dataframe, and save out to csv"""
     # pylint: disable=duplicate-code
@@ -75,12 +75,12 @@ def collect_semlex(
         [
             col
             for col in [
-            DatasetDFCol.GLOSS,
-            DatasetDFCol.SPLIT,
-            DatasetDFCol.VIDEO_ID,
-            "POSE_FILE_PATH",
-            # "VIDEO_FILE_PATH",
-        ]
+                DatasetDFCol.GLOSS,
+                DatasetDFCol.SPLIT,
+                DatasetDFCol.VIDEO_ID,
+                "POSE_FILE_PATH",
+                # "VIDEO_FILE_PATH",
+            ]
             if col in df.columns
         ]
     ]

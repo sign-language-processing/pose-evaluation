@@ -25,12 +25,12 @@ TensorConvertableType = Union[List, np.ndarray, Tensor]
 
 class EmbeddingDistanceMetric(EmbeddingMetric):
     def __init__(
-            self,
-            model: str,
-            name: Optional[str] = None,
-            kind: ValidDistanceKinds = "cosine",
-            device: Optional[Union[torch.device, str]] = None,
-            dtype=None,
+        self,
+        model: str,
+        name: Optional[str] = None,
+        kind: ValidDistanceKinds = "cosine",
+        device: Optional[Union[torch.device, str]] = None,
+        dtype=None,
     ):
         """
         Args:
@@ -106,10 +106,10 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         return self.score_all(hypothesis, reference).item()
 
     def score_all(
-            self,
-            hypotheses: Union[List[TensorConvertableType], Tensor],
-            references: Union[List[TensorConvertableType], Tensor],
-            progress_bar: bool = True,
+        self,
+        hypotheses: Union[List[TensorConvertableType], Tensor],
+        references: Union[List[TensorConvertableType], Tensor],
+        progress_bar: bool = True,
     ) -> Tensor:
         """
         Compute the distance between all hypotheses and all references.
@@ -131,7 +131,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
         assert (
-                hypotheses.ndim == 2 and references.ndim == 2
+            hypotheses.ndim == 2 and references.ndim == 2
         ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
 
         return self._metric_dispatch[self.kind](hypotheses, references)

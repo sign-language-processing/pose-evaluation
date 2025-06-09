@@ -203,14 +203,14 @@ class AddTOffsetsToZPoseProcessor(PoseProcessor):
 
 
 def get_standard_pose_processors(
-        trim_meaningless_frames: bool = True,
-        normalize_poses: bool = True,
-        reduce_poses_to_common_components: bool = True,
-        remove_world_landmarks=True,
-        remove_legs=True,
-        reduce_holistic_to_face_and_upper_body=False,
-        zero_fill_masked=False,
-        zero_pad_shorter=True,
+    trim_meaningless_frames: bool = True,
+    normalize_poses: bool = True,
+    reduce_poses_to_common_components: bool = True,
+    remove_world_landmarks=True,
+    remove_legs=True,
+    reduce_holistic_to_face_and_upper_body=False,
+    zero_fill_masked=False,
+    zero_pad_shorter=True,
 ) -> List[PoseProcessor]:
     pose_processors = []
 

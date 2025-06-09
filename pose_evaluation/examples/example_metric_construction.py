@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Define file paths for test pose data
     # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
     test_data_path = (
-            Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+        Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
     )
     reference_file = test_data_path / "colin-1-HOUSE.pose"
     hypothesis_file = test_data_path / "colin-2-HOUSE.pose"

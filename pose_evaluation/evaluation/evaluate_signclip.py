@@ -63,10 +63,10 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
 
 
 def calculate_mean_distances(
-        distance_matrix: torch.Tensor,
-        indices_a: torch.Tensor,
-        indices_b: torch.Tensor,
-        exclude_self: bool = False,
+    distance_matrix: torch.Tensor,
+    indices_a: torch.Tensor,
+    indices_b: torch.Tensor,
+    exclude_self: bool = False,
 ) -> float:
     """
     Calculate the mean of distances between two sets of indices in a 2D distance matrix.
@@ -166,7 +166,7 @@ def calculate_class_means(gloss_indices, scores):
 
 
 def evaluate_signclip(
-        emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"
+    emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"
 ):  # pylint: disable=too-many-locals, too-many-statements
     """
     Evaluate SignCLIP embeddings using score_all.

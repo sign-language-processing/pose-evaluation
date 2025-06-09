@@ -87,7 +87,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
                     ),
                     hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>"
                     #   f"{'METRIC: %{{customdata[1]}}<br>' if METRIC_COL in group else ''}"
-                                  f"{METRIC_COL}: %{{customdata[1]}}<br>" f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
+                    f"{METRIC_COL}: %{{customdata[1]}}<br>" f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
                 )
             )
     else:
@@ -123,8 +123,8 @@ def plot_pareto_frontier(df: pd.DataFrame):
                 frontier[[DESCRIPTIVE_NAME_COL, METRIC_COL]] if METRIC_COL in frontier else frontier[[SHORT_COL]]
             ),
             hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>"
-                          f"{METRIC_COL}: %{{customdata[1]}}<br>"
-                          f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
+            f"{METRIC_COL}: %{{customdata[1]}}<br>"
+            f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
         )
     )
 
@@ -140,7 +140,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
 
 
 def get_pareto_frontier(
-        df: pd.DataFrame, col1: str, col2: str, maximize_col1: bool, maximize_col2: bool
+    df: pd.DataFrame, col1: str, col2: str, maximize_col1: bool, maximize_col2: bool
 ) -> pd.DataFrame:
     """Returns the Pareto frontier based on optimization directions."""
     data = df.copy()
@@ -588,13 +588,11 @@ if csv_paths_input:
     if keyword_input.strip():
         keywords = [k.strip().lower() for k in keyword_input.split(",") if k.strip()]
 
-
         def match_keywords(text):
             matched = [kw for kw in keywords if kw in text.lower()]
             if matched:
                 return " + ".join(sorted(set(matched))) if multi_color else f"Matched: {', '.join(keywords)}"
             return "Other"
-
 
         df["highlight"] = df.apply(
             lambda row: match_keywords(row[METRIC_COL]) if pd.notnull(row[METRIC_COL]) else "Other", axis=1

@@ -10,18 +10,18 @@ from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
 
 
 def get_poses(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
-        length1: int,
-        length2: int,
-        conf1: Optional[float] = None,
-        conf2: Optional[float] = None,
-        people1: int = 3,
-        people2: int = 3,
-        keypoints1: int = 4,
-        keypoints2: int = 4,
-        coordinate_dimensions1: int = 3,
-        coordinate_dimensions2: int = 3,
-        fill_value1: float = 1.0,
-        fill_value2: float = 0.0,
+    length1: int,
+    length2: int,
+    conf1: Optional[float] = None,
+    conf2: Optional[float] = None,
+    people1: int = 3,
+    people2: int = 3,
+    keypoints1: int = 4,
+    keypoints2: int = 4,
+    coordinate_dimensions1: int = 3,
+    coordinate_dimensions2: int = 3,
+    fill_value1: float = 1.0,
+    fill_value2: float = 0.0,
 ):
     """
     Utility function to generate hypothesis and reference Pose objects for testing.

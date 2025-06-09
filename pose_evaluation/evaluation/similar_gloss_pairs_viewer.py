@@ -121,7 +121,7 @@ selected_glosses = st.multiselect("Filter pairs containing any of these glosses:
 if selected_glosses:
     filtered_pairs_df = similar_pairs_df[
         similar_pairs_df["GLOSS_A"].isin(selected_glosses) | similar_pairs_df["GLOSS_B"].isin(selected_glosses)
-        ]
+    ]
 
 else:
     filtered_pairs_df = similar_pairs_df
@@ -172,7 +172,7 @@ else:
             "Further thoughts on this similarity?", manual_verification_thoughts, key=f"manual_verify_text_{idx}"
         )
         if st.button(
-                f"Update CSV ({gloss_a},{gloss_b}) with '{manual_verification_thoughts}'", key=f"update_csv_{idx}"
+            f"Update CSV ({gloss_a},{gloss_b}) with '{manual_verification_thoughts}'", key=f"update_csv_{idx}"
         ):
             # find similar_pairs_df row where "GLOSS_A" == gloss_a and "GLOSS_B" == gloss_b
             # overwrite "manual_verification" value with "not similar"

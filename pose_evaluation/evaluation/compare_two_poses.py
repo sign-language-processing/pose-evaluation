@@ -49,20 +49,20 @@ def update_csv_paths(paths_csv):
 
 @app.command()
 def compare(
-        query_pose: Path = typer.Argument(..., exists=True, help="Path to the query .pose file"),
-        ref_pose: Path = typer.Argument(..., exists=True, help="Path to the reference .pose file"),
-        specific_metrics: List[str] = typer.Option(
-            None, help="If specified, will add these metrics to the list of filtered metrics"
-        ),
-        specific_metrics_csv: Path = typer.Option(
-            None, help="If specified, will read the metrics from this CSV and add those"
-        ),
-        include_keywords: List[str] = typer.Option(
-            None, help="Will filter metrics to only those that include any of these"
-        ),
-        exclude_keywords: List[str] = typer.Option(
-            None, help="Will filter metrics to only those that include none of these"
-        ),
+    query_pose: Path = typer.Argument(..., exists=True, help="Path to the query .pose file"),
+    ref_pose: Path = typer.Argument(..., exists=True, help="Path to the reference .pose file"),
+    specific_metrics: List[str] = typer.Option(
+        None, help="If specified, will add these metrics to the list of filtered metrics"
+    ),
+    specific_metrics_csv: Path = typer.Option(
+        None, help="If specified, will read the metrics from this CSV and add those"
+    ),
+    include_keywords: List[str] = typer.Option(
+        None, help="Will filter metrics to only those that include any of these"
+    ),
+    exclude_keywords: List[str] = typer.Option(
+        None, help="Will filter metrics to only those that include none of these"
+    ),
 ):
     # paths_csvs = Path("/opt/home/cleong/projects/pose-evaluation/debug_zspeed/zspeed_results_from_preliminary/").glob(
     #     "*.csv"

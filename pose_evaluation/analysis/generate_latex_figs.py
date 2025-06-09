@@ -3,13 +3,13 @@ from typing import Optional
 
 
 def generate_latex_figures(
-        fig_directory: Path,
-        output_file: Path,
-        figures_prefix="figures",
-        pattern="*.png",
-        default_caption=None,
-        cosine_count: Optional[int] = None,
-        add_clearpage_period: Optional[int] = None,
+    fig_directory: Path,
+    output_file: Path,
+    figures_prefix="figures",
+    pattern="*.png",
+    default_caption=None,
+    cosine_count: Optional[int] = None,
+    add_clearpage_period: Optional[int] = None,
 ):
     files = sorted(fig_directory.rglob(pattern))
     if cosine_count is not None:

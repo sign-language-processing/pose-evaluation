@@ -13,7 +13,7 @@ def pose_remove_world_landmarks(pose: Pose) -> Pose:
 
 
 def get_component_names_and_points_dict(
-        pose: Pose,
+    pose: Pose,
 ) -> Tuple[List[str], Dict[str, List[str]]]:
     component_names = []
     points_dict = defaultdict(list)
@@ -44,9 +44,9 @@ def load_pose_file(pose_path: Path) -> Pose:
 
 
 def reduce_poses_to_intersection(
-        poses: Iterable["Pose"],
-        progress: bool = False,
-        debug: bool = False,
+    poses: Iterable["Pose"],
+    progress: bool = False,
+    debug: bool = False,
 ) -> List["Pose"]:
     poses = list(poses)  # Ensure it's a list so we can iterate multiple times
 

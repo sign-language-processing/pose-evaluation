@@ -27,10 +27,10 @@ def parse_dataset_split(folder_name: str):
 
 
 def merge_parquet_files(
-        input_paths: Union[str, Path, List[Union[str, Path]]],
-        output_dir: Union[str, Path],
-        partition_columns: Optional[List[str]] = None,
-        parse_parent_for_datasets_and_splits: bool = True,
+    input_paths: Union[str, Path, List[Union[str, Path]]],
+    output_dir: Union[str, Path],
+    partition_columns: Optional[List[str]] = None,
+    parse_parent_for_datasets_and_splits: bool = True,
 ) -> None:
     """
     Merge one or more Parquet files into a new dataset directory,
@@ -116,9 +116,9 @@ def count_rows(parquets: list[Path]):
 
 
 def load_and_merge(
-        parquets: List[Path],
-        dedupe: bool = True,
-        output_path: Optional[Path] = None,
+    parquets: List[Path],
+    dedupe: bool = True,
+    output_path: Optional[Path] = None,
 ) -> pa.Table:
     """
     Load and merge multiple Parquet files into a single in-memory pyarrow Table.

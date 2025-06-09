@@ -69,7 +69,7 @@ def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
         pose_preprocessors=[],
     )
     with pytest.warns(
-            RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
+        RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
     ):
         for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
             score = metric.score_with_signature(hyp, ref)

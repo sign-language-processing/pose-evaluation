@@ -165,7 +165,7 @@ def get_unique_values_for_metric_column(dataset, metric: str, column: str) -> se
 
 
 def get_common_gloss_paths_across_metrics(
-        dataset, column_a: str = "GLOSS_A_PATH", column_b: str = "GLOSS_B_PATH"
+    dataset, column_a: str = "GLOSS_A_PATH", column_b: str = "GLOSS_B_PATH"
 ) -> Tuple[Set[str], Set[str]]:
     """
     Computes the intersection of unique GLOSS_A_PATH and GLOSS_B_PATH values
@@ -202,12 +202,12 @@ def get_common_gloss_paths_across_metrics(
 
 
 def load_filtered_metric_df(
-        dataset,
-        metric: str,
-        common_a_paths: set,
-        common_b_paths: set,
-        column_a: str = "GLOSS_A_PATH",
-        column_b: str = "GLOSS_B_PATH",
+    dataset,
+    metric: str,
+    common_a_paths: set,
+    common_b_paths: set,
+    column_a: str = "GLOSS_A_PATH",
+    column_b: str = "GLOSS_B_PATH",
 ) -> "pd.DataFrame":
     """
     Loads a filtered DataFrame for a given metric, including only rows where

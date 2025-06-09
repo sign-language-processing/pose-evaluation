@@ -24,10 +24,10 @@ class Ham2PoseMSEDistanceMeasure(AggregatedDistanceMeasure):
         trajectory_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
-                enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
-                desc="getting dtw distances for trajectories",
-                total=keypoint_count,
-                disable=not progress,
+            enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
+            desc="getting dtw distances for trajectories",
+            total=keypoint_count,
+            disable=not progress,
         ):
             sq_error = np.power(hyp_trajectory - ref_trajectory, 2).sum(-1)
             trajectory_distances[i] = sq_error  # Store distance in the preallocated array
@@ -48,10 +48,10 @@ class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
         trajectory_distances = ma.empty(keypoint_count)  # Preallocate a NumPy array
 
         for i, (hyp_trajectory, ref_trajectory) in tqdm(
-                enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
-                desc="getting dtw distances for trajectories",
-                total=keypoint_count,
-                disable=not progress,
+            enumerate(self._get_keypoint_trajectories(hyp_data, ref_data)),
+            desc="getting dtw distances for trajectories",
+            total=keypoint_count,
+            disable=not progress,
         ):
             sq_error = np.power(hyp_trajectory - ref_trajectory, 2).sum(-1)
             trajectory_distances[i] = np.sqrt(sq_error).mean()  # Store distance in the preallocated array
@@ -118,6 +118,7 @@ def ham2pose_mse_trajectory_distance(trajectory1, trajectory2):
 
 def ham2pose_ape_trajectory_distance(trajectory1, trajectory2):
     return np.sqrt(ham2pose_mse_trajectory_distance(trajectory1, trajectory2)).mean()
+
 
 # No need for this if we just do FillMasked
 # def ham2pose_unmasked_euclidean_point_distance(point1, point2):
