@@ -19,9 +19,11 @@ torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import (descriptive_name,
-                                                       interpret_name,
-                                                       shorten_metric_name)
+from pose_evaluation.evaluation.interpret_name import (
+    descriptive_name,
+    interpret_name,
+    shorten_metric_name,
+)
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -68,10 +70,8 @@ def plot_pareto_frontier(df: pd.DataFrame):
     if st.checkbox("Show data table for Pareto Frontier?"):
         # Drop overlapping columns (except "METRIC") from df before merge
         cols_to_drop = [col for col in df.columns if col in frontier.columns and col != "METRIC"]
-        
+
         df_trimmed = df.drop(columns=cols_to_drop)
-
-
 
         # Merge without causing _x/_y suffixes
         frontier_download = frontier.merge(df_trimmed, on="METRIC", how="left")
@@ -79,11 +79,12 @@ def plot_pareto_frontier(df: pd.DataFrame):
         first_cols = [DESCRIPTIVE_NAME_COL, col1, col2]
         rest_cols = [c for c in frontier_download.columns if c not in first_cols]
         frontier_download = frontier_download[first_cols + rest_cols]
-        cols_to_drop = ["RANK", "data_labels","_metric_lower","highlight"]
-        frontier_download = frontier_download.drop(columns=cols_to_drop)
+        cols_to_drop = {"RANK", "data_labels", "_metric_lower", "highlight"}
+        frontier_download = frontier_download[[col for col in frontier_download.columns if col not in cols_to_drop]]
+
 
         st.dataframe(frontier_download)
-        
+
         # Create and offer CSV for download
         frontier_csv_data = frontier_download.to_csv(index=False)
         st.download_button(
@@ -92,7 +93,6 @@ def plot_pareto_frontier(df: pd.DataFrame):
             file_name=f"pareto_frontier_{len(frontier)}of{len(df)}_metrics.csv",
             mime="text/csv",
         )
-
 
     fig = go.Figure()
 
@@ -222,16 +222,51 @@ def find_single_token_diff_pairs(df: pd.DataFrame) -> List[Tuple[str, str, int]]
     return results
 
 
-def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", verbose=True):
-    """
-    df: a pandas DataFrame containing metric strings
-    keywords: list of keywords to identify differing positions
-    metric_col: the name of the column in df containing metric strings
-    verbose: whether to print debug info
-    """
-    if metric_col not in df.columns:
-        raise ValueError(f"Column '{metric_col}' not found in DataFrame.")
+def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", mode="auto", verbose=False):
+    if mode not in {"auto", "positional", "presence_absence"}:
+        raise ValueError(f"Invalid mode: {mode}. Must be 'auto', 'positional', or 'presence_absence'.")
 
+    if mode in ("presence_absence", "auto"):
+        results = find_optional_keyword_differences(df, keywords, metric_col, verbose)
+        if results or mode == "presence_absence":
+            return results
+
+    # Fallback or explicit request
+    return find_positional_keyword_differences(df, keywords, metric_col, verbose)
+
+
+
+def find_optional_keyword_differences(df, keywords, metric_col="METRIC", verbose=False):
+    metrics = df[metric_col].tolist()
+    keywords = [kw.lower() for kw in keywords]
+    results = []
+
+    processed = []
+    for m in metrics:
+        tokens = m.split("_")
+        lowered = [t.lower() for t in tokens]
+        keyword_tokens = [t for t in lowered if any(kw in t for kw in keywords)]
+        stripped_tokens = tuple(t for t in lowered if all(kw not in t for kw in keywords))
+        processed.append({
+            "original": m,
+            "tokens": tokens,
+            "lowered": lowered,
+            "keyword_tokens": keyword_tokens,
+            "stripped": stripped_tokens,
+        })
+
+    for i, p1 in enumerate(processed):
+        for j, p2 in enumerate(processed):
+            if i == j:
+                continue
+            if (p1["keyword_tokens"] and not p2["keyword_tokens"] and p1["stripped"] == p2["stripped"]):
+                if verbose:
+                    print(f"[presence_absence] Match: {p1['original']} ↔ {p2['original']}")
+                results.append((p1["original"], p2["original"]))
+    return results
+
+
+def find_positional_keyword_differences(df, keywords, metric_col="METRIC", verbose=False):
     metrics = df[metric_col].tolist()
     keywords = [kw.lower() for kw in keywords]
     results = []
@@ -240,7 +275,7 @@ def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", verbose=Tru
 
     for i, (m1, m1_parts) in enumerate(split_metrics):
         if verbose:
-            print(f"\nExamining base metric[{i}]: {metrics[i]}")
+            print(f"\n[Positional] Base metric[{i}]: {m1}")
 
         kw_indices = []
         for kw in keywords:
@@ -249,12 +284,7 @@ def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", verbose=Tru
                     kw_indices.append(idx)
                     break
 
-        if verbose:
-            print(f"  Found keyword indices: {kw_indices}")
-
         if len(kw_indices) != len(keywords):
-            if verbose:
-                print("  Skipping — not all keywords found in this metric.")
             continue
 
         for j, (m2, m2_parts) in enumerate(split_metrics):
@@ -265,22 +295,16 @@ def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", verbose=Tru
             for idx in range(len(m1_parts)):
                 if idx in kw_indices:
                     if m1_parts[idx] == m2_parts[idx]:
-                        if verbose:
-                            print(f"    At index {idx}, expected difference but got match: {m1_parts[idx]}")
                         all_match = False
                         break
                 else:
                     if m1_parts[idx] != m2_parts[idx]:
-                        if verbose:
-                            print(
-                                f"    At index {idx}, expected match but got diff: {m1_parts[idx]} vs {m2_parts[idx]}"
-                            )
                         all_match = False
                         break
 
             if all_match:
                 if verbose:
-                    print(f"  --> Match found: {metrics[i]} vs {metrics[j]}")
+                    print(f"  [positional] Match: {metrics[i]} ↔ {metrics[j]}")
                 results.append((metrics[i], metrics[j]))
 
     return results
@@ -459,7 +483,7 @@ csv_paths_default = [
     # /opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses/stats_by_metric.csv",
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_21_score_analysis_1206metrics_169glosses/stats_by_metric.csv",
-    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/2025-06-05_2887_metrics_169_glosses_comparable_score_analysis/stats_by_metric.csv"
+    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/2025-06-05_2887_metrics_169_glosses_comparable_score_analysis/stats_by_metric.csv",
 ]
 csv_paths_input = st.text_input(
     "Enter paths to your CSV files (comma-separated)",
@@ -806,7 +830,7 @@ if csv_paths_input:
     effect_keyword = st.text_input(
         "Keyword to test effect of (case-insensitive, comma-separated)", key="group_effect_kw"
     )
-
+    
     if not effect_keyword.strip():
         effect_keywords = [
             "dtw,dtaiDTWAggregatedDistanceMetricFast",
@@ -866,84 +890,85 @@ if csv_paths_input:
         # effect_keywords = [effect_keyword]
 
     summary_data = []
-    for effect_keyword in effect_keywords:
-        kw = effect_keyword.strip().lower()
-        df["_metric_lower"] = df[METRIC_COL].str.lower()
+    if st.checkbox(f"Show Keyword Effects for {effect_keywords}?"):
+        for effect_keyword in effect_keywords:
+            kw = effect_keyword.strip().lower()
+            df["_metric_lower"] = df[METRIC_COL].str.lower()
 
-        has_kw = df[df["_metric_lower"].str.contains(kw)]
-        no_kw = df[~df["_metric_lower"].str.contains(kw)]
+            has_kw = df[df["_metric_lower"].str.contains(kw)]
+            no_kw = df[~df["_metric_lower"].str.contains(kw)]
 
-        if len(has_kw) == 0:
-            st.warning(f"No metrics contain keyword '{kw}'")
-        elif len(no_kw) == 0:
-            st.warning(f"All metrics contain keyword '{kw}'")
-        else:
-            avg_with = has_kw[sort_col].mean()
-            max_with = has_kw[sort_col].max()
-            min_with = has_kw[sort_col].min()
-            avg_rank = has_kw["RANK"].mean()
-            avg_without = no_kw[sort_col].mean()
-            max_without = no_kw[sort_col].max()
-            min_without = no_kw[sort_col].min()
-            delta = avg_with - avg_without
+            if len(has_kw) == 0:
+                st.warning(f"No metrics contain keyword '{kw}'")
+            elif len(no_kw) == 0:
+                st.warning(f"All metrics contain keyword '{kw}'")
+            else:
+                avg_with = has_kw[sort_col].mean()
+                max_with = has_kw[sort_col].max()
+                min_with = has_kw[sort_col].min()
+                avg_rank = has_kw["RANK"].mean()
+                avg_without = no_kw[sort_col].mean()
+                max_without = no_kw[sort_col].max()
+                min_without = no_kw[sort_col].min()
+                delta = avg_with - avg_without
 
-            summary_data.append(
-                {
-                    "keyword": kw,
-                    f"Δ {sort_col}": round(delta, 4),
-                    f"count within {top_or_bottom} 100": (has_kw["RANK"] <= 100).sum(),
-                    f"count within {top_or_bottom} 10": (has_kw["RANK"] <= 10).sum(),
-                    f"count within {top_or_bottom} 5": (has_kw["RANK"] <= 5).sum(),
-                    "mean (with kw)": round(avg_with, 4),
-                    "mean (without kw)": round(avg_without, 4),
-                    "n (with)": len(has_kw),
-                    "n (without)": len(no_kw),
-                    "mean metric rank": avg_rank,
-                }
-            )
+                summary_data.append(
+                    {
+                        "keyword": kw,
+                        f"Δ {sort_col}": round(delta, 4),
+                        f"count within {top_or_bottom} 100": (has_kw["RANK"] <= 100).sum(),
+                        f"count within {top_or_bottom} 10": (has_kw["RANK"] <= 10).sum(),
+                        f"count within {top_or_bottom} 5": (has_kw["RANK"] <= 5).sum(),
+                        "mean (with kw)": round(avg_with, 4),
+                        "mean (without kw)": round(avg_without, 4),
+                        "n (with)": len(has_kw),
+                        "n (without)": len(no_kw),
+                        "mean metric rank": avg_rank,
+                    }
+                )
 
-            st.write(f"#### Effect of `{kw}`")
-            st.write(f"Compared `{len(has_kw)}` metrics **with** '`{kw}`' vs `{len(no_kw)}` **without**.")
-            st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
-            st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
-            st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
-            st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
-            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK']<= 10).sum()}")
-            st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
+                st.write(f"#### Effect of `{kw}`")
+                st.write(f"Compared `{len(has_kw)}` metrics **with** '`{kw}`' vs `{len(no_kw)}` **without**.")
+                st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
+                st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
+                st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
+                st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
+                st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK']<= 10).sum()}")
+                st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
 
-            if st.checkbox(f"Show distributions for {kw}?"):
+                if st.checkbox(f"Show distributions for {kw}?"):
 
-                fig = go.Figure()
+                    fig = go.Figure()
 
-                fig.add_trace(
-                    go.Histogram(
-                        x=has_kw[sort_col],
-                        name=f"Has '{kw}'",
-                        marker_color="blue",
-                        opacity=0.6,
-                        histnorm="probability density",
+                    fig.add_trace(
+                        go.Histogram(
+                            x=has_kw[sort_col],
+                            name=f"Has '{kw}'",
+                            marker_color="blue",
+                            opacity=0.6,
+                            histnorm="probability density",
+                        )
                     )
-                )
 
-                fig.add_trace(
-                    go.Histogram(
-                        x=no_kw[sort_col],
-                        name=f"No '{kw}'",
-                        marker_color="orange",
-                        opacity=0.6,
-                        histnorm="probability density",
+                    fig.add_trace(
+                        go.Histogram(
+                            x=no_kw[sort_col],
+                            name=f"No '{kw}'",
+                            marker_color="orange",
+                            opacity=0.6,
+                            histnorm="probability density",
+                        )
                     )
-                )
 
-                fig.update_layout(
-                    barmode="overlay",
-                    title=f"Distribution of '{sort_col}' by presence of '{kw}'",
-                    xaxis_title=sort_col,
-                    yaxis_title="Density",
-                    legend=dict(x=0.7, y=0.95),
-                )
+                    fig.update_layout(
+                        barmode="overlay",
+                        title=f"Distribution of '{sort_col}' by presence of '{kw}'",
+                        xaxis_title=sort_col,
+                        yaxis_title="Density",
+                        legend=dict(x=0.7, y=0.95),
+                    )
 
-                st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, use_container_width=True)
     if st.checkbox(f"Pairwise comparisons for {effect_keywords}"):
         pairwise_effect_rows = []
         for effect_keywords_pairwise in effect_keywords:
