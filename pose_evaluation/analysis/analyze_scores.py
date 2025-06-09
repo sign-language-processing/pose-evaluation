@@ -8,16 +8,23 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
+from torchmetrics.retrieval import (
+    RetrievalMAP,
+    RetrievalMRR,
+    RetrievalPrecision,
+    RetrievalRecall,
+)
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
-from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
+from pose_evaluation.evaluation.load_pyarrow_dataset import (
+    load_dataset,
+    load_metric_dfs,
+)
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 _DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
-
 
 tqdm.pandas()
 
@@ -513,7 +520,6 @@ if __name__ == "__main__":
         stats_by_metric_df.to_csv(metric_stats_out, index=False)
     else:
         print("No metrics were analyzed.")
-
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_1_2_z_combined_818_metrics/scores --file-format parquet
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_round_4/scores/ --file-format parquet
