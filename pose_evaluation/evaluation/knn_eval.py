@@ -11,8 +11,7 @@ import pyarrow.parquet as pq
 import typer
 from tqdm import tqdm
 
-from pose_evaluation.evaluation.load_pyarrow_dataset import \
-    summarize_metric_partitions
+from pose_evaluation.evaluation.load_pyarrow_dataset import summarize_metric_partitions
 
 app = typer.Typer()
 

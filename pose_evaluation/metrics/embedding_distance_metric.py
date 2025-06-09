@@ -96,7 +96,6 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     def get_device(self) -> torch.device:
         return self._device
 
-
     def score(self, hypothesis: TensorConvertableType, reference: TensorConvertableType) -> Number:
         """
         Compute the distance between two embeddings.

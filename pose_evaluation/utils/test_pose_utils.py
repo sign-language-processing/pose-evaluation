@@ -8,12 +8,18 @@ from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs
 
 from pose_evaluation.utils.pose_utils import (
-    add_z_offsets_to_pose, first_frame_pad_shorter_poses,
-    get_component_names_and_points_dict, get_face_and_hands_from_pose,
-    get_youtube_asl_mediapipe_keypoints, load_pose_file,
-    pose_fill_masked_or_invalid, pose_hide_low_conf,
-    pose_remove_world_landmarks, reduce_poses_to_intersection,
-    zero_pad_shorter_poses)
+    add_z_offsets_to_pose,
+    first_frame_pad_shorter_poses,
+    get_component_names_and_points_dict,
+    get_face_and_hands_from_pose,
+    get_youtube_asl_mediapipe_keypoints,
+    load_pose_file,
+    pose_fill_masked_or_invalid,
+    pose_hide_low_conf,
+    pose_remove_world_landmarks,
+    reduce_poses_to_intersection,
+    zero_pad_shorter_poses,
+)
 
 
 def test_load_poses_mediapipe(
@@ -166,10 +172,14 @@ def test_reduce_pose_components_to_intersection(
 def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
 
     # they should be sorted alphabetically by name
-    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (37, 1, 576, 3) # 000017451997373907346-LIBRARY.pose
-    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (44, 1, 553, 3) # SbTU6uS4cc1tZpqCnE3g.pose
-    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (111, 1, 553, 3) # Ui9Nq58yYSgkJslO02za.pose
-    
+    assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (
+        37,
+        1,
+        576,
+        3,
+    )  # 000017451997373907346-LIBRARY.pose
+    assert mediapipe_poses_test_data_mixed_shapes[1].body.data.shape == (44, 1, 553, 3)  # SbTU6uS4cc1tZpqCnE3g.pose
+    assert mediapipe_poses_test_data_mixed_shapes[2].body.data.shape == (111, 1, 553, 3)  # Ui9Nq58yYSgkJslO02za.pose
 
     for pose in mediapipe_poses_test_data_mixed_shapes:
         c_names = [c.name for c in pose.header.components]
@@ -351,9 +361,7 @@ import pytest
 
 @pytest.mark.parametrize("speed_multiplier", [0.0, 0.5, 1.0, 2.0, "match_fps"])
 def test_add_z_offsets_to_pose_varied_speeds(
-    speed_multiplier,
-    mediapipe_poses_test_data_refined: List[Pose],
-    mediapipe_poses_test_data: List[Pose]
+    speed_multiplier, mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data: List[Pose]
 ):
     all_poses = mediapipe_poses_test_data_refined + mediapipe_poses_test_data
 
@@ -389,17 +397,10 @@ def test_add_z_offsets_to_pose_varied_speeds(
         # X and Y axes should be unchanged
         for axis in [0, 1]:
             assert np.allclose(
-                updated_data[:, :, :, axis],
-                original_data[:, :, :, axis],
-                equal_nan=True
+                updated_data[:, :, :, axis], original_data[:, :, :, axis], equal_nan=True
             ), f"Speed {speed}: axis {axis} (X/Y) changed unexpectedly"
 
         # Mask should be preserved
         assert np.array_equal(
-            ma.getmaskarray(updated_data),
-            ma.getmaskarray(original_data)
+            ma.getmaskarray(updated_data), ma.getmaskarray(original_data)
         ), f"Speed {speed}: mask was modified"
-
-
-
-    

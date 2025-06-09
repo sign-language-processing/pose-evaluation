@@ -82,7 +82,6 @@ def plot_pareto_frontier(df: pd.DataFrame):
         cols_to_drop = {"RANK", "data_labels", "_metric_lower", "highlight"}
         frontier_download = frontier_download[[col for col in frontier_download.columns if col not in cols_to_drop]]
 
-
         st.dataframe(frontier_download)
 
         # Create and offer CSV for download
@@ -235,7 +234,6 @@ def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", mode="auto"
     return find_positional_keyword_differences(df, keywords, metric_col, verbose)
 
 
-
 def find_optional_keyword_differences(df, keywords, metric_col="METRIC", verbose=False):
     metrics = df[metric_col].tolist()
     keywords = [kw.lower() for kw in keywords]
@@ -247,19 +245,21 @@ def find_optional_keyword_differences(df, keywords, metric_col="METRIC", verbose
         lowered = [t.lower() for t in tokens]
         keyword_tokens = [t for t in lowered if any(kw in t for kw in keywords)]
         stripped_tokens = tuple(t for t in lowered if all(kw not in t for kw in keywords))
-        processed.append({
-            "original": m,
-            "tokens": tokens,
-            "lowered": lowered,
-            "keyword_tokens": keyword_tokens,
-            "stripped": stripped_tokens,
-        })
+        processed.append(
+            {
+                "original": m,
+                "tokens": tokens,
+                "lowered": lowered,
+                "keyword_tokens": keyword_tokens,
+                "stripped": stripped_tokens,
+            }
+        )
 
     for i, p1 in enumerate(processed):
         for j, p2 in enumerate(processed):
             if i == j:
                 continue
-            if (p1["keyword_tokens"] and not p2["keyword_tokens"] and p1["stripped"] == p2["stripped"]):
+            if p1["keyword_tokens"] and not p2["keyword_tokens"] and p1["stripped"] == p2["stripped"]:
                 if verbose:
                     print(f"[presence_absence] Match: {p1['original']} ↔ {p2['original']}")
                 results.append((p1["original"], p2["original"]))
@@ -830,7 +830,7 @@ if csv_paths_input:
     effect_keyword = st.text_input(
         "Keyword to test effect of (case-insensitive, comma-separated)", key="group_effect_kw"
     )
-    
+
     if not effect_keyword.strip():
         effect_keywords = [
             "dtw,dtaiDTWAggregatedDistanceMetricFast",

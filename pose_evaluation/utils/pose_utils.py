@@ -56,20 +56,17 @@ def reduce_poses_to_intersection(
     # === Stage 1: Reduce to common components ===
     common_components: Set[str] = {comp.name for comp in poses[0].header.components}
 
-
     for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting components", disable=not progress)):
         current_components = {comp.name for comp in pose.header.components}
         common_components.intersection_update(current_components)
 
     common_components_list = sorted(common_components)
 
-
     # Apply component filtering
     poses = [pose.get_components(common_components_list) for pose in poses]
 
     # === Stage 2: Reduce to common points within each component ===
     common_points: Dict[str, Set[str]] = {comp.name: set(comp.points) for comp in poses[0].header.components}
-
 
     for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting points", disable=not progress)):
         current_points = {comp.name: set(comp.points) for comp in pose.header.components}
