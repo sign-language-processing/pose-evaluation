@@ -1,6 +1,5 @@
-from typing import TypeVar
-
 import torch
+from typing import TypeVar
 
 from pose_evaluation.metrics.base import BaseMetric
 

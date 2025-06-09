@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import numpy as np
+import pandas as pd
 import re
 from pathlib import Path
+from tqdm import tqdm
 from typing import Optional, Dict
 
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 # --- Constants & Regexes ------------------------------------------------
@@ -15,6 +15,7 @@ from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_s
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 # Filename metric: defaultdist<float>
 _DEFAULTDIST_RE = re.compile(r"defaultdist[\d.]+")
+
 
 # --- Helper Functions ---------------------------------------------------
 
@@ -56,7 +57,7 @@ def build_new_metric_name(old_metric: str, signature_dist: Optional[str]) -> str
     metric = old_metric
     # 1) trimmed -> startendtrimmed
     if metric.startswith("trimmed"):
-        metric = "startendtrimmed" + metric[len("trimmed") :]
+        metric = "startendtrimmed" + metric[len("trimmed"):]
     # 2) exact replace normalized
     metric = metric.replace("_normalized_", "_normalizedbyshoulders_")
     # 3) defaultdist logic only if signature provided

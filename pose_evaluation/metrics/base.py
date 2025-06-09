@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Sequence, TypeVar
-
 from tqdm import tqdm
+from typing import Any, Callable, Generic, Sequence, TypeVar
 
 T = TypeVar("T")
 
@@ -73,11 +72,10 @@ class Score:
         return f"{self.signature} = {self.score}"
 
     def format(
-        self,
-        width: int = 2,
-        score_only: bool = False,
+            self,
+            width: int = 2,
+            score_only: bool = False,
     ) -> str:
-
         sc = f"{self.score:.{width}f}"
 
         full_score = f"{self.signature}" if self.signature else self.name
@@ -108,10 +106,10 @@ class BaseMetric(ABC, Generic[T]):  # Ensure it extends ABC
         raise NotImplementedError
 
     def score_with_signature(
-        self,
-        hypothesis: T,
-        reference: T,
-        short: bool = False,
+            self,
+            hypothesis: T,
+            reference: T,
+            short: bool = False,
     ) -> Score:
         return Score(
             name=self.name,
@@ -143,11 +141,11 @@ class BaseMetric(ABC, Generic[T]):  # Ensure it extends ABC
         ]
 
     def score_all_with_signature(
-        self,
-        hypotheses: Sequence[T],
-        references: Sequence[T],
-        progress_bar=False,
-        short: bool = False,
+            self,
+            hypotheses: Sequence[T],
+            references: Sequence[T],
+            progress_bar=False,
+            short: bool = False,
     ) -> list[list[Score]]:
         return [
             [self.score_with_signature(h, r, short=short) for r in references]

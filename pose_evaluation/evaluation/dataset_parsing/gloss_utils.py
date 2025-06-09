@@ -73,7 +73,6 @@ def standardize_asllex_vocab(gloss: str) -> str:
 
 
 def test_gloss_matching():
-
     # ASL Citizen Test Set has 2731 vocab
     # Non-alphanumeric characters for STAND-UP: {'-'}
     # Non-alphanumeric characters for SKI-CA: {'-'}

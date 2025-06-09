@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
-from pathlib import Path
 import pandas as pd
-
+from pathlib import Path
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.score_dataframe_format import load_score_csv
 
 
 def convert_csvs_to_parquet(
-    folder: Path, out_dir: Path | None = None, remove_original: bool = False, score_csv_format=False
+        folder: Path, out_dir: Path | None = None, remove_original: bool = False, score_csv_format=False
 ):
     csv_files = list(folder.glob("*.csv"))
     if not csv_files:

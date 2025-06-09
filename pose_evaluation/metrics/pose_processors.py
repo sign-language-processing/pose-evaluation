@@ -1,12 +1,9 @@
-from typing import Any, List, Union, Iterable, Callable
-
-
-from tqdm import tqdm
 from numpy import ma
-
 from pose_format import Pose
 from pose_format.utils.generic import pose_hide_legs, reduce_holistic, detect_known_pose_format
 from spoken_to_signed.gloss_to_pose.concatenate import trim_pose
+from tqdm import tqdm
+from typing import Any, List, Union, Iterable, Callable
 
 from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
@@ -18,7 +15,6 @@ from pose_evaluation.utils.pose_utils import (
     get_youtube_asl_mediapipe_keypoints,
     add_z_offsets_to_pose,
 )
-
 
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 
@@ -171,7 +167,6 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
 
     def process_pose(self, pose):
         if detect_known_pose_format(pose) == "holistic":
-
             return trim_pose(pose.copy(), start=self.start, end=self.end)
         # not supported
         return pose
@@ -208,14 +203,14 @@ class AddTOffsetsToZPoseProcessor(PoseProcessor):
 
 
 def get_standard_pose_processors(
-    trim_meaningless_frames: bool = True,
-    normalize_poses: bool = True,
-    reduce_poses_to_common_components: bool = True,
-    remove_world_landmarks=True,
-    remove_legs=True,
-    reduce_holistic_to_face_and_upper_body=False,
-    zero_fill_masked=False,
-    zero_pad_shorter=True,
+        trim_meaningless_frames: bool = True,
+        normalize_poses: bool = True,
+        reduce_poses_to_common_components: bool = True,
+        remove_world_landmarks=True,
+        remove_legs=True,
+        reduce_holistic_to_face_and_upper_body=False,
+        zero_fill_masked=False,
+        zero_pad_shorter=True,
 ) -> List[PoseProcessor]:
     pose_processors = []
 

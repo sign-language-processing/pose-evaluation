@@ -1,8 +1,7 @@
-from pathlib import Path
-from typing import Optional
-
 import pandas as pd
 import typer
+from pathlib import Path
+from typing import Optional
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
@@ -17,11 +16,11 @@ app = typer.Typer()
 
 @app.command()
 def collect(
-    dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+        dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
+        pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+        metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+        video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+        out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
     """Read in Sem-Lex files and metadata, combine to one dataframe, and save out to csv"""
     # pylint: disable=duplicate-code
@@ -68,7 +67,6 @@ def collect(
     typer.echo(f"There are now {len(df)} rows")
 
     for prefix in ["POSE", "VIDEO"]:
-
         files_df = file_paths_list_to_df(result[f"{prefix}_FILES"], prefix=prefix)
         files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem.split("-")[0])
         # typer.echo(files_df.head())

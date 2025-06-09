@@ -1,6 +1,5 @@
-from unittest.mock import MagicMock
-
 import pytest
+from unittest.mock import MagicMock
 
 from pose_evaluation.evaluation.create_metrics import (
     construct_metric,
@@ -8,6 +7,7 @@ from pose_evaluation.evaluation.create_metrics import (
     extract_signature_distance,
     get_metrics,
 )
+
 
 # ---- Tests for extract_signature_distance ----
 

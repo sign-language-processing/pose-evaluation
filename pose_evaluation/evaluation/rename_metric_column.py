@@ -2,7 +2,6 @@
 
 import argparse
 from pathlib import Path
-
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.score_dataframe_format import load_score_csv

@@ -1,9 +1,7 @@
-from pathlib import Path
-from typing import Optional
-
 import pandas as pd
 import typer
-
+from pathlib import Path
+from typing import Optional
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
@@ -18,13 +16,12 @@ app = typer.Typer()
 
 @app.command()
 def collect(
-    dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    asl_knowledge_graph_path: Optional[Path] = typer.Option(None, exists=True, file_okay=True, readable=True),
-    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+        dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
+        pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+        video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
+        asl_knowledge_graph_path: Optional[Path] = typer.Option(None, exists=True, file_okay=True, readable=True),
+        out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
 ):
-
     # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
@@ -39,7 +36,6 @@ def collect(
 
     files_dfs = []
     for prefix in ["POSE", "VIDEO"]:
-
         files_df = file_paths_list_to_df(
             result[f"{prefix}_FILES"], prefix=prefix, parse_metatadata_from_folder_structure=True
         )
@@ -56,10 +52,10 @@ def collect(
 
         # Assert that SPLIT and GLOSS columns match
         assert (
-            merged_check[f"{DatasetDFCol.SPLIT}_x"] == merged_check[f"{DatasetDFCol.SPLIT}_y"]
+                merged_check[f"{DatasetDFCol.SPLIT}_x"] == merged_check[f"{DatasetDFCol.SPLIT}_y"]
         ).all(), f"{DatasetDFCol.SPLIT} values do not match"
         assert (
-            merged_check[f"{DatasetDFCol.GLOSS}_x"] == merged_check[f"{DatasetDFCol.GLOSS}_y"]
+                merged_check[f"{DatasetDFCol.GLOSS}_x"] == merged_check[f"{DatasetDFCol.GLOSS}_y"]
         ).all(), f"{DatasetDFCol.GLOSS} values do not match"
 
         files_df = files_df.drop(columns=["GLOSS", "SPLIT"])

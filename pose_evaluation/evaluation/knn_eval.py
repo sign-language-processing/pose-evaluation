@@ -1,15 +1,14 @@
 import heapq
-from collections import defaultdict, Counter
-from pathlib import Path
-from typing import Dict, Tuple, List, Optional, Any
-
+import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
-import pyarrow.compute as pc
-import pandas as pd
 import typer
+from collections import defaultdict, Counter
+from pathlib import Path
 from tqdm import tqdm
+from typing import Dict, Tuple, List, Optional, Any
 
 from pose_evaluation.evaluation.load_pyarrow_dataset import summarize_metric_partitions
 
@@ -17,12 +16,12 @@ app = typer.Typer()
 
 
 def summarize_distance_matrix(
-    dataset: ds.Dataset,
-    query_path_col: str = "GLOSS_A_PATH",
-    neighbor_path_col: str = "GLOSS_B_PATH",
-    score_col: str = "SCORE",
-    query_label_col: str = "GLOSS_A",
-    neighbor_label_col: str = "GLOSS_B",
+        dataset: ds.Dataset,
+        query_path_col: str = "GLOSS_A_PATH",
+        neighbor_path_col: str = "GLOSS_B_PATH",
+        score_col: str = "SCORE",
+        query_label_col: str = "GLOSS_A",
+        neighbor_label_col: str = "GLOSS_B",
 ) -> Dict[str, Any]:
     """
     Summarizes the sparsity and completeness of a KNN-style distance matrix in a memory-efficient way.
@@ -95,15 +94,15 @@ def summarize_distance_matrix(
 
 
 def compute_top_k_neighbors(
-    dataset: ds.Dataset,
-    k: int,
-    score_col: str,
-    query_path_col: str,
-    neighbor_path_col: str,
-    query_label_col: str,
-    neighbor_label_col: str,
-    min_references_per_query: Optional[int] = None,
-    max_queries: Optional[int] = None,
+        dataset: ds.Dataset,
+        k: int,
+        score_col: str,
+        query_path_col: str,
+        neighbor_path_col: str,
+        query_label_col: str,
+        neighbor_label_col: str,
+        min_references_per_query: Optional[int] = None,
+        max_queries: Optional[int] = None,
 ) -> Tuple[Dict[Tuple[str, str], List[Tuple[float, str, str]]], Dict[str, int]]:
     """
     Compute top-k nearest neighbors from a PyArrow dataset, assuming lower scores are better (e.g., distances).
@@ -120,11 +119,11 @@ def compute_top_k_neighbors(
         table = batch.to_pydict()
 
         for q_path, n_path, score, q_label, n_label in zip(
-            table[query_path_col],
-            table[neighbor_path_col],
-            table[score_col],
-            table[query_label_col],
-            table[neighbor_label_col],
+                table[query_path_col],
+                table[neighbor_path_col],
+                table[score_col],
+                table[query_label_col],
+                table[neighbor_label_col],
         ):
             key = (q_path, q_label)
             reference_counts[key] += 1
@@ -165,7 +164,7 @@ def compute_top_k_neighbors(
 
 
 def get_metric_filtered_datasets(
-    dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
+        dataset_path: Path, dataset: ds.Dataset, metric: Optional[str] = None
 ) -> List[Tuple[Optional[str], ds.Dataset]]:
     """
     Returns a list of (metric_name, filtered_dataset) tuples
@@ -224,14 +223,14 @@ def get_metric_filtered_datasets(
 
 
 def save_neighbors(
-    top_k_results: dict,
-    output_path: Path,
-    query_path_col: str,
-    query_label_col: str,
-    neighbor_path_col: str,
-    neighbor_label_col: str,
-    score_col: str,
-    overwrite: bool = False,
+        top_k_results: dict,
+        output_path: Path,
+        query_path_col: str,
+        query_label_col: str,
+        neighbor_path_col: str,
+        neighbor_label_col: str,
+        score_col: str,
+        overwrite: bool = False,
 ) -> None:
     """
     Save top-k results from neighbor dict to Parquet.
@@ -287,9 +286,9 @@ def save_neighbors(
 
 
 def evaluate_top_k_results(
-    top_k_results: dict,
-    k: int,
-    verbose: bool = False,
+        top_k_results: dict,
+        k: int,
+        verbose: bool = False,
 ) -> float:
     """
     Evaluate top-k results and return accuracy only.
@@ -317,14 +316,14 @@ def evaluate_top_k_results(
 
 @app.command("analyze")
 def analyze_neighbors_command(
-    file_path: Path = typer.Argument(..., help="Path to a saved Parquet file of neighbors."),
-    k: int = typer.Option(5, help="Value of k used in top-k neighbors."),
-    query_path_col: str = typer.Option("GLOSS_A_PATH"),
-    neighbor_path_col: str = typer.Option("GLOSS_B_PATH"),
-    query_label_col: str = typer.Option("GLOSS_A"),
-    neighbor_label_col: str = typer.Option("GLOSS_B"),
-    score_col: str = typer.Option("SCORE"),
-    verbose: bool = typer.Option(False, help="Print classification details."),
+        file_path: Path = typer.Argument(..., help="Path to a saved Parquet file of neighbors."),
+        k: int = typer.Option(5, help="Value of k used in top-k neighbors."),
+        query_path_col: str = typer.Option("GLOSS_A_PATH"),
+        neighbor_path_col: str = typer.Option("GLOSS_B_PATH"),
+        query_label_col: str = typer.Option("GLOSS_A"),
+        neighbor_label_col: str = typer.Option("GLOSS_B"),
+        score_col: str = typer.Option("SCORE"),
+        verbose: bool = typer.Option(False, help="Print classification details."),
 ):
     """
     Analyze previously saved top-k neighbor results.
@@ -344,18 +343,18 @@ def analyze_neighbors_command(
 
 @app.command("compute")
 def do_knn(
-    dataset_path: Path = typer.Argument(..., help="Path to Arrow/Parquet dataset."),
-    k: int = typer.Option(1, help="Number of neighbors."),
-    score_col: str = typer.Option("SCORE"),
-    query_path_col: str = typer.Option("GLOSS_A_PATH"),
-    neighbor_path_col: str = typer.Option("GLOSS_B_PATH"),
-    query_label_col: str = typer.Option("GLOSS_A"),
-    neighbor_label_col: str = typer.Option("GLOSS_B"),
-    output_path: Optional[Path] = typer.Option(None, help="Optional output path to save top-k results as Parquet."),
-    verbose: bool = typer.Option(False, help="Print classification details."),
-    metric: Optional[str] = typer.Option(None, help="Metric partition value to evaluate."),
-    max_queries: Optional[int] = typer.Option(None, help="If given, will only process this many query files"),
-    overwrite: bool = typer.Option(False, help="If given, will skip saving over existing files"),
+        dataset_path: Path = typer.Argument(..., help="Path to Arrow/Parquet dataset."),
+        k: int = typer.Option(1, help="Number of neighbors."),
+        score_col: str = typer.Option("SCORE"),
+        query_path_col: str = typer.Option("GLOSS_A_PATH"),
+        neighbor_path_col: str = typer.Option("GLOSS_B_PATH"),
+        query_label_col: str = typer.Option("GLOSS_A"),
+        neighbor_label_col: str = typer.Option("GLOSS_B"),
+        output_path: Optional[Path] = typer.Option(None, help="Optional output path to save top-k results as Parquet."),
+        verbose: bool = typer.Option(False, help="Print classification details."),
+        metric: Optional[str] = typer.Option(None, help="Metric partition value to evaluate."),
+        max_queries: Optional[int] = typer.Option(None, help="If given, will only process this many query files"),
+        overwrite: bool = typer.Option(False, help="If given, will skip saving over existing files"),
 ):
     """
     Perform KNN classification using intra- or cross-split distances from a PyArrow dataset.

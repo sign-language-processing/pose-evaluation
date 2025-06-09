@@ -1,20 +1,18 @@
 import copy
 import json
-from pathlib import Path
-from typing import List, Dict
-
 import pytest
+from pathlib import Path
 from pose_format import Pose
 from pose_format.utils.generic import fake_pose
 from pose_format.utils.openpose_135 import (
     OpenPose_Components as openpose_135_components,
 )
+from typing import List, Dict
 
 from pose_evaluation.utils.pose_utils import load_pose_file
 
-
 utils_standard_mediapipe_landmarks_test_data_dir = (
-    Path(__file__).parent / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+        Path(__file__).parent / "test" / "test_data" / "mediapipe" / "standard_landmarks"
 )
 
 

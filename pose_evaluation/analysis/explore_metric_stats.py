@@ -1,14 +1,14 @@
-from pathlib import Path
-from itertools import combinations
-import re
+import io
 import os
-import torch
-import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-import io
+import re
+import streamlit as st
+import torch
+from itertools import combinations
+from pathlib import Path
 from typing import List, Tuple
 
 # pio.templates.default = "plotly"
@@ -87,7 +87,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
                     ),
                     hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>"
                     #   f"{'METRIC: %{{customdata[1]}}<br>' if METRIC_COL in group else ''}"
-                    f"{METRIC_COL}: %{{customdata[1]}}<br>" f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
+                                  f"{METRIC_COL}: %{{customdata[1]}}<br>" f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
                 )
             )
     else:
@@ -123,8 +123,8 @@ def plot_pareto_frontier(df: pd.DataFrame):
                 frontier[[DESCRIPTIVE_NAME_COL, METRIC_COL]] if METRIC_COL in frontier else frontier[[SHORT_COL]]
             ),
             hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>"
-            f"{METRIC_COL}: %{{customdata[1]}}<br>"
-            f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
+                          f"{METRIC_COL}: %{{customdata[1]}}<br>"
+                          f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
         )
     )
 
@@ -140,7 +140,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
 
 
 def get_pareto_frontier(
-    df: pd.DataFrame, col1: str, col2: str, maximize_col1: bool, maximize_col2: bool
+        df: pd.DataFrame, col1: str, col2: str, maximize_col1: bool, maximize_col2: bool
 ) -> pd.DataFrame:
     """Returns the Pareto frontier based on optimization directions."""
     data = df.copy()
@@ -260,7 +260,6 @@ def prettify_axis_label(label: str) -> str:
 
 
 def apply_minimal_layout(fig: go.Figure, size: int = 600) -> None:
-
     # fig.update_layout(
     #     title=None,
     #     xaxis=dict(visible=False),
@@ -589,11 +588,13 @@ if csv_paths_input:
     if keyword_input.strip():
         keywords = [k.strip().lower() for k in keyword_input.split(",") if k.strip()]
 
+
         def match_keywords(text):
             matched = [kw for kw in keywords if kw in text.lower()]
             if matched:
                 return " + ".join(sorted(set(matched))) if multi_color else f"Matched: {', '.join(keywords)}"
             return "Other"
+
 
         df["highlight"] = df.apply(
             lambda row: match_keywords(row[METRIC_COL]) if pd.notnull(row[METRIC_COL]) else "Other", axis=1
@@ -753,7 +754,7 @@ if csv_paths_input:
                 # f"\n% {interpret_name(metric)}",
                 f"\n% {descriptive_name(metric)}",
                 f"\n% {metric} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}\t\\\\",
-                f"\n{descriptive_name(metric).split()[0]} & {dd} & {fm} & {trim} & {norm} & {seq_align} & {kp} &\t{metric_row['mean_average_precision']*100:.0f}\\% &\t{metric_row['precision@10']*100:.0f}\\%\t\\\\",
+                f"\n{descriptive_name(metric).split()[0]} & {dd} & {fm} & {trim} & {norm} & {seq_align} & {kp} &\t{metric_row['mean_average_precision'] * 100:.0f}\\% &\t{metric_row['precision@10'] * 100:.0f}\\%\t\\\\",
             ]
 
             for mdl in markdown_lines:
@@ -876,11 +877,10 @@ if csv_paths_input:
             st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
             st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
             st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
-            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK']<= 10).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK'] <= 10).sum()}")
             st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
 
             if st.checkbox(f"Show distributions for {kw}?"):
-
                 fig = go.Figure()
 
                 fig.add_trace(
@@ -1025,6 +1025,5 @@ if csv_paths_input:
         plot_grouped_bar_chart(df)
     else:
         plot_pareto_frontier(df)
-
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && streamlit run pose_evaluation/evaluation/explore_metric_stats.py

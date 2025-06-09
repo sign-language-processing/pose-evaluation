@@ -1,6 +1,6 @@
-from pathlib import Path
 import pandas as pd
 from io import StringIO
+from pathlib import Path
 
 """Trying to combine Sem-Lex, ASL Citizen, ASL Knowledge Graph and "Known Lookalikes" from 
 """
@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     sem_related_df = sem_related_df[
         sem_related_df["subject"].str.contains("asllex:") & sem_related_df["object"].str.contains("asllex:")
-    ]
+        ]
     print(sem_related_df[["subject", "object"]])
 
     # ASL-Lex Vocabulary for compatibility

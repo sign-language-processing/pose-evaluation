@@ -1,10 +1,9 @@
-from pathlib import Path
 import pandas as pd
-from tqdm import tqdm
+from pathlib import Path
 from pose_format import Pose
+from tqdm import tqdm
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
-
 from pose_evaluation.evaluation.load_splits_and_run_metrics import get_filtered_metrics
 
 
@@ -16,7 +15,7 @@ def save_results(entries, output_csv_path):
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
-        yield lst[i : i + n]
+        yield lst[i: i + n]
 
 
 if __name__ == "__main__":
@@ -113,7 +112,8 @@ if __name__ == "__main__":
             entries = []
 
             for i in tqdm(
-                range(item_count), desc=f"Running metrics {chunk_start}-{chunk_end} on pose pairs for system {system}"
+                    range(item_count),
+                    desc=f"Running metrics {chunk_start}-{chunk_end} on pose pairs for system {system}"
             ):
                 hyp_file = hyp_paths[i]
                 ref_file = ref_paths[i]

@@ -1,10 +1,9 @@
-from itertools import product
-from pathlib import Path
-
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
 from fastdtw import fastdtw  # type: ignore (pylint can't find it but it's there)
+from itertools import product
+from pathlib import Path
 
 
 def pad_seq(seq, val, count):
@@ -71,7 +70,7 @@ if __name__ == "__main__":
     update_x_vals = [True, False]
 
     for point_count_1, padding, add_mappings, add_z, update_x in product(
-        point_count_1_list, paddings, add_mappings, add_z_values, update_x_vals
+            point_count_1_list, paddings, add_mappings, add_z_values, update_x_vals
     ):
 
         print(

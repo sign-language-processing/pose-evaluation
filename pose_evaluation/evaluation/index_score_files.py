@@ -1,10 +1,9 @@
-from typing import Optional
 import argparse
-from pathlib import Path
-from collections import defaultdict
 import json
-
+from collections import defaultdict
+from pathlib import Path
 from tqdm import tqdm
+from typing import Optional
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
@@ -15,9 +14,9 @@ class ScoresIndexDFCol:
 
 
 def index_scores(
-    scores_folder: Path,
-    filter_metric: Optional[str] = None,
-    filter_gloss_a: Optional[str] = None,
+        scores_folder: Path,
+        filter_metric: Optional[str] = None,
+        filter_gloss_a: Optional[str] = None,
 ):
     analysis_folder = scores_folder.parent / "score_analysis"
     score_files_index_out = analysis_folder / "score_files_index.json"

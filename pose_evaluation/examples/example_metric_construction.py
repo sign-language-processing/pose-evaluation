@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from pose_format import Pose
 
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
@@ -9,7 +8,8 @@ from pose_evaluation.metrics.dtw_metric import (
     DTWAggregatedScipyDistanceMeasure,
     DTWDTAIImplementationDistanceMeasure,
 )
-from pose_evaluation.metrics.test_distance_metric import get_poses
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
 from pose_evaluation.metrics.pose_processors import (
     NormalizePosesProcessor,
     ZeroPadShorterPosesProcessor,
@@ -17,16 +17,13 @@ from pose_evaluation.metrics.pose_processors import (
     ReduceHolisticPoseProcessor,
     get_standard_pose_processors,
 )
-
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-
-from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
+from pose_evaluation.metrics.test_distance_metric import get_poses
 
 if __name__ == "__main__":
     # Define file paths for test pose data
     # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
     test_data_path = (
-        Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
+            Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
     )
     reference_file = test_data_path / "colin-1-HOUSE.pose"
     hypothesis_file = test_data_path / "colin-2-HOUSE.pose"

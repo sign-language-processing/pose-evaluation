@@ -1,21 +1,21 @@
-import shutil
 import json
-from pathlib import Path
-from datetime import datetime
+import shutil
+import typer
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
 from tqdm import tqdm
-import typer
 
 app = typer.Typer()
 
 
 @app.command()
 def filter_parquet_files(
-    in_path: Path = typer.Argument(..., help="Folder with input .parquet files"),
-    out_path: Path = typer.Argument(..., help="Folder to save filtered .parquet files"),
-    glosses_to_include: str = typer.Option(..., help="Comma-separated list of glosses to include"),
-    report_path: Path = typer.Option(None, help="Optional path to save a JSON report"),
+        in_path: Path = typer.Argument(..., help="Folder with input .parquet files"),
+        out_path: Path = typer.Argument(..., help="Folder to save filtered .parquet files"),
+        glosses_to_include: str = typer.Option(..., help="Comma-separated list of glosses to include"),
+        report_path: Path = typer.Option(None, help="Optional path to save a JSON report"),
 ):
     glosses_set = set(g.strip().upper() for g in glosses_to_include.split(","))
     typer.echo(f"📂 Input path: {in_path}")
@@ -35,7 +35,7 @@ def filter_parquet_files(
         for gloss in glosses_set:
             prefix = f"{gloss}_"
             if fname.startswith(prefix) and "OUTGLOSS_4X_SCORE_RESULTS" in fname:
-                metric_part = fname[len(prefix) : fname.index("OUTGLOSS_4X_SCORE_RESULTS")].rstrip("_")
+                metric_part = fname[len(prefix): fname.index("OUTGLOSS_4X_SCORE_RESULTS")].rstrip("_")
                 metric_to_glosses[metric_part].add(gloss)
                 gloss_to_files[(gloss, metric_part)].append(file)
 
@@ -79,7 +79,6 @@ def filter_parquet_files(
 
 if __name__ == "__main__":
     app()
-
 
 # GLOSS	SAMPLES
 # DECIDE2	8

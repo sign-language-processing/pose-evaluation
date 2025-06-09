@@ -1,23 +1,21 @@
 import argparse
-from typing import Optional, List, Dict, Tuple
+import json
+import numpy as np
+import pandas as pd
+import re
+import torch
 from collections import defaultdict
 from pathlib import Path
-import json
-import re
-
-import pandas as pd
-import numpy as np
-from tqdm import tqdm
-import torch
 from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
+from tqdm import tqdm
+from typing import Optional, List, Dict, Tuple
 
-from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
 from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
+from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 _DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
-
 
 tqdm.pandas()
 
@@ -34,7 +32,7 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
     possible_gloss, rest = stem.split("_", 1)
     first_part = rest.split("_", 1)[0]
     assert (
-        "Return4" in first_part or "trimmed" in first_part
+            "Return4" in first_part or "trimmed" in first_part
     ), f"Unexpected format: {rest}, possibly gloss has underscores? {possible_gloss}"
     metric, _ = rest.split("_outgloss_", 1)
     return metric
@@ -74,7 +72,7 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
 
     group_id = 0
     for gloss_a_path, group in tqdm(
-        df.groupby(ScoreDFCol.GLOSS_A_PATH), "Iterating over hyp paths", disable=len(df) < 1000
+            df.groupby(ScoreDFCol.GLOSS_A_PATH), "Iterating over hyp paths", disable=len(df) < 1000
     ):
         filtered_group = group[group[ScoreDFCol.GLOSS_B_PATH] != gloss_a_path]
         if filtered_group.empty:
@@ -291,7 +289,7 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
         try:
             for score_file in tqdm(
-                files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric_name}'"
+                    files, desc=f"Loading {len(files)} {file_format.upper()} files for metric '{metric_name}'"
             ):
                 if file_format == "csv":
                     scores_df = load_score_csv(csv_file=score_file)
@@ -327,7 +325,7 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
                 all_dfs.append(scores_df)
 
             assert (
-                len(signatures_set) == 1
+                    len(signatures_set) == 1
             ), f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
 
         except AssertionError as e:
@@ -406,9 +404,9 @@ if __name__ == "__main__":
             print(score_files_index[ScoresIndexDFCol.SUMMARY])
 
     if (
-        previous_stats_by_metric is not None
-        and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores")
-        == previous_stats_by_metric["total_count"].sum()
+            previous_stats_by_metric is not None
+            and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores")
+            == previous_stats_by_metric["total_count"].sum()
     ):
         print(f"Score count has not changed, no need to re-analyze. Quitting now.")
         exit()
@@ -513,7 +511,6 @@ if __name__ == "__main__":
         stats_by_metric_df.to_csv(metric_stats_out, index=False)
     else:
         print("No metrics were analyzed.")
-
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_1_2_z_combined_818_metrics/scores --file-format parquet
 # conda activate /opt/home/cleong/envs/pose_eval_src && cd /opt/home/cleong/projects/pose-evaluation && python pose_evaluation/evaluation/analyze_scores.py metric_results_round_4/scores/ --file-format parquet

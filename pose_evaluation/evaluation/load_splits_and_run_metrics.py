@@ -1,23 +1,21 @@
 import concurrent.futures
+import math
+import numpy as np
+import pandas as pd
+import random
+import time
+import typer
 from collections import defaultdict
 from itertools import product
-import math
-import time
-from typing import List, Optional, Annotated
 from pathlib import Path
-import random
-
-from tqdm import tqdm
 from pose_format import Pose
-import pandas as pd
-import numpy as np
-
-import typer
+from tqdm import tqdm
+from typing import List, Optional, Annotated
 
 from pose_evaluation.evaluation.create_metrics import get_metrics, get_embedding_metrics
-from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
+from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 app = typer.Typer()
@@ -89,17 +87,17 @@ def load_embedding_for_pose(df, model, pose_file_path):
 
 
 def run_metrics_in_out_trials(
-    df: pd.DataFrame,
-    out_path: Path,
-    metrics: List["DistanceMetric"],
-    gloss_count: Optional[int] = 5,
-    out_gloss_multiplier=4,
-    shuffle_metrics=True,
-    metric_count: Optional[int] = 10,
-    additional_glosses: Optional[List[str]] = None,
-    shuffle_query_glosses=False,
-    skip_glosses_with_more_than_this_many: Optional[int] = None,
-    gloss_dfs_folder: Optional[Path] = None,
+        df: pd.DataFrame,
+        out_path: Path,
+        metrics: List["DistanceMetric"],
+        gloss_count: Optional[int] = 5,
+        out_gloss_multiplier=4,
+        shuffle_metrics=True,
+        metric_count: Optional[int] = 10,
+        additional_glosses: Optional[List[str]] = None,
+        shuffle_query_glosses=False,
+        skip_glosses_with_more_than_this_many: Optional[int] = None,
+        gloss_dfs_folder: Optional[Path] = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
     typer.echo(f"The number of possible unique glosses to pick from is {len(query_gloss_vocabulary)}")
@@ -171,7 +169,7 @@ def run_metrics_in_out_trials(
     scores_path.mkdir(exist_ok=True, parents=True)
 
     for g_index, (gloss, metric) in enumerate(
-        tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
+            tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
     ):
         if isinstance(metric, EmbeddingDistanceMetric):
             typer.echo(f"{metric} is an Embedding Metric")
@@ -211,8 +209,8 @@ def run_metrics_in_out_trials(
             in_gloss_df.to_csv(in_gloss_df_path)
 
         if (
-            skip_glosses_with_more_than_this_many is not None
-            and len(in_gloss_df) > skip_glosses_with_more_than_this_many
+                skip_glosses_with_more_than_this_many is not None
+                and len(in_gloss_df) > skip_glosses_with_more_than_this_many
         ):
             typer.echo(
                 f"*** {gloss} has {len(in_gloss_df)} items, greater than the max: {skip_glosses_with_more_than_this_many}, skipping! ***"
@@ -241,9 +239,9 @@ def run_metrics_in_out_trials(
         )
 
         for _, hyp_row in tqdm(
-            in_gloss_df.iterrows(),
-            total=len(in_gloss_df),
-            desc=f"{gloss}/{metric.name}",
+                in_gloss_df.iterrows(),
+                total=len(in_gloss_df),
+                desc=f"{gloss}/{metric.name}",
         ):
             hyp_path = hyp_row[DatasetDFCol.POSE_FILE_PATH]
 
@@ -331,14 +329,14 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
 
 
 def run_metrics_full_distance_matrix_batched_parallel(
-    df: pd.DataFrame,
-    out_path: Path,
-    metrics: list,
-    batch_size: int = 100,
-    max_workers: int = 4,
-    merge=False,
-    intersplit: bool = True,
-    max_hyp: Optional[int] = None,
+        df: pd.DataFrame,
+        out_path: Path,
+        metrics: list,
+        batch_size: int = 100,
+        max_workers: int = 4,
+        merge=False,
+        intersplit: bool = True,
+        max_hyp: Optional[int] = None,
 ):
     typer.echo(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
@@ -388,11 +386,11 @@ def run_metrics_full_distance_matrix_batched_parallel(
         typer.echo(f"Metric #{i + 1}/{len(metrics)}: {metric.name}")
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
-        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
+        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size * batch_size} distances per.")
         typer.echo(f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})")
         if max_hyp is not None:
             typer.echo(
-                f"With max hyp {max_hyp}: like, {(max_hyp+batch_size)//batch_size}x{batches_ref} = {(max_hyp//batch_size)*batches_ref}?"
+                f"With max hyp {max_hyp}: like, {(max_hyp + batch_size) // batch_size}x{batches_ref} = {(max_hyp // batch_size) * batches_ref}?"
             )
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
@@ -411,10 +409,10 @@ def run_metrics_full_distance_matrix_batched_parallel(
                     # typer.echo(f"Skipping hyp_start {hyp_start} due to max_hyp={max_hyp}")
                     continue
 
-                hyp_chunk = df_a.iloc[hyp_start : hyp_start + batch_size].copy()
+                hyp_chunk = df_a.iloc[hyp_start: hyp_start + batch_size].copy()
 
                 for ref_start in range(0, len(df_b), batch_size):
-                    ref_chunk = df_b.iloc[ref_start : ref_start + batch_size].copy()
+                    ref_chunk = df_b.iloc[ref_start: ref_start + batch_size].copy()
                     batch_filename = metric_results_path / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
 
                     if not batch_filename.exists():
@@ -437,24 +435,24 @@ def run_metrics_full_distance_matrix_batched_parallel(
             merged_df = pd.concat(all_dfs, ignore_index=True)
 
             final_path = (
-                scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
+                    scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
             )
             merged_df.to_parquet(final_path, index=False, compression="snappy")
             typer.echo(f"✅ Final results written to {final_path}\n")
 
 
 def get_filtered_metrics(
-    metrics,
-    top10=False,
-    top10_nohands_nointerp=False,
-    top10_nohands_nodtw_nointerp=False,
-    top50_nointerp=False,
-    get_top_10_nointerp_default10_fillmasked10=False,
-    return4=False,
-    include_keywords: List[str] | None = None,
-    exclude_keywords: List[str] | None = None,
-    specific_metrics: str | list[str] | None = None,
-    csv_path: Path | None = None,
+        metrics,
+        top10=False,
+        top10_nohands_nointerp=False,
+        top10_nohands_nodtw_nointerp=False,
+        top50_nointerp=False,
+        get_top_10_nointerp_default10_fillmasked10=False,
+        return4=False,
+        include_keywords: List[str] | None = None,
+        exclude_keywords: List[str] | None = None,
+        specific_metrics: str | list[str] | None = None,
+        csv_path: Path | None = None,
 ):
     if isinstance(specific_metrics, str):
         specific_metrics = [specific_metrics]
@@ -693,58 +691,59 @@ def get_filtered_metrics(
 
 @app.command()
 def main(
-    dataset_df_files: Annotated[
-        List[Path], typer.Argument(help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID")
-    ],
-    splits: Optional[str] = typer.Option(
-        None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
-    ),
-    gloss_count: Optional[int] = typer.Option(83, help="Number of glosses to select"),
-    additional_glosses: Optional[str] = typer.Option(
-        None,
-        help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
-    ),
-    out_gloss_multiplier: Optional[int] = typer.Option(4, help="Number of out-of-gloss items to sample"),
-    metric_count: Optional[int] = typer.Option(None, help="Number of metrics to sample"),
-    filter_en_vocab: Annotated[
-        bool,
-        typer.Option(
-            help="Whether to filter out 'gloss' values starting with 'EN:', which are actually English, not ASL."
+        dataset_df_files: Annotated[
+            List[Path], typer.Argument(help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID")
+        ],
+        splits: Optional[str] = typer.Option(
+            None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
         ),
-    ] = False,
-    out: Path = typer.Option(
-        "metric_results_full_matrix", exists=False, file_okay=False, help="Folder to save the results"
-    ),
-    full: Optional[bool] = typer.Option(
-        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
-    ),
-    full_intersplit: Optional[bool] = typer.Option(
-        True, help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits"
-    ),
-    max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
-    full_matrix_max_hyp: Optional[int] = typer.Option(
-        None, help="Don't calculate rows of the full distance matrix past batches starting with this index"
-    ),
-    batch_size: Optional[int] = typer.Option(
-        100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
-    ),
-    filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
-    embedding_metrics: bool = typer.Option(False, help="whether to add in embedding metric"),
-    specific_metrics: List[str] = typer.Option(
-        None, help="If specified, will add these metrics to the list of filtered metrics"
-    ),
-    specific_metrics_csv: Path = typer.Option(
-        None, help="If specified, will read the metrics from this CSV and add those"
-    ),
-    include_keywords: List[str] = typer.Option(
-        None, help="Will filter metrics to only those that include any of these"
-    ),
-    exclude_keywords: List[str] = typer.Option(
-        None, help="Will filter metrics to only those that include none of these"
-    ),
-    skip_glosses_with_more_than_this_many: int = typer.Option(
-        None, help="skip long glosses with more than this many items/samples"
-    ),
+        gloss_count: Optional[int] = typer.Option(83, help="Number of glosses to select"),
+        additional_glosses: Optional[str] = typer.Option(
+            None,
+            help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
+        ),
+        out_gloss_multiplier: Optional[int] = typer.Option(4, help="Number of out-of-gloss items to sample"),
+        metric_count: Optional[int] = typer.Option(None, help="Number of metrics to sample"),
+        filter_en_vocab: Annotated[
+            bool,
+            typer.Option(
+                help="Whether to filter out 'gloss' values starting with 'EN:', which are actually English, not ASL."
+            ),
+        ] = False,
+        out: Path = typer.Option(
+            "metric_results_full_matrix", exists=False, file_okay=False, help="Folder to save the results"
+        ),
+        full: Optional[bool] = typer.Option(
+            False, help="Whether to run FULL distance matrix with the specified dataset dfs"
+        ),
+        full_intersplit: Optional[bool] = typer.Option(
+            True, help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits"
+        ),
+        max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
+        full_matrix_max_hyp: Optional[int] = typer.Option(
+            None, help="Don't calculate rows of the full distance matrix past batches starting with this index"
+        ),
+        batch_size: Optional[int] = typer.Option(
+            100,
+            help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
+        ),
+        filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
+        embedding_metrics: bool = typer.Option(False, help="whether to add in embedding metric"),
+        specific_metrics: List[str] = typer.Option(
+            None, help="If specified, will add these metrics to the list of filtered metrics"
+        ),
+        specific_metrics_csv: Path = typer.Option(
+            None, help="If specified, will read the metrics from this CSV and add those"
+        ),
+        include_keywords: List[str] = typer.Option(
+            None, help="Will filter metrics to only those that include any of these"
+        ),
+        exclude_keywords: List[str] = typer.Option(
+            None, help="Will filter metrics to only those that include none of these"
+        ),
+        skip_glosses_with_more_than_this_many: int = typer.Option(
+            None, help="skip long glosses with more than this many items/samples"
+        ),
 ):
     """
     Accept a list of dataset DataFrame file paths.
@@ -787,7 +786,6 @@ def main(
     else:
 
         if filter_metrics:
-
             metrics = get_filtered_metrics(
                 metrics,
                 top10=False,

@@ -1,12 +1,11 @@
-from collections import defaultdict
-from pathlib import Path
-from typing import List, Tuple, Dict, Iterable, Union, Set
-
 import numpy as np
+from collections import defaultdict
 from numpy import ma
+from pathlib import Path
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format
 from tqdm import tqdm
+from typing import List, Tuple, Dict, Iterable, Union, Set
 
 
 def pose_remove_world_landmarks(pose: Pose) -> Pose:
@@ -14,7 +13,7 @@ def pose_remove_world_landmarks(pose: Pose) -> Pose:
 
 
 def get_component_names_and_points_dict(
-    pose: Pose,
+        pose: Pose,
 ) -> Tuple[List[str], Dict[str, List[str]]]:
     component_names = []
     points_dict = defaultdict(list)
@@ -45,9 +44,9 @@ def load_pose_file(pose_path: Path) -> Pose:
 
 
 def reduce_poses_to_intersection(
-    poses: Iterable["Pose"],
-    progress: bool = False,
-    debug: bool = False,
+        poses: Iterable["Pose"],
+        progress: bool = False,
+        debug: bool = False,
 ) -> List["Pose"]:
     poses = list(poses)  # Ensure it's a list so we can iterate multiple times
 
@@ -64,7 +63,7 @@ def reduce_poses_to_intersection(
     for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting components", disable=not progress)):
         current_components = {comp.name for comp in pose.header.components}
         if debug:
-            print(f"Pose {i+1} components: {sorted(current_components)}")
+            print(f"Pose {i + 1} components: {sorted(current_components)}")
         common_components.intersection_update(current_components)
         if debug:
             print(f"Updated common components: {sorted(common_components)}")
@@ -92,7 +91,7 @@ def reduce_poses_to_intersection(
             if debug:
                 before = common_points[name]
                 current = current_points.get(name, set())
-                print(f"Pose {i+1}, component '{name}': intersecting {sorted(before)} with {sorted(current)}")
+                print(f"Pose {i + 1}, component '{name}': intersecting {sorted(before)} with {sorted(current)}")
             common_points[name].intersection_update(current_points.get(name, set()))
             if debug:
                 print(f"Updated points for '{name}': {sorted(common_points[name])}")
@@ -254,7 +253,6 @@ def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0, overwrite_confidence=T
 
 
 def add_z_offsets_to_pose(pose: Pose, speed: float = 1.0) -> Pose:
-
     offset = speed / pose.body.fps
     # Assuming pose.data is a numpy masked array
     pose_data = pose.body.data  # Shape: (frames, persons, keypoints, xyz)

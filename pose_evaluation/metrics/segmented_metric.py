@@ -1,7 +1,6 @@
+import numpy as np
 from abc import ABC
 from importlib import resources
-
-import numpy as np
 from pose_format import Pose
 from scipy.optimize import linear_sum_assignment
 from sign_language_segmentation.bin import load_model, predict

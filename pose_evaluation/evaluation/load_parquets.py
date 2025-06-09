@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 import argparse
-from collections import defaultdict
-from typing import List, Optional, Union
-from pathlib import Path
-import random
-
 import pandas as pd
-from tqdm import tqdm
 import pyarrow as pa
-import pyarrow.parquet as pq
-import pyarrow.dataset as ds
 import pyarrow.compute as pc
-
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+import random
+from collections import defaultdict
+from pathlib import Path
+from tqdm import tqdm
+from typing import List, Optional, Union
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
 
@@ -29,10 +27,10 @@ def parse_dataset_split(folder_name: str):
 
 
 def merge_parquet_files(
-    input_paths: Union[str, Path, List[Union[str, Path]]],
-    output_dir: Union[str, Path],
-    partition_columns: Optional[List[str]] = None,
-    parse_parent_for_datasets_and_splits: bool = True,
+        input_paths: Union[str, Path, List[Union[str, Path]]],
+        output_dir: Union[str, Path],
+        partition_columns: Optional[List[str]] = None,
+        parse_parent_for_datasets_and_splits: bool = True,
 ) -> None:
     """
     Merge one or more Parquet files into a new dataset directory,
@@ -112,15 +110,15 @@ def count_rows(parquets: list[Path]):
     for i, p in enumerate(tqdm(parquets, desc="loading files")):
         row_count += pq.ParquetFile(p).metadata.num_rows
         if (i + 1) % 1000 == 0 and i > 0:
-            print(f"Read {i+1:,} files, counted {row_count:,} rows so far, or {row_count/(i+1):,} on average")
+            print(f"Read {i + 1:,} files, counted {row_count:,} rows so far, or {row_count / (i + 1):,} on average")
 
-    print(f"Total row count: {row_count:,}, or on average {row_count/len(parquets):,} across {len(parquets)} files")
+    print(f"Total row count: {row_count:,}, or on average {row_count / len(parquets):,} across {len(parquets)} files")
 
 
 def load_and_merge(
-    parquets: List[Path],
-    dedupe: bool = True,
-    output_path: Optional[Path] = None,
+        parquets: List[Path],
+        dedupe: bool = True,
+        output_path: Optional[Path] = None,
 ) -> pa.Table:
     """
     Load and merge multiple Parquet files into a single in-memory pyarrow Table.
@@ -264,7 +262,6 @@ def head(input_paths, n=100, column_names=None):
 
 
 def main():
-
     default_score_columns = ",".join(
         [value for name, value in vars(ScoreDFCol).items() if not name.startswith("__") and not callable(value)]
     )

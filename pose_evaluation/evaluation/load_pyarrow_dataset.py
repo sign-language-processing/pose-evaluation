@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 
 import argparse
-from pathlib import Path
 import pyarrow as pa
-import pyarrow.dataset as ds
 import pyarrow.compute as pc
+import pyarrow.dataset as ds
 import pyarrow.parquet as pq
-
-from tqdm import tqdm
-
-from typing import Optional, List, Tuple, Set
 from collections import defaultdict
+from pathlib import Path
+from tqdm import tqdm
+from typing import Optional, List, Tuple, Set
 
 
 def load_dataset(dataset_dir: Path):
@@ -82,12 +80,11 @@ def summarize_df(df):
         print(f"  - {col}: {unique_count} unique values")
     total_bytes = df.memory_usage(deep=True).sum()
     print(f"{total_bytes:,} b")
-    print(f"{total_bytes/1024:,} kb")
-    print(f"{total_bytes/(1024**2):,} mb")
+    print(f"{total_bytes / 1024:,} kb")
+    print(f"{total_bytes / (1024 ** 2):,} mb")
 
 
 def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, sample_count=5):
-
     if columns is None:
         columns = ["METRIC", "GLOSS_A", "GLOSS_B", "GLOSS_A_PATH", "GLOSS_B_PATH"]
 
@@ -168,7 +165,7 @@ def get_unique_values_for_metric_column(dataset, metric: str, column: str) -> se
 
 
 def get_common_gloss_paths_across_metrics(
-    dataset, column_a: str = "GLOSS_A_PATH", column_b: str = "GLOSS_B_PATH"
+        dataset, column_a: str = "GLOSS_A_PATH", column_b: str = "GLOSS_B_PATH"
 ) -> Tuple[Set[str], Set[str]]:
     """
     Computes the intersection of unique GLOSS_A_PATH and GLOSS_B_PATH values
@@ -205,12 +202,12 @@ def get_common_gloss_paths_across_metrics(
 
 
 def load_filtered_metric_df(
-    dataset,
-    metric: str,
-    common_a_paths: set,
-    common_b_paths: set,
-    column_a: str = "GLOSS_A_PATH",
-    column_b: str = "GLOSS_B_PATH",
+        dataset,
+        metric: str,
+        common_a_paths: set,
+        common_b_paths: set,
+        column_a: str = "GLOSS_A_PATH",
+        column_b: str = "GLOSS_B_PATH",
 ) -> "pd.DataFrame":
     """
     Loads a filtered DataFrame for a given metric, including only rows where
@@ -245,7 +242,7 @@ def save_filtered_metrics(dataset, metric_names, out_path, common_a, common_b):
     out_path.mkdir(parents=True, exist_ok=True)
 
     for i, metric in enumerate(metric_names):
-        print(f"[{i+1}/{len(metric_names)}] Processing {metric}...")
+        print(f"[{i + 1}/{len(metric_names)}] Processing {metric}...")
 
         # Load filtered DataFrame
         metric_df = load_filtered_metric_df(dataset, metric, common_a, common_b)
@@ -344,6 +341,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && python pose_evaluation/evaluation/load_pyarrow_dataset.py metric_results_full_matrix/pyarrow_dataset/semlex/

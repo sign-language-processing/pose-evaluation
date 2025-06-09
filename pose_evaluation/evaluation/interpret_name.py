@@ -1,12 +1,9 @@
-from pathlib import Path
 import hashlib
-import re
-
-import warnings
-
-import pandas as pd
 import numpy as np
-
+import pandas as pd
+import re
+import warnings
+from pathlib import Path
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
 
@@ -84,7 +81,6 @@ def interpret_name(metric_name: str):
 
 
 def shorten_metric_name(metric_name: str):
-
     abbrev = {
         "normalize": "n",
         "trim": "t",

@@ -1,8 +1,8 @@
-import streamlit as st
 import pandas as pd
+import random
+import streamlit as st
 from pathlib import Path
 from tqdm import tqdm
-import random
 
 
 def display_video_for_gloss(rows: pd.DataFrame, gloss_label: str, key_prefix: str):
@@ -113,7 +113,6 @@ if raw_input:
     similar_pairs_df = pd.concat([input_pairs_df, similar_pairs_df], ignore_index=True)
     st.success(f"Prepended to existing pairs. New total: {len(similar_pairs_df)}")
 
-
 # Get all unique glosses from GLOSS_A and GLOSS_B
 unique_glosses = sorted(set(similar_pairs_df["GLOSS_A"]).union(similar_pairs_df["GLOSS_B"]))
 
@@ -122,7 +121,7 @@ selected_glosses = st.multiselect("Filter pairs containing any of these glosses:
 if selected_glosses:
     filtered_pairs_df = similar_pairs_df[
         similar_pairs_df["GLOSS_A"].isin(selected_glosses) | similar_pairs_df["GLOSS_B"].isin(selected_glosses)
-    ]
+        ]
 
 else:
     filtered_pairs_df = similar_pairs_df
@@ -130,13 +129,10 @@ else:
 if st.checkbox("Filter manually verified similar?"):
     filtered_pairs_df = filtered_pairs_df[pd.isna(filtered_pairs_df["manual_verification"])]
 
-
 if st.button("Shuffle?"):
     filtered_pairs_df = filtered_pairs_df.sample(frac=1).reset_index(drop=True)
 
-
 top_n = st.number_input("Show top N rows (leave as 0 to show all)", min_value=0, value=0, step=1)
-
 
 start_i = st.number_input("Starting Index?", min_value=0, max_value=len(filtered_pairs_df), value=0, step=max(top_n, 1))
 
@@ -144,7 +140,6 @@ if start_i > 0:
     filtered_pairs_df = filtered_pairs_df.iloc[start_i:]
 if top_n > 0:
     filtered_pairs_df = filtered_pairs_df.head(top_n)
-
 
 st.info(f"{len(filtered_pairs_df)} pairs")
 if st.checkbox(f"Show filtered pairs?"):
@@ -177,7 +172,7 @@ else:
             "Further thoughts on this similarity?", manual_verification_thoughts, key=f"manual_verify_text_{idx}"
         )
         if st.button(
-            f"Update CSV ({gloss_a},{gloss_b}) with '{manual_verification_thoughts}'", key=f"update_csv_{idx}"
+                f"Update CSV ({gloss_a},{gloss_b}) with '{manual_verification_thoughts}'", key=f"update_csv_{idx}"
         ):
             # find similar_pairs_df row where "GLOSS_A" == gloss_a and "GLOSS_B" == gloss_b
             # overwrite "manual_verification" value with "not similar"

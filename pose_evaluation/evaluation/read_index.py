@@ -1,8 +1,7 @@
-from pathlib import Path
-from collections import defaultdict
 import json
-
 import pandas as pd
+from collections import defaultdict
+from pathlib import Path
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol

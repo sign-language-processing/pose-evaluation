@@ -1,20 +1,19 @@
 import itertools
+import numpy as np
+import pytest
 import unittest
+from numpy import ma
+from pose_format import Pose
 from typing import List
 
-import numpy as np
-from numpy import ma
-import pytest
-
-from pose_format import Pose
 from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 from pose_evaluation.metrics.pose_processors import (
     get_standard_pose_processors,
     FillMaskedOrInvalidValuesPoseProcessor,
     ReducePosesToCommonComponentsProcessor,
 )
 from pose_evaluation.metrics.test_distance_metric import get_poses
-from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 
 
 class TestDTWMetricL1(unittest.TestCase):
@@ -59,7 +58,6 @@ class TestDTWMetricL1(unittest.TestCase):
 
 
 def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
-
     default_distance = 10.0
     metric = DistanceMetric(
         name="testmetric_with_no_masked_preprocessing",
@@ -71,7 +69,7 @@ def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
         pose_preprocessors=[],
     )
     with pytest.warns(
-        RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
+            RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
     ):
         for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
             score = metric.score_with_signature(hyp, ref)

@@ -1,7 +1,6 @@
+import pandas as pd
 import typer
 from pathlib import Path
-
-import pandas as pd
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import parse_id_and_model_name_from_embedding_file
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import file_paths_list_to_df, DatasetDFCol
@@ -25,9 +24,10 @@ def get_embeddings_df(embeddings_folder: Path, split_id_on_dash=False):
 
 @app.command()
 def process(
-    input_csv: Path = typer.Argument(..., exists=True, help="Path to input CSV file"),
-    embeddings_folder: Path = typer.Argument(..., exists=True, file_okay=False, help="Path to folder with embeddings"),
-    output_csv: Path = typer.Option(Path("output.csv"), help="Path to output CSV file"),
+        input_csv: Path = typer.Argument(..., exists=True, help="Path to input CSV file"),
+        embeddings_folder: Path = typer.Argument(..., exists=True, file_okay=False,
+                                                 help="Path to folder with embeddings"),
+        output_csv: Path = typer.Option(Path("output.csv"), help="Path to output CSV file"),
 ):
     typer.echo(f"Reading input CSV: {input_csv}")
     typer.echo(f"Using embeddings from: {embeddings_folder}")
