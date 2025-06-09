@@ -369,7 +369,7 @@ def do_knn(
         summary_stats = summarize_distance_matrix(dataset)
 
         if summary_stats["fill_ratio"] < 0.5:
-            print(f"⚠️ Warning: distance matrix is sparse! Fill Ratio: {fill_ratio}")
+            print(f"⚠️ Warning: distance matrix is sparse! Fill Ratio: {summary_stats['fill_ratio']}")
 
         top_k_results, filter_stats = compute_top_k_neighbors(
             dataset=dataset,

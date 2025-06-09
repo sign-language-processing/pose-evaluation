@@ -53,6 +53,7 @@ disable = [
     "W0511", # TODO
     "W1203", # use lazy % formatting in logging functions
     "R0913", # too-many-arguments
+    "R0917", # too-many-positional-arguments
 ]
 
 [tool.black]

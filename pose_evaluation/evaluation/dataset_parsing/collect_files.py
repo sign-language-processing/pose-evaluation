@@ -17,6 +17,26 @@ def parse_model_name_from_embedding_file(file_path: Path) -> str:
     return name.split("-using-model-")[-1].removesuffix(".npy")
 
 
+def parse_id_and_model_name_from_embedding_file(file_path: Path) -> tuple[str, str]:
+    """
+    Extract both ID and model name from a file name like:
+    "some-id-using-model-modelname_checkpoint_best.npy"
+    Returns (id, model_name)
+    """
+    name = file_path.name
+    if "-using-model-" not in name:
+        raise ValueError(f"No model name found in file: {file_path}")
+    
+    parts = name.split("-using-model-")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid file name format: {file_path}")
+    
+    id_part = parts[0]
+    model_name_part = parts[1].removesuffix(".npy")
+    
+    return id_part, model_name_part
+
+
 def collect_files_once(
     base: Path,
     pattern_map: Dict[str, List[str]],
