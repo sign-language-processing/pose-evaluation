@@ -52,6 +52,7 @@ disable = [
     "C0116", # Missing function or method docstring
     "W0511", # TODO
     "W1203", # use lazy % formatting in logging functions
+    "R0913", # too-many-arguments
 ]
 
 [tool.black]

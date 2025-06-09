@@ -1,5 +1,4 @@
-import numpy as np
-import numpy.ma as ma
+from numpy import ma
 from pose_evaluation.metrics.distance_measure import DistanceMeasure
 
 

@@ -1,10 +1,10 @@
-import pytest
 import itertools
-from typing import List
 import unittest
+from typing import List
 
 import numpy as np
-import numpy.ma as ma
+from numpy import ma
+import pytest
 
 from pose_format import Pose
 from pose_evaluation.metrics.distance_metric import DistanceMetric

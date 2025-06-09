@@ -71,7 +71,7 @@ def call_with_both_input_orders_and_do_standard_checks(
     distance_range_checker,
     distance_matrix_shape_checker,
     expected_shape: Optional[Tuple] = None,
-):
+):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
         m, n = expected_shape
