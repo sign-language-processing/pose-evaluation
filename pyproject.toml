@@ -38,6 +38,10 @@ dev = [
     "matplotlib",
     "pytest-cov",
     "coverage-lcov",
+    "isort",
+    "docformatter",
+    "ruff",
+    "autoflake"
 ]
 
 [tool.yapf]
