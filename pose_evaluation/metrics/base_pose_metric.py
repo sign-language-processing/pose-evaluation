@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Sequence, Union, cast
+from collections.abc import Iterable, Sequence
+from typing import cast
 
 from pose_format import Pose
 from tqdm import tqdm
@@ -22,9 +23,8 @@ class PoseMetric(BaseMetric[Pose], ABC):
         self,
         name: str = "PoseMetric",
         higher_is_better: bool = False,
-        pose_preprocessors: Union[None, List[PoseProcessor]] = None,
+        pose_preprocessors: None | list[PoseProcessor] = None,
     ):
-
         super().__init__(name, higher_is_better)
         if pose_preprocessors is None:
             self.pose_preprocessors = get_standard_pose_processors()
@@ -42,7 +42,7 @@ class PoseMetric(BaseMetric[Pose], ABC):
 
     def score_all(
         self, hypotheses: Sequence[Pose], references: Sequence[Pose], progress_bar=False
-    ) -> List[List[float]]:
+    ) -> list[list[float]]:
         hyp_len = len(hypotheses)
         ref_len = len(references)
 
@@ -70,7 +70,6 @@ class PoseMetric(BaseMetric[Pose], ABC):
         progress_bar=False,
         short: bool = False,
     ) -> list[list[Score]]:
-
         return [
             [self.score_with_signature(h, r, short=short) for r in references]
             for h in tqdm(
@@ -80,7 +79,7 @@ class PoseMetric(BaseMetric[Pose], ABC):
             )
         ]
 
-    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> list[Pose]:
         poses = list(poses)
         for preprocessor in tqdm(self.pose_preprocessors, desc="Preprocessing Poses", disable=not progress):
             preprocessor = cast(PoseProcessor, preprocessor)

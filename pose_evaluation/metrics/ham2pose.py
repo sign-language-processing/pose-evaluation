@@ -1,15 +1,16 @@
 # https://github.com/sign-language-processing/pose-evaluation/issues/31
-from fastdtw import fastdtw  # type: ignore
 
-from pose_evaluation.metrics.distance_measure import AggregatedDistanceMeasure, DistanceMeasure
-from pose_evaluation.metrics.distance_metric import DistanceMetric
+import numpy.ma as ma
+from tqdm import tqdm
+
+from pose_evaluation.metrics.distance_measure import AggregatedDistanceMeasure
 
 # class Ham2Pose_MSE(AggregatedDistanceMetric):
 #     pass
 
 
 class Ham2PoseMSEDistanceMeasure(AggregatedDistanceMeasure):
-    def __init__():
+    def __init__(self):
         super().__init__(
             name="Ham2PoseMSEDistanceMeasure",
             default_distance=0.0,
@@ -26,14 +27,14 @@ class Ham2PoseMSEDistanceMeasure(AggregatedDistanceMeasure):
             total=keypoint_count,
             disable=not progress,
         ):
-            sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1)
+            sq_error = ma.power(hyp_trajectory - ref_trajectory, 2).sum(-1)
             trajectory_distances[i] = sq_error  # Store distance in the preallocated array
         trajectory_distances = ma.array(trajectory_distances)
         return self._aggregate(trajectory_distances)
 
 
 class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
-    def __init__():
+    def __init__(self):
         super().__init__(
             name="Ham2PoseMSEDistanceMeasure",
             default_distance=0.0,
@@ -50,8 +51,8 @@ class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
             total=keypoint_count,
             disable=not progress,
         ):
-            sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1)
-            trajectory_distances[i] = np.sqrt(sq_error).mean()  # Store distance in the preallocated array
+            sq_error = ma.power(hyp_trajectory - ref_trajectory, 2).sum(-1)
+            trajectory_distances[i] = ma.sqrt(sq_error).mean()  # Store distance in the preallocated array
         trajectory_distances = ma.array(trajectory_distances)
         return self._aggregate(trajectory_distances)
 
@@ -108,12 +109,12 @@ class Ham2PoseAPEDistanceMeasure(AggregatedDistanceMeasure):
 
 
 def ham2pose_mse_trajectory_distance(trajectory1, trajectory2):
-    sq_error = np.power(trajectory1 - trajectory2, 2).sum(-1)
+    sq_error = ma.power(trajectory1 - trajectory2, 2).sum(-1)
     return sq_error
 
 
 def ham2pose_ape_trajectory_distance(trajectory1, trajectory2):
-    return np.sqrt(ham2pose_mse_trajectory_distance(trajectory1, trajectory2)).mean()
+    return ma.sqrt(ham2pose_mse_trajectory_distance(trajectory1, trajectory2)).mean()
 
 
 # No need for this if we just do FillMasked

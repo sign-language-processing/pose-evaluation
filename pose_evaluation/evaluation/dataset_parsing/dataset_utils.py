@@ -1,6 +1,5 @@
 from collections import defaultdict
 from pathlib import Path
-from typing import List
 
 import pandas as pd
 
@@ -18,7 +17,7 @@ class DatasetDFCol:
 
 
 def file_paths_list_to_df(
-    file_paths: List[Path], prefix="", parse_metatadata_from_folder_structure=False
+    file_paths: list[Path], prefix="", parse_metatadata_from_folder_structure=False
 ) -> pd.DataFrame:
     # Define the column names dynamically based on the prefix
     columns = {
@@ -35,7 +34,7 @@ def file_paths_list_to_df(
     return df_paths
 
 
-def parse_split_and_gloss_from_file_paths(file_paths: List[Path], gloss_level=0, split_level=1):
+def parse_split_and_gloss_from_file_paths(file_paths: list[Path], gloss_level=0, split_level=1):
     columns = defaultdict(list)
 
     for file_path in file_paths:
@@ -101,15 +100,19 @@ def deduplicate_by_video_id(df, video_id_col="video_id", split_col="split", prio
 
 def find_duplicates(df: pd.DataFrame, column: str):
     """
-    Finds and prints duplicate values in the specified column of a DataFrame.
+    Finds and prints duplicate values in the specified column of a
+    DataFrame.
 
-    Parameters:
+    Parameters
+    ----------
     - df: pd.DataFrame — the input DataFrame
     - column: str — the column to check for duplicates
 
-    Returns:
+    Returns
+    -------
     - duplicate_counts: pd.Series — counts of duplicated values
     - duplicate_rows: pd.DataFrame — rows with duplicated values
+
     """
     duplicate_rows = df[df.duplicated(subset=column, keep=False)].sort_values(by=column)
     duplicate_counts = df[column].value_counts()
@@ -142,7 +145,7 @@ def convert_eng_to_ase_gloss_translations(df, asl_knowledge_graph_df, translatio
 
         if len(set(translations_without_colon)) == 1:
             translated_word_without_lang = translated_word.split(":")[1]
-            translation = list(set(translations_without_colon))[0]
+            translation = next(iter(set(translations_without_colon)))
 
             if translated_word_without_lang == translation:
                 selected_translations.append((translated_word, translation))

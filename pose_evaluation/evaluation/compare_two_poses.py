@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import List
 
 import pandas as pd
 import typer
@@ -31,7 +30,7 @@ def update_csv_paths(paths_csv):
     print(dataset_df)
 
     # Create lookup dict from key to full POSE_FILE_PATH
-    pose_path_lookup = dict(zip(dataset_df["Key"], dataset_df["POSE_FILE_PATH"]))
+    pose_path_lookup = dict(zip(dataset_df["Key"], dataset_df["POSE_FILE_PATH"], strict=False))
     paths_df["Gloss A Path"] = paths_df["Gloss A Key"].map(pose_path_lookup)
     paths_df["Gloss B Path"] = paths_df["Gloss B Key"].map(pose_path_lookup)
 
@@ -52,20 +51,19 @@ def update_csv_paths(paths_csv):
 def compare(
     query_pose: Path = typer.Argument(..., exists=True, help="Path to the query .pose file"),
     ref_pose: Path = typer.Argument(..., exists=True, help="Path to the reference .pose file"),
-    specific_metrics: List[str] = typer.Option(
+    specific_metrics: list[str] = typer.Option(
         None, help="If specified, will add these metrics to the list of filtered metrics"
     ),
     specific_metrics_csv: Path = typer.Option(
         None, help="If specified, will read the metrics from this CSV and add those"
     ),
-    include_keywords: List[str] = typer.Option(
+    include_keywords: list[str] = typer.Option(
         None, help="Will filter metrics to only those that include any of these"
     ),
-    exclude_keywords: List[str] = typer.Option(
+    exclude_keywords: list[str] = typer.Option(
         None, help="Will filter metrics to only those that include none of these"
     ),
 ):
-
     # paths_csvs = Path("/opt/home/cleong/projects/pose-evaluation/debug_zspeed/zspeed_results_from_preliminary/").glob(
     #     "*.csv"
     # )

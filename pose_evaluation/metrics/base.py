@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, Generic, TypeVar
 
 from tqdm import tqdm
 
@@ -7,10 +8,13 @@ T = TypeVar("T")
 
 
 class Signature:
-    """Represents reproducibility signatures for metrics. Inspired by sacreBLEU"""
+    """
+    Represents reproducibility signatures for metrics.
+
+    Inspired by sacreBLEU
+    """
 
     def __init__(self, name: str, args: dict):
-
         self._abbreviated = {"name": "n", "higher_is_better": "hb"}
 
         self.signature_info = {"name": name, **args}
@@ -62,7 +66,10 @@ class Signature:
 
 
 class Score:
-    """Inspired by Sacrebleu, a base score class which can add signature information after the value."""
+    """
+    Inspired by Sacrebleu, a base score class which can add signature
+    information after the value.
+    """
 
     def __init__(self, name: str, score: float, signature: str) -> None:
         self.name = name
@@ -77,7 +84,6 @@ class Score:
         width: int = 2,
         score_only: bool = False,
     ) -> str:
-
         sc = f"{self.score:.{width}f}"
 
         full_score = f"{self.signature}" if self.signature else self.name
@@ -131,8 +137,8 @@ class BaseMetric(ABC, Generic[T]):  # Ensure it extends ABC
     def corpus_score(self, hypotheses: Sequence[T], references: Sequence[list[T]]) -> float:
         """Default implementation: average over sentence scores."""
         self.validate_corpus_score_input(hypotheses, references)
-        transpose_references = list(zip(*references))
-        scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references)]
+        transpose_references = list(zip(*references, strict=False))
+        scores = [self.score_max(h, r) for h, r in zip(hypotheses, transpose_references, strict=False)]
         return sum(scores) / len(hypotheses)
 
     def score_all(self, hypotheses: Sequence[T], references: Sequence[T], progress_bar=False) -> list[list[float]]:

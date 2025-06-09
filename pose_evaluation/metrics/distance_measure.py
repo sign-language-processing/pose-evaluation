@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
 
@@ -11,7 +11,7 @@ AggregationStrategy = Literal["max", "min", "mean", "sum"]
 class DistanceMeasureSignature(Signature):
     """Signature for distance measure metrics."""
 
-    def __init__(self, name: str, args: Dict[str, Any]) -> None:
+    def __init__(self, name: str, args: dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_abbr("distance", "dist")
         self.update_abbr("power", "pow")
@@ -61,7 +61,7 @@ class DistanceMeasure(ABC):
 class PowerDistanceSignature(DistanceMeasureSignature):
     """Signature for power distance measures."""
 
-    def __init__(self, name: str, args: Dict[str, Any]) -> None:
+    def __init__(self, name: str, args: dict[str, Any]) -> None:
         super().__init__(name=name, args=args)
         self.update_signature_and_abbr("order", "ord", args)
         self.update_signature_and_abbr("default_distance", "dflt", args)
@@ -97,13 +97,19 @@ class AggregatedDistanceMeasure(DistanceMeasure):
         raise NotImplementedError(f"Aggregation Strategy {self.aggregation_strategy} not implemented")
 
     def get_distance(self, hyp_data: ma.MaskedArray, ref_data: ma.MaskedArray) -> float:
-        """Compute and aggregate the distance between hypothesis and reference data."""
+        """
+        Compute and aggregate the distance between hypothesis and reference
+        data.
+        """
         calculated = self._calculate_pointwise_distances(hyp_data, ref_data)
         return self._aggregate(calculated)
 
 
 class AggregatedPowerDistance(AggregatedDistanceMeasure):
-    """Aggregated power distance metric using a specified aggregation strategy."""
+    """
+    Aggregated power distance metric using a specified aggregation
+    strategy.
+    """
 
     _SIGNATURE_TYPE = PowerDistanceSignature
 
@@ -118,8 +124,10 @@ class AggregatedPowerDistance(AggregatedDistanceMeasure):
         Initialize the aggregated power distance metric.
 
         :param order: The exponent to which differences are raised.
-        :param default_distance: The value to fill in for masked entries.
-        :param aggregation_strategy: Strategy to aggregate computed distances.
+        :param default_distance: The value to fill in for masked
+            entries.
+        :param aggregation_strategy: Strategy to aggregate computed
+            distances.
         """
         super().__init__(
             name=name,

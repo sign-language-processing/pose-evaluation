@@ -1,4 +1,9 @@
-"""this script was intended to let me edit CSV files to e.g. fix metric names. I forgot that some other columns might also need fixing, e.g. the SIGNATURE"""
+"""
+Script was intended to let me edit CSV files to e.g. fix metric names.
+
+I forgot that some other columns might also need fixing, e.g. the
+SIGNATURE
+"""
 
 import argparse
 from pathlib import Path
@@ -33,7 +38,7 @@ def main():
 
         if args.dry_run:
             print(f"\n❌ {len(updated)} in {csv_path}, here are a few")
-            for i, (old_val, new_val) in enumerate(zip(column_values[changed], updated)):
+            for i, (old_val, new_val) in enumerate(zip(column_values[changed], updated, strict=False)):
                 if i <= 5:
                     print(f"  📝 Would update row {changed.index[i]}: \n{old_val} \n→ \n{new_val}")
         else:

@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 
 def generate_latex_figures(
@@ -8,8 +7,8 @@ def generate_latex_figures(
     figures_prefix="figures",
     pattern="*.png",
     default_caption=None,
-    cosine_count: Optional[int] = None,
-    add_clearpage_period: Optional[int] = None,
+    cosine_count: int | None = None,
+    add_clearpage_period: int | None = None,
 ):
     files = sorted(fig_directory.rglob(pattern))
     if cosine_count is not None:

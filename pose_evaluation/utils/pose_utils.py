@@ -1,6 +1,6 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Dict, Iterable, List, Set, Tuple, Union
 
 import numpy as np
 from numpy import ma
@@ -15,7 +15,7 @@ def pose_remove_world_landmarks(pose: Pose) -> Pose:
 
 def get_component_names_and_points_dict(
     pose: Pose,
-) -> Tuple[List[str], Dict[str, List[str]]]:
+) -> tuple[list[str], dict[str, list[str]]]:
     component_names = []
     points_dict = defaultdict(list)
     for component in pose.header.components:
@@ -47,16 +47,16 @@ def load_pose_file(pose_path: Path) -> Pose:
 def reduce_poses_to_intersection(
     poses: Iterable["Pose"],
     progress: bool = False,
-) -> List["Pose"]:
+) -> list["Pose"]:
     poses = list(poses)  # Ensure it's a list so we can iterate multiple times
 
     if not poses:
         return []
 
     # === Stage 1: Reduce to common components ===
-    common_components: Set[str] = {comp.name for comp in poses[0].header.components}
+    common_components: set[str] = {comp.name for comp in poses[0].header.components}
 
-    for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting components", disable=not progress)):
+    for pose in tqdm(poses[1:], desc="Intersecting components", disable=not progress):
         current_components = {comp.name for comp in pose.header.components}
         common_components.intersection_update(current_components)
 
@@ -66,15 +66,15 @@ def reduce_poses_to_intersection(
     poses = [pose.get_components(common_components_list) for pose in poses]
 
     # === Stage 2: Reduce to common points within each component ===
-    common_points: Dict[str, Set[str]] = {comp.name: set(comp.points) for comp in poses[0].header.components}
+    common_points: dict[str, set[str]] = {comp.name: set(comp.points) for comp in poses[0].header.components}
 
-    for i, pose in enumerate(tqdm(poses[1:], desc="Intersecting points", disable=not progress)):
+    for _, pose in enumerate(tqdm(poses[1:], desc="Intersecting points", disable=not progress)):
         current_points = {comp.name: set(comp.points) for comp in pose.header.components}
         for name in common_points:
             common_points[name].intersection_update(current_points.get(name, set()))
 
     # Final dictionary of intersected points
-    final_points_dict: Dict[str, List[str]] = {name: sorted(list(pts)) for name, pts in common_points.items()}
+    final_points_dict: dict[str, list[str]] = {name: sorted(pts) for name, pts in common_points.items()}
 
     # Apply final component + point reduction
     reduced_poses = [pose.get_components(common_components_list, points=final_points_dict) for pose in poses]
@@ -82,7 +82,7 @@ def reduce_poses_to_intersection(
     return reduced_poses
 
 
-def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
+def zero_pad_shorter_poses(poses: Iterable[Pose]) -> list[Pose]:
     poses = [pose.copy() for pose in poses]
     # arrays = [pose.body.data for pose in poses]
 
@@ -100,7 +100,7 @@ def zero_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
     return poses
 
 
-def first_frame_pad_shorter_poses(poses: Iterable[Pose]) -> List[Pose]:
+def first_frame_pad_shorter_poses(poses: Iterable[Pose]) -> list[Pose]:
     poses = [pose.copy() for pose in poses]
     max_frame_count = max(len(pose.body.data) for pose in poses)
 
@@ -133,7 +133,8 @@ def get_youtube_asl_mediapipe_keypoints(pose: Pose):
     # For the face, we use 37 landmark points, from the eyes, eyebrows, lips, and face outline.
     # These are indices 0, 4, 13, 14, 17, 33, 37, 39, 46, 52, 55, 61, 64, 81, 82, 93, 133, 151, 152, 159, 172, 178,
     # 181, 263, 269, 276, 282, 285, 291, 294, 311, 323, 362, 386, 397, 468, 473.
-    # Colin: note that these are with refine_face_landmarks on, and are relative to the component itself. Working it all out the result is:
+    # Colin: note that these are with refine_face_landmarks on, and are relative to the component itself.
+    # Working it all out the result is:
     chosen_component_names = ["POSE_LANDMARKS", "FACE_LANDMARKS", "LEFT_HAND_LANDMARKS", "RIGHT_HAND_LANDMARKS"]
     points_dict = {
         "POSE_LANDMARKS": ["LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_HIP", "RIGHT_HIP", "LEFT_ELBOW", "RIGHT_ELBOW"],
@@ -180,7 +181,7 @@ def get_youtube_asl_mediapipe_keypoints(pose: Pose):
     additional_face_points = ["468", "473"]
     for additional_point in additional_face_points:
         try:
-            point_index = pose.header.get_point_index("FACE_LANDMARKS", additional_point)
+            pose.header.get_point_index("FACE_LANDMARKS", additional_point)
             points_dict["FACE_LANDMARKS"].append(additional_point)
         except ValueError:
             # not in the list
@@ -225,7 +226,6 @@ def pose_fill_masked_or_invalid(pose: Pose, fill_val=0.0, overwrite_confidence=T
 
 
 def add_z_offsets_to_pose(pose: Pose, speed: float = 1.0) -> Pose:
-
     offset = speed / pose.body.fps
     # Assuming pose.data is a numpy masked array
     pose_data = pose.body.data  # Shape: (frames, persons, keypoints, xyz)

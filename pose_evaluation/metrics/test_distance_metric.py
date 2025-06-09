@@ -1,5 +1,4 @@
 import unittest
-from typing import Optional
 
 import numpy as np
 from pose_format import Pose
@@ -13,8 +12,8 @@ from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
 def get_poses(  # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     length1: int,
     length2: int,
-    conf1: Optional[float] = None,
-    conf2: Optional[float] = None,
+    conf1: float | None = None,
+    conf2: float | None = None,
     people1: int = 3,
     people2: int = 3,
     keypoints1: int = 4,
@@ -25,7 +24,8 @@ def get_poses(  # pylint: disable=too-many-arguments, too-many-positional-argume
     fill_value2: float = 0.0,
 ):
     """
-    Utility function to generate hypothesis and reference Pose objects for testing.
+    Utility function to generate hypothesis and reference Pose objects for
+    testing.
 
     Args:
         length1 (int): Number of frames in the hypothesis pose.
@@ -35,8 +35,8 @@ def get_poses(  # pylint: disable=too-many-arguments, too-many-positional-argume
 
     Returns:
         tuple: A tuple containing (hypothesis, reference) Pose objects.
-    """
 
+    """
     data_tensor = np.full([length1, people1, keypoints1, coordinate_dimensions1], fill_value=fill_value1)
     zeros_tensor = np.full((length2, people2, keypoints2, coordinate_dimensions2), fill_value=fill_value2)
     data_confidence = np.ones(data_tensor.shape[:-1])
@@ -90,7 +90,10 @@ class TestDistanceMetricMeanL1(unittest.TestCase):
 
 
 class TestDistanceMetricL2(unittest.TestCase):
-    """Tests for the L2 (Euclidean) distance metric with default distance substitution."""
+    """
+    Tests for the L2 (Euclidean) distance metric with default distance
+    substitution.
+    """
 
     def setUp(self):
         self.default_distance = 17

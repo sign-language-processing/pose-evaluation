@@ -1,39 +1,9 @@
 files: ^pose_evaluation/
 repos:
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
-    hooks:
-      - id: black
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13
+    rev: v0.11.13 # Or the latest stable version
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix] # This includes formatting and many linting fixes
 
-  - repo: https://github.com/PyCQA/autoflake
-    rev: v2.3.1
-    hooks:
-      - id: autoflake
-        args: [--in-place, --remove-unused-variables, --remove-all-unused-imports]
-
-  - repo: https://github.com/PyCQA/docformatter
-    rev: v1.7.7
-    hooks:
-      - id: docformatter
-        args: [--in-place]
-
-  - repo: local
-    hooks:
-
-      - id: pytest
-        name: pytest
-        entry: pytest pose_evaluation
-        language: system
-        types: [python]
+  # - repo: lruf

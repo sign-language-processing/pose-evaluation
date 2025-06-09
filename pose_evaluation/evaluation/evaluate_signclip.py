@@ -14,13 +14,15 @@ from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceM
 
 def load_embedding(file_path: Path) -> np.ndarray:
     """
-    Load a SignCLIP embedding from a .npy file, ensuring it has the correct shape.
+    Load a SignCLIP embedding from a .npy file, ensuring it has the correct
+    shape.
 
     Args:
         file_path (Path): Path to the .npy file.
 
     Returns:
         np.ndarray: The embedding with shape (768,).
+
     """
     embedding = np.load(file_path)
     if embedding.ndim == 2 and embedding.shape[0] == 1:
@@ -30,7 +32,8 @@ def load_embedding(file_path: Path) -> np.ndarray:
 
 def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Match .npy embeddings to the corresponding glosses based on the numerical ID.
+    Match .npy embeddings to the corresponding glosses based on the
+    numerical ID.
 
     Args:
         emb_dir (Path): Directory containing the .npy files.
@@ -38,8 +41,8 @@ def match_embeddings_to_glosses(emb_dir: Path, split_df: pd.DataFrame) -> pd.Dat
 
     Returns:
         pd.DataFrame: Updated DataFrame with an additional column for embeddings.
-    """
 
+    """
     # Step 1: Create a mapping of numerical IDs to .npy files
     map_start = time.perf_counter()
     embeddings_map = {npy_file.stem.split("-")[0]: npy_file for npy_file in emb_dir.glob("*.npy")}
@@ -70,7 +73,8 @@ def calculate_mean_distances(
     exclude_self: bool = False,
 ) -> float:
     """
-    Calculate the mean of distances between two sets of indices in a 2D distance matrix.
+    Calculate the mean of distances between two sets of indices in a 2D
+    distance matrix.
 
     Args:
         distance_matrix (torch.Tensor): A 2D tensor representing pairwise distances.
@@ -80,6 +84,7 @@ def calculate_mean_distances(
 
     Returns:
         float: The mean distance between all pairs of (indices_a, indices_b).
+
     """
     # Create all pair combinations
     row_indices, col_indices = torch.meshgrid(indices_a, indices_b, indexing="ij")
@@ -166,9 +171,7 @@ def calculate_class_means(gloss_indices, scores):
 #    return within_class_means_by_gloss
 
 
-def evaluate_signclip(
-    emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"
-):  # pylint: disable=too-many-locals, too-many-statements
+def evaluate_signclip(emb_dir: Path, split_file: Path, out_path: Path, kind: str = "cosine"):  # pylint: disable=too-many-locals, too-many-statements
     """
     Evaluate SignCLIP embeddings using score_all.
 
@@ -176,6 +179,7 @@ def evaluate_signclip(
         emb_dir (Path): Directory containing .npy embeddings.
         split_file (Path): Path to the split CSV file.
         kind (str): Metric type ("cosine" or "l2"). Default is "cosine".
+
     """
     overall_start = time.perf_counter()  # Start overall benchmarking
 
@@ -225,7 +229,7 @@ def evaluate_signclip(
     index_to_check = 0
     number_to_check = 10
     print(f"The first {number_to_check} scores for {files[index_to_check]} to...")
-    for ref, score in list(zip(files, scores[index_to_check]))[:number_to_check]:
+    for ref, score in list(zip(files, scores[index_to_check], strict=False))[:number_to_check]:
         print("\t*------------->", f"{ref}".ljust(35), "\t", score.item())
 
     unique_glosses = items_with_embeddings_df["Gloss"].unique()

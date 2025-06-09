@@ -1,4 +1,7 @@
-"""WIP script to try and add relations to dataset_dfs, depends on fixing gloss/vocabulary matching problems"""
+"""
+WIP script to try and add relations to dataset_dfs, depends on fixing
+gloss/vocabulary matching problems.
+"""
 
 from pathlib import Path
 
@@ -20,7 +23,7 @@ if __name__ == "__main__":
     relations_df = pd.read_csv(relations_csv)
     relations_df["gloss_tuple"] = relations_df.apply(create_gloss_tuple, col1="GLOSS_A", col2="GLOSS_B", axis=1)
     # Create a mapping from gloss_tuple to relation
-    gloss_to_relation = dict(zip(relations_df["gloss_tuple"], relations_df["relation"]))
+    gloss_to_relation = dict(zip(relations_df["gloss_tuple"], relations_df["relation"], strict=False))
 
     relations_df_vocab = list(
         set(relations_df["GLOSS_A"].unique().tolist() + relations_df["GLOSS_B"].unique().tolist())

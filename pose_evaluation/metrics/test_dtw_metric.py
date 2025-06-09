@@ -1,6 +1,5 @@
 import itertools
 import unittest
-from typing import List
 
 import numpy as np
 import numpy.ma as ma
@@ -58,8 +57,7 @@ class TestDTWMetricL1(unittest.TestCase):
         self.assertAlmostEqual(score, expected_distance)
 
 
-def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
-
+def test_dtai_distance_with_masked_poses(real_mixed_shape_files: list[Pose]):
     default_distance = 10.0
     metric = DistanceMetric(
         name="testmetric_with_no_masked_preprocessing",
@@ -89,7 +87,6 @@ def test_dtai_distance_with_masked_poses(real_mixed_shape_files: List[Pose]):
         pose_preprocessors=[FillMaskedOrInvalidValuesPoseProcessor(), ReducePosesToCommonComponentsProcessor()],
     )
     for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
-
         processed_poses = metric.process_poses([hyp, ref], progress=True)
         for pose in processed_poses:
             assert ma.count_masked(pose.body.data) == 0

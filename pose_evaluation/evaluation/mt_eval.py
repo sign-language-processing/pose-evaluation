@@ -5,7 +5,6 @@ from pose_format import Pose
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
-from pose_evaluation.evaluation.load_splits_and_run_metrics import get_filtered_metrics
 
 
 def save_results(entries, output_csv_path):
@@ -92,7 +91,7 @@ if __name__ == "__main__":
     print(metric_names_to_use)
     metrics = [m for m in metrics if m.name in metric_names_to_use]
 
-    print(f"USING THE FOLLOWING METRICS")
+    print("USING THE FOLLOWING METRICS")
     for i, m in enumerate(metrics):
         print(i, m.name)
 
@@ -106,7 +105,6 @@ if __name__ == "__main__":
         chunk_end = min(chunk_start + chunk_size, len(metrics))
 
         for system, hyp_paths in system_paths.items():
-
             output_csv_path = f"/opt/home/cleong/data/zifan_signsuisse/zspeed_metrics/metrics.{system}-{len(metrics)}metrics-metric{chunk_start}-metric{chunk_end}.csv"
 
             print(f"Running metrics for {system}, {chunk_start} to {chunk_end} and saving to {output_csv_path}")
@@ -133,7 +131,7 @@ if __name__ == "__main__":
                     try:
                         score = metric.score_with_signature(hyp, ref)
                         entry[f"{metric.name}"] = score.score
-                    except KeyError as e:
+                    except KeyError:
                         pass
                     except ValueError as e:
                         print(f"Error on {metric.name}: {e}")

@@ -49,6 +49,6 @@ class SegmentedPoseMetric(PoseMetric, ABC):
             cost_tensor = 1 - cost_tensor
 
         row_ind, col_ind = linear_sum_assignment(cost_tensor)
-        pairs = list(zip(row_ind, col_ind))
+        pairs = list(zip(row_ind, col_ind, strict=False))
         values = [cost_matrix[row][col] for row, col in pairs]
         return sum(values) / len(values)

@@ -18,13 +18,12 @@ def convert_csvs_to_parquet(
         return
 
     if score_csv_format:
-        print(f"Using score csv format")
+        print("Using score csv format")
 
     out_dir = out_dir or folder
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for csv_path in tqdm(csv_files, desc="Converting CSV files to Parquet"):
-
         if score_csv_format:
             df = load_score_csv(csv_path)
         else:

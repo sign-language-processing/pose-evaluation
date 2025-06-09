@@ -66,12 +66,12 @@ def test_construct_metric_basic():
 def test_get_metrics_uniqueness_and_consistency(include_return4, include_masked):
     """
     Runs get_metrics() with various config flags and checks:
+
     - All DistanceMetric names are unique
     - All DistanceMetric signatures are unique
     - No two metrics share the same DistanceMeasure object
     - defaultdist in name matches default_distance in signature
     """
-
     metrics = get_metrics(include_return4=include_return4, include_masked=include_masked)
 
     metric_names = [m.name for m in metrics]
@@ -89,12 +89,13 @@ def test_get_metrics_uniqueness_and_consistency(include_return4, include_masked)
     ), f"Duplicate metric signatures found for include_return4={include_return4}, include_masked={include_masked}"
 
     # 3. No reused DistanceMeasure objects
-    assert len(distance_measure_ids) == len(
-        set(distance_measure_ids)
-    ), f"DistanceMeasures are shared across metrics, include_return4={include_return4}, include_masked={include_masked}"
+    assert len(distance_measure_ids) == len(set(distance_measure_ids)), (
+        "DistanceMeasures are shared across metrics,",
+        f" include_return4={include_return4}, include_masked={include_masked}",
+    )
 
     # 4. Signature default_distance matches name defaultdist
-    for name, sig in zip(metric_names, metric_sigs):
+    for name, sig in zip(metric_names, metric_sigs, strict=False):
         dist_from_name = extract_metric_name_dist(name)
         dist_from_sig = extract_signature_distance(sig)
         assert dist_from_name == dist_from_sig, (

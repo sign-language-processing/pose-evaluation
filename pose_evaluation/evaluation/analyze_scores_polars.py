@@ -25,7 +25,7 @@ def run_experiments(path: Path, limit_rows: int = 100_000_000, runs: int = 10):
         non_streaming_stats.append((mem_used, duration))
 
     def summarize(name, stats):
-        mems, times = zip(*stats)
+        mems, times = zip(*stats, strict=False)
         print(f"\n📊 Summary: {name}")
         print(
             f"  → Memory (MB): mean = {statistics.mean(mems):.2f}, std = {statistics.stdev(mems):.2f}, min = {min(mems):.2f}, max = {max(mems):.2f}"
@@ -42,16 +42,20 @@ def compute_map_by_metric_with_profiling(
     path: Path, limit_rows: int = 10_000, streaming: bool = False
 ) -> pl.DataFrame | None:
     """
-    Load a limited number of rows from a LazyFrame and compute mean average precision (mAP) per METRIC.
-    Includes profiling for memory usage and execution time.
+    Load a limited number of rows from a LazyFrame and compute mean average
+    precision (mAP) per METRIC. Includes profiling for memory usage and
+    execution time.
 
-    Parameters:
+    Parameters
+    ----------
     - path: Path to a Parquet file.
     - limit_rows: Number of rows to load (default 10,000).
     - streaming: Whether to use Polars streaming engine.
 
-    Returns:
+    Returns
+    -------
     - Polars DataFrame with columns: METRIC, mAP
+
     """
     print(f"⏳ Scanning first {limit_rows:,} rows from {path}...")
 
@@ -124,7 +128,6 @@ def show_head(lf: pl.LazyFrame, n=5):
 
 
 def compute_score_by_metric(lf: pl.LazyFrame):
-
     print(lf.schema)
 
     lazy_result = lf.group_by("METRIC").agg(pl.col("SCORE").mean().alias("mean_SCORE"))
@@ -145,7 +148,9 @@ def compute_score_by_metric(lf: pl.LazyFrame):
 
 def compute_map_by_metric_safe(lf: pl.LazyFrame, limit_rows: None | int = None) -> pl.LazyFrame:
     """
-    Computes mean average precision (mAP) per METRIC from a Polars LazyFrame.
+    Computes mean average precision (mAP) per METRIC from a Polars
+    LazyFrame.
+
     Lower scores are better (ascending rank order).
     Fixed to match TorchMetrics exactly - replicates TorchMetrics' internal ranking logic.
     """
@@ -226,7 +231,8 @@ def compute_map_by_metric_safe_chunked(
     lf: pl.LazyFrame, limit_rows: None | int = None, chunk_size: int = 1000000
 ) -> pl.LazyFrame:
     """
-    Memory-efficient version that processes data in chunks by METRIC to avoid OOM.
+    Memory-efficient version that processes data in chunks by METRIC to
+    avoid OOM.
     """
     import time
 
@@ -265,7 +271,7 @@ def compute_map_by_metric_safe_chunked(
         for i in range(0, len(gloss_a_paths), batch_size):
             batch_paths = gloss_a_paths[i : i + batch_size]
             print(
-                f"  📁 Processing batch {i//batch_size + 1}/{(len(gloss_a_paths) + batch_size - 1)//batch_size} ({len(batch_paths)} paths)"
+                f"  📁 Processing batch {i // batch_size + 1}/{(len(gloss_a_paths) + batch_size - 1) // batch_size} ({len(batch_paths)} paths)"
             )
 
             batch_lf = metric_lf.filter(pl.col("GLOSS_A_PATH").is_in(batch_paths))
@@ -321,15 +327,10 @@ def compute_map_by_metric_safe_chunked(
     return result_df
 
 
-import time
-from pathlib import Path
-
-import polars as pl
-
-
 def compute_map_by_metric_memory_efficient(lf: pl.LazyFrame, limit_rows: None | int = None) -> pl.LazyFrame:
     """
     Memory-efficient computation of mean average precision (mAP) per METRIC.
+
     This version still uses too much memory for very large datasets - use chunked versions instead.
     """
     start_time = time.perf_counter()
@@ -380,10 +381,12 @@ def compute_map_by_metric_memory_efficient(lf: pl.LazyFrame, limit_rows: None | 
 
 
 def compute_map_aggressive_chunking(
-    dataset_path: str, metrics_to_process: list[str] = None, max_queries_per_chunk: int = 1000
+    dataset_path: str, metrics_to_process: list[str] | None = None, max_queries_per_chunk: int = 1000
 ) -> pl.DataFrame:
     """
-    Aggressively chunk by both metric AND query paths to minimize memory usage.
+    Aggressively chunk by both metric AND query paths to minimize memory
+    usage.
+
     Processes small batches of queries at a time.
     """
     import pyarrow.dataset as ds
@@ -447,6 +450,7 @@ def compute_map_aggressive_chunking(
 def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[float]:
     """
     Process a small chunk of queries with minimal memory usage.
+
     Returns list of average precision values.
     """
     avg_precisions = []
@@ -469,7 +473,7 @@ def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[
                 continue
 
             # Calculate relevance and AP in pure Python (more memory efficient for small data)
-            scores = query_data["SCORE"].to_list()
+            query_data["SCORE"].to_list()
             gloss_a = query_data["GLOSS_A"].to_list()
             gloss_b = query_data["GLOSS_B"].to_list()
 
@@ -477,7 +481,7 @@ def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[
             relevant_count = 0
             precision_sum = 0.0
 
-            for i, (a, b) in enumerate(zip(gloss_a, gloss_b)):
+            for i, (a, b) in enumerate(zip(gloss_a, gloss_b, strict=False)):
                 if a == b:  # relevant
                     relevant_count += 1
                     precision_at_i = relevant_count / (i + 1)
@@ -495,10 +499,11 @@ def process_query_chunk_minimal_memory(dataset, query_paths: list[str]) -> list[
 
 
 def compute_map_chunked_by_metric(
-    dataset_path: str, metrics_to_process: list[str] = None, chunk_size: int = 1000000
+    dataset_path: str, metrics_to_process: list[str] | None = None, chunk_size: int = 1000000
 ) -> pl.DataFrame:
     """
     Process each metric separately to minimize memory usage.
+
     This is the most memory-efficient approach for huge datasets.
     """
     import pyarrow.dataset as ds
@@ -542,7 +547,8 @@ def compute_map_chunked_by_metric(
 
 def compute_map_single_metric_chunked(lf: pl.LazyFrame, metric_name: str, chunk_size: int = 1000000) -> pl.DataFrame:
     """
-    Process a single metric in chunks by GLOSS_A_PATH to minimize memory usage.
+    Process a single metric in chunks by GLOSS_A_PATH to minimize memory
+    usage.
     """
     # Get unique GLOSS_A_PATH values to process in batches
     unique_paths = lf.select("GLOSS_A_PATH").unique().collect(engine="streaming")["GLOSS_A_PATH"].to_list()
@@ -553,7 +559,7 @@ def compute_map_single_metric_chunked(lf: pl.LazyFrame, metric_name: str, chunk_
     for i in range(0, len(unique_paths), chunk_size):
         chunk_paths = unique_paths[i : i + chunk_size]
         print(
-            f"  📦 Processing chunk {i//chunk_size + 1}/{(len(unique_paths) + chunk_size - 1)//chunk_size} "
+            f"  📦 Processing chunk {i // chunk_size + 1}/{(len(unique_paths) + chunk_size - 1) // chunk_size} "
             f"({len(chunk_paths)} paths)"
         )
 
@@ -574,9 +580,7 @@ def compute_map_single_metric_chunked(lf: pl.LazyFrame, metric_name: str, chunk_
 
 
 def process_chunk_for_map(lf: pl.LazyFrame) -> pl.DataFrame:
-    """
-    Process a chunk of data to compute average precision per query.
-    """
+    """Process a chunk of data to compute average precision per query."""
     # Filter out self-scores and add relevant flag
     lf = (
         lf.filter(pl.col("GLOSS_A_PATH") != pl.col("GLOSS_B_PATH"))
@@ -609,9 +613,11 @@ def process_chunk_for_map(lf: pl.LazyFrame) -> pl.DataFrame:
     )
 
 
-def compute_map_ultra_minimal_memory(dataset_path: str, metrics_to_process: list[str] = None) -> pl.DataFrame:
+def compute_map_ultra_minimal_memory(dataset_path: str, metrics_to_process: list[str] | None = None) -> pl.DataFrame:
     """
-    Ultra memory-efficient version that processes one metric and one query at a time.
+    Ultra memory-efficient version that processes one metric and one query
+    at a time.
+
     Slowest but uses minimal memory.
     """
     import pyarrow.dataset as ds
@@ -641,7 +647,7 @@ def compute_map_ultra_minimal_memory(dataset_path: str, metrics_to_process: list
         # Process each query (GLOSS_A_PATH) individually
         for i, path in enumerate(unique_paths):
             if i % 1000 == 0:
-                print(f"  📍 Processing query {i+1}/{len(unique_paths)}")
+                print(f"  📍 Processing query {i + 1}/{len(unique_paths)}")
 
             # Get data for this specific query
             query_lf = (
@@ -681,7 +687,8 @@ def compute_map_ultra_minimal_memory(dataset_path: str, metrics_to_process: list
 
 def calculate_average_precision(relevant_list: list[int]) -> float:
     """
-    Calculate average precision for a single query given a list of relevance labels.
+    Calculate average precision for a single query given a list of relevance
+    labels.
     """
     if not any(relevant_list):
         return 0.0
@@ -708,8 +715,6 @@ def calculate_average_precision(relevant_list: list[int]) -> float:
 
     # Option 3: Ultra minimal memory (slowest but safest)
     # result = compute_map_ultra_minimal_memory("path/to/your/dataset")
-
-    pass
 
 
 if __name__ == "__main__":

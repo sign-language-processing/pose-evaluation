@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-"""Trying to combine Sem-Lex, ASL Citizen, ASL Knowledge Graph and "Known Lookalikes" from 
-"""
+"""Trying to combine Sem-Lex, ASL Citizen, ASL Knowledge Graph and "Known Lookalikes" from Brenda Cartwright articles."""
 
 
 def create_gloss_tuple(row, col1: str, col2: str):
@@ -18,8 +17,8 @@ def merge_and_check_unmatched(df, df_name: str, asl_lex_2_df, left_on="ASL-LEX C
     df[left_on] = df[left_on].str.upper()
     asl_lex_2_df[right_on] = asl_lex_2_df[right_on].str.upper()
     print(f"\nMerging ASL LEX with {df_name}, left on {left_on}, right on {right_on}")
-    asl_lex_cols = list(set([right_on, "EntryID"]))
-    print(f"\nColumns:")
+    asl_lex_cols = list({right_on, "EntryID"})
+    print("\nColumns:")
     print(df.columns)  # includes "label"
     merged_df = df.merge(
         asl_lex_2_df[asl_lex_cols],
@@ -38,7 +37,7 @@ def merge_and_check_unmatched(df, df_name: str, asl_lex_2_df, left_on="ASL-LEX C
     print(f"\nUnmatched (Left): {left_on}")
     print(unmatched_left[left_on])
 
-    print(f"\nASL-LEX ONLY")
+    print("\nASL-LEX ONLY")
     unmatched_right = merged_df[merged_df["_merge"] == "right_only"]
     print(unmatched_right)
     print(f"\nUnmatched (ASL-LEX): {right_on}")
@@ -182,7 +181,7 @@ if __name__ == "__main__":
     # Group by gloss_tuple and determine relation
     relation_df = (
         combined_df.groupby("gloss_tuple")["relation"]
-        .agg(lambda x: "Both" if len(set(x)) > 1 else list(x)[0])
+        .agg(lambda x: "Both" if len(set(x)) > 1 else next(iter(x)))
         .reset_index()
     )
 

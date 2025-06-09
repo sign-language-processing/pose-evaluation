@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from tqdm import tqdm
 
 
 def display_video_for_gloss(rows: pd.DataFrame, gloss_label: str, key_prefix: str):
@@ -49,7 +48,7 @@ def attach_video_paths(df: pd.DataFrame, file_paths: list) -> pd.DataFrame:
     # Assuming file_paths is a list of Path objects
     # Extract VIDEO_ID from filenames and map to path
     video_id_to_path = {path.stem.split("-")[0]: str(path) for path in file_paths}
-    video_id_to_name = {path.stem.split("-")[0]: str(path.name) for path in file_paths}
+    # video_id_to_name = {path.stem.split("-")[0]: str(path.name) for path in file_paths}
 
     # Map VIDEO_ID in the dataframe to the corresponding file path
     df["VIDEO_FILE_PATH"] = df["VIDEO_ID"].map(video_id_to_path)
@@ -89,7 +88,7 @@ if "VIDEO_FILE_PATH" not in dataset_df.columns and dataset_df["VIDEO_FILE_PATHS"
     st.download_button(
         label="Download Full Data Table CSV",
         data=df_csv_data,
-        file_name=f"dataset_df.csv",
+        file_name="dataset_df.csv",
         mime="text/csv",
     )
 st.info(f"Loaded {len(dataset_df)} rows from {dataset_path}")
@@ -148,7 +147,7 @@ if top_n > 0:
 
 
 st.info(f"{len(filtered_pairs_df)} pairs")
-if st.checkbox(f"Show filtered pairs?"):
+if st.checkbox("Show filtered pairs?"):
     st.dataframe(filtered_pairs_df)
 # Ensure the necessary columns exist
 if "GLOSS" not in dataset_df.columns:

@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock
-
 import pytest
 
 from pose_evaluation.metrics.base import BaseMetric, Score, Signature

@@ -4,13 +4,8 @@ from pose_format import Pose
 
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
 from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.metrics.dtw_metric import (
-    DTWAggregatedPowerDistanceMeasure,
-    DTWAggregatedScipyDistanceMeasure,
-    DTWDTAIImplementationDistanceMeasure,
-)
+from pose_evaluation.metrics.dtw_metric import DTWDTAIImplementationDistanceMeasure
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
 from pose_evaluation.metrics.pose_processors import (
     HideLegsPosesProcessor,
     NormalizePosesProcessor,
@@ -22,7 +17,7 @@ from pose_evaluation.metrics.test_distance_metric import get_poses
 
 if __name__ == "__main__":
     # Define file paths for test pose data
-    # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
+    # pose-evaluation/pose_evaluation/utils/test/test_data/mediapipe/standard_landmarks/colin-1-HOUSE.pose
     test_data_path = (
         Path("pose_evaluation").resolve() / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
     )
@@ -169,7 +164,8 @@ if __name__ == "__main__":
         try:
             if isinstance(metric, EmbeddingDistanceMetric):
                 print(
-                    "Sorry, this is an embedding metric, it can't handle poses! You need to load the .npy files to arrays of shape (768,) first!"
+                    "Sorry, this is an embedding metric, it can't handle poses!",
+                    " You need to load the .npy files to arrays of shape (768,) first!",
                 )
                 continue
             #

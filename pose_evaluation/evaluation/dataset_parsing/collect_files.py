@@ -1,6 +1,5 @@
 import fnmatch
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import typer
 
@@ -20,8 +19,8 @@ def parse_model_name_from_embedding_file(file_path: Path) -> str:
 
 def collect_files_once(
     base: Path,
-    pattern_map: Dict[str, List[str]],
-) -> Dict[str, List[Path]]:
+    pattern_map: dict[str, list[str]],
+) -> dict[str, list[Path]]:
     """Walk the directory once and classify files by matching patterns."""
     result = {key: [] for key in pattern_map}
     for f in base.rglob("*"):
@@ -51,16 +50,19 @@ def collect_files_once(
 
 def collect_files_main(
     dataset_path: Path,
-    pose_files_path: Optional[Path] = None,
-    metadata_path: Optional[Path] = None,
-    video_files_path: Optional[Path] = None,
-    embedding_files_path: Optional[Path] = None,
-    pose_patterns: Optional[List[str]] = None,
-    metadata_patterns: Optional[List[str]] = None,
-    video_patterns: Optional[List[str]] = None,
-    embedding_patterns: Optional[List[str]] = None,
+    pose_files_path: Path | None = None,
+    metadata_path: Path | None = None,
+    video_files_path: Path | None = None,
+    embedding_files_path: Path | None = None,
+    pose_patterns: list[str] | None = None,
+    metadata_patterns: list[str] | None = None,
+    video_patterns: list[str] | None = None,
+    embedding_patterns: list[str] | None = None,
 ):
-    """Efficiently collect all files by walking each root directory only once."""
+    """
+    Efficiently collect all files by walking each root directory only
+    once.
+    """
     if pose_patterns is None:
         pose_patterns = ["*.pose", "*.pose.zst"]
     if metadata_patterns is None:
@@ -96,16 +98,16 @@ def collect_files_main(
 @app.command()
 def collect_files_cli(
     dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    embedding_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    pose_patterns: List[str] = typer.Option(["*.pose", "*.pose.zst"]),
-    metadata_patterns: List[str] = typer.Option(["*.csv"]),
-    video_patterns: List[str] = typer.Option(["*.mp4", "*.avi", "*.mov"]),
-    embedding_patterns: List[str] = typer.Option(["*.npy"]),
+    pose_files_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    metadata_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    video_files_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    embedding_files_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    pose_patterns: list[str] = typer.Option(["*.pose", "*.pose.zst"]),
+    metadata_patterns: list[str] = typer.Option(["*.csv"]),
+    video_patterns: list[str] = typer.Option(["*.mp4", "*.avi", "*.mov"]),
+    embedding_patterns: list[str] = typer.Option(["*.npy"]),
 ):
-    """CLI wrapper around collect_files_main"""
+    """CLI wrapper around collect_files_main."""
     result = collect_files_main(
         dataset_path=dataset_path,
         pose_files_path=pose_files_path,

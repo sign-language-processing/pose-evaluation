@@ -17,13 +17,13 @@ def apply_minimal_layout(fig: go.Figure, is_3d: bool = True, size: int = 600) ->
     if is_3d:
         fig.update_layout(
             title=None,
-            scene=dict(
-                xaxis=dict(visible=False),
-                yaxis=dict(visible=False),
-                zaxis=dict(visible=False),
-                bgcolor="white",
-            ),
-            margin=dict(l=0, r=0, t=0, b=0),
+            scene={
+                "xaxis": {"visible": False},
+                "yaxis": {"visible": False},
+                "zaxis": {"visible": False},
+                "bgcolor": "white",
+            },
+            margin={"l": 0, "r": 0, "t": 0, "b": 0},
             showlegend=False,
             paper_bgcolor="white",
             width=size,
@@ -32,9 +32,9 @@ def apply_minimal_layout(fig: go.Figure, is_3d: bool = True, size: int = 600) ->
     else:
         fig.update_layout(
             title=None,
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
-            margin=dict(l=0, r=0, t=0, b=0),
+            xaxis={"visible": False},
+            yaxis={"visible": False},
+            margin={"l": 0, "r": 0, "t": 0, "b": 0},
             showlegend=False,
             paper_bgcolor="white",
             plot_bgcolor="white",
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # Generate angles from 0 to 2π
     point_count_1_list = [12, 6]
     paddings = ["padwithfirstframe", "zeropad", None]
-    add_mappings = [
+    add_mapping_vals = [
         True,
         # False
     ]
@@ -71,12 +71,11 @@ if __name__ == "__main__":
     update_x_vals = [True, False]
 
     for point_count_1, padding, add_mappings, add_z, update_x in product(
-        point_count_1_list, paddings, add_mappings, add_z_values, update_x_vals
+        point_count_1_list, paddings, add_mapping_vals, add_z_values, update_x_vals
     ):
-
         print(
             f"Point Counts: {point_count_1},{POINT_COUNT_2}.",
-            " Padding:{padding}, add_mappings: {add_mappings}, add_z: {add_z}, update_x: {update_x}",
+            f" Padding:{padding}, add_mappings: {add_mappings}, add_z: {add_z}, update_x: {update_x}",
         )
 
         TITLE = ""
@@ -157,8 +156,8 @@ if __name__ == "__main__":
         if len(trace1_y) == len(trace2_y):
             mappings = [(i, i) for i in range(point_count_1)]
         else:
-            points1 = [xyz for xyz in zip(angles1, trace1_y, trace1_z)]
-            points2 = [xyz for xyz in zip(angles2, trace2_y, trace2_z)]
+            points1 = list(zip(angles1, trace1_y, trace1_z, strict=False))
+            points2 = list(zip(angles2, trace2_y, trace2_z, strict=False))
             # dist, mappings = fastdtw(trace1_y, trace2_y, 1)
             # print(f"Points 1: {points1}")
             # print(f"Points 2: {points2}")
@@ -181,7 +180,7 @@ if __name__ == "__main__":
                     # z=[i for i in range(len(trace1_y))],
                     #  mode="lines",
                     mode=MODE,
-                    marker=dict(size=2),
+                    marker={"size": 2},
                     name=f"Sequence 1: {point_count_1} points",
                 )
             )
@@ -195,7 +194,7 @@ if __name__ == "__main__":
                     # z=[i for i in range(len(trace2_y))],
                     #  mode="lines",
                     mode=MODE,
-                    marker=dict(size=2),
+                    marker={"size": 2},
                     name=f"Sequence 2 {POINT_COUNT_2} points",
                 )
             )
@@ -206,7 +205,7 @@ if __name__ == "__main__":
                     x=angles1,
                     y=trace1_y,
                     mode=MODE,
-                    marker=dict(size=2),
+                    marker={"size": 2},
                     name=f"Sequence 1: {point_count_1} points",
                 )
             )
@@ -217,14 +216,13 @@ if __name__ == "__main__":
                     x=angles2,
                     y=trace2_y,
                     mode=MODE,
-                    marker=dict(size=4),
+                    marker={"size": 4},
                     name=f"Sequence 2 {POINT_COUNT_2} points",
                 )
             )
 
         # Add green lines for mappings
         if add_mappings:
-
             for i, j in mappings:
                 if add_z:
                     latex_fig.add_trace(
@@ -233,7 +231,7 @@ if __name__ == "__main__":
                             y=[trace1_y[i], trace2_y[j]],
                             z=[trace1_z[i], trace2_z[j]],
                             mode="lines",
-                            line=dict(color="green", width=2),
+                            line={"color": "green", "width": 2},
                             showlegend=False,  # Hide individual mappings from legend
                         )
                     )
@@ -243,7 +241,7 @@ if __name__ == "__main__":
                             x=[angles1[i], angles2[j]],
                             y=[trace1_y[i], trace2_y[j]],
                             mode="lines",
-                            line=dict(color="green", width=2),
+                            line={"color": "green", "width": 2},
                             showlegend=False,  # Hide individual mappings from legend
                         )
                     )
@@ -251,7 +249,7 @@ if __name__ == "__main__":
         # Customize layout
 
         if add_z:
-            latex_fig.update_layout(scene=dict(camera=dict(eye=dict(x=camxyz[0], y=camxyz[1], z=camxyz[2]))))
+            latex_fig.update_layout(scene={"camera": {"eye": {"x": camxyz[0], "y": camxyz[1], "z": camxyz[2]}}})
             TITLE = f"{TITLE} (3D)"
             # title = f"{title} (3D, cam={camxyz})"
 

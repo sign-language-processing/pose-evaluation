@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import typer
@@ -18,12 +17,15 @@ app = typer.Typer()
 @app.command()
 def collect_semlex(
     dataset_path: Path = typer.Argument(..., exists=True, file_okay=False),
-    pose_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    metadata_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    video_files_path: Optional[Path] = typer.Option(None, exists=True, file_okay=False),
-    out: Optional[Path] = typer.Option(None, exists=False, file_okay=True),
+    pose_files_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    metadata_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    video_files_path: Path | None = typer.Option(None, exists=True, file_okay=False),
+    out: Path | None = typer.Option(None, exists=False, file_okay=True),
 ):
-    """Read in files and metadata, combine to one dataframe, and save out to csv"""
+    """
+    Read in files and metadata, combine to one dataframe, and save out to
+    csv.
+    """
     # pylint: disable=duplicate-code
     result = collect_files_main(
         dataset_path=dataset_path,
@@ -39,7 +41,6 @@ def collect_semlex(
     # metadata
     meta_dfs = []
     for meta_file in result["METADATA_FILES"]:
-
         # should just be the one file, semlex_metadata.csv
         df = pd.read_csv(meta_file, index_col=0, header=0)
         # should have 91148 rows, including the index row
@@ -60,7 +61,6 @@ def collect_semlex(
     df = pd.concat(meta_dfs)
 
     for prefix in ["POSE", "VIDEO"]:
-
         files_df = file_paths_list_to_df(result[f"{prefix}_FILES"], prefix=prefix)
         files_df[DatasetDFCol.VIDEO_ID] = files_df[f"{prefix}_FILE_PATH"].apply(lambda x: Path(x).stem)
         typer.echo(f"Merging {len(files_df)} {prefix} files into df")

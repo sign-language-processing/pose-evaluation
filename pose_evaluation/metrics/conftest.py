@@ -1,6 +1,6 @@
 import shutil
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Union
 
 import numpy as np
 import pytest
@@ -36,9 +36,9 @@ def fixture_distance_matrix_shape_checker() -> Callable[[torch.Tensor, torch.Ten
 
 
 @pytest.fixture(name="distance_range_checker")
-def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray], float, float], None]:
+def fixture_distance_range_checker() -> Callable[[torch.Tensor | np.ndarray, float, float], None]:
     def _check_range(
-        distances: Union[torch.Tensor, np.ndarray],
+        distances: torch.Tensor | np.ndarray,
         min_val: float = 0,
         max_val: float = 2,
     ) -> None:
@@ -46,18 +46,18 @@ def fixture_distance_range_checker() -> Callable[[Union[torch.Tensor, np.ndarray
         min_distance = distances.min().item()
 
         # Use np.isclose for comparisons with tolerance
-        assert (
-            np.isclose(min_distance, min_val, atol=1e-6) or min_val <= min_distance <= max_val
-        ), f"Minimum distance ({min_distance}) is outside the expected range [{min_val}, {max_val}]"
-        assert (
-            np.isclose(max_distance, max_val, atol=1e-6) or min_val <= max_distance <= max_val
-        ), f"Maximum distance ({max_distance}) is outside the expected range [{min_val}, {max_val}]"
+        assert np.isclose(min_distance, min_val, atol=1e-6) or min_val <= min_distance <= max_val, (
+            f"Minimum distance ({min_distance}) is outside the expected range [{min_val}, {max_val}]"
+        )
+        assert np.isclose(max_distance, max_val, atol=1e-6) or min_val <= max_distance <= max_val, (
+            f"Maximum distance ({max_distance}) is outside the expected range [{min_val}, {max_val}]"
+        )
 
     return _check_range
 
 
 @pytest.fixture
-def real_pose_files() -> List[Pose]:
+def real_pose_files() -> list[Pose]:
     # pose_evaluation/utils/test/test_data/standard_landmarks
     test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data" / "mediapipe" / "standard_landmarks"
     real_pose_files_list = [Pose.read(test_file.read_bytes()) for test_file in test_files_folder.glob("*.pose")]
@@ -65,13 +65,13 @@ def real_pose_files() -> List[Pose]:
 
 
 @pytest.fixture
-def real_refined_landmark_pose_file_paths() -> List[Path]:
+def real_refined_landmark_pose_file_paths() -> list[Path]:
     test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data" / "mediapipe" / "refined_landmarks"
     return list(test_files_folder.glob("*.pose"))
 
 
 @pytest.fixture
-def real_mixed_shape_files() -> List[Pose]:
+def real_mixed_shape_files() -> list[Pose]:
     # pose_evaluation/utils/test/test_data/standard_landmarks
     test_files_folder = Path("pose_evaluation") / "utils" / "test" / "test_data" / "mediapipe" / "mixed"
     real_pose_files_list = [Pose.read(test_file.read_bytes()) for test_file in test_files_folder.glob("*.pose")]

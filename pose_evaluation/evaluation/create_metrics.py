@@ -1,25 +1,26 @@
-"""Creates metrics by composing various settings and preprocessors together with DistanceMeasures.
+"""
+Creates metrics by composing various settings and preprocessors together
+with DistanceMeasures.
 
-They are given names based on the settings. E.g. 'trimmed_dtw' would be dynamic time warping with trimming."""
+They are given names based on the settings. E.g. 'trimmed_dtw' would be
+dynamic time warping with trimming.
+"""
 
 import copy
 import itertools
 import re
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 import pandas as pd
 
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
-from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance, DistanceMeasure
-from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.metrics.dtw_metric import (
-    DTWAggregatedDistanceMeasure,
-    DTWAggregatedPowerDistanceMeasure,
-    DTWAggregatedScipyDistanceMeasure,
-    DTWDTAIImplementationDistanceMeasure,
-    DTWOptimizedDistanceMeasure,
+from pose_evaluation.metrics.distance_measure import (
+    AggregatedPowerDistance,
+    DistanceMeasure,
 )
+from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.metrics.dtw_metric import DTWDTAIImplementationDistanceMeasure
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 from pose_evaluation.metrics.nonsense_measures import Return4Measure
 from pose_evaluation.metrics.pose_processors import (
@@ -37,7 +38,6 @@ from pose_evaluation.metrics.pose_processors import (
     RemoveWorldLandmarksProcessor,
     TrimMeaninglessFramesPoseProcessor,
     ZeroPadShorterPosesProcessor,
-    get_standard_pose_processors,
 )
 
 # --- Constants & Regexes ------------------------------------------------
@@ -47,18 +47,21 @@ _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
 _DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
 
 
-def extract_signature_distance(signature: str) -> Optional[str]:
+def extract_signature_distance(signature: str) -> str | None:
     """
-    From a signature string, extract the float following 'default_distance:'.
+    From a signature string, extract the float following
+    'default_distance:'.
+
     Returns None if not found.
     """
     m = _SIGNATURE_RE.search(signature)
     return float(m.group(1)) if m else None
 
 
-def extract_metric_name_dist(metric_name: str) -> Optional[float]:
+def extract_metric_name_dist(metric_name: str) -> float | None:
     """
     From a metric_name, extract the float following 'defaultdist'.
+
     Returns None if not found.
     """
     m = _DEFAULTDIST_RE.search(metric_name)
@@ -74,10 +77,10 @@ def construct_metric(
     keypoint_selection: Literal[
         "removelegsandworld", "reduceholistic", "hands", "youtubeaslkeypoints"
     ] = "removelegsandworld",
-    masked_fill_value: Optional[float] = None,
-    fps: Optional[int] = None,
-    name: Optional[str] = None,
-    z_speed: Optional[float] = None,
+    masked_fill_value: float | None = None,
+    fps: int | None = None,
+    name: str | None = None,
+    z_speed: float | None = None,
     reduce_poses_to_common_components: bool = True,
 ):
     distance_measure = copy.deepcopy(distance_measure)
@@ -167,7 +170,7 @@ def construct_metric(
     return DistanceMetric(name=name, distance_measure=distance_measure, pose_preprocessors=pose_preprocessors)
 
 
-def get_embedding_metrics(df: pd.DataFrame) -> List:
+def get_embedding_metrics(df: pd.DataFrame) -> list:
     print(f"Getting embedding_metrics from df with {df.columns}")
     if DatasetDFCol.EMBEDDING_MODEL in df:
         for model in df[DatasetDFCol.EMBEDDING_MODEL].unique().tolist():
@@ -177,7 +180,10 @@ def get_embedding_metrics(df: pd.DataFrame) -> List:
 
 
 def get_metrics(
-    measures: List[DistanceMeasure] = None, include_return4=True, metrics_out: Path = None, include_masked: bool = False
+    measures: list[DistanceMeasure] | None = None,
+    include_return4=True,
+    metrics_out: Optional[Path] = None,
+    include_masked: bool | None = False,
 ):
     metrics = []
 
@@ -265,7 +271,6 @@ def get_metrics(
         masked_fill_value,
         sequence_alignment,
     ) in metric_combinations:
-
         #############
         # DTW vs other sequence alignments
         # DTW metrics don't use a pose preprocessor, they handle it internally in the DistanceMeasure.
@@ -327,7 +332,7 @@ def get_metrics(
     assert len(metric_names_set) == len(metric_names)
     assert len(metric_sigs_set) == len(metric_sigs)
 
-    for m_name, m_sig in zip(metric_names, metric_sigs):
+    for m_name, m_sig in zip(metric_names, metric_sigs, strict=False):
         sig_distance = extract_signature_distance(m_sig)
         try:
             name_distance = extract_metric_name_dist(m_name)
@@ -359,7 +364,7 @@ if __name__ == "__main__":
     print(f"{len(set(metric_names))} unique metric names")
     print(f"{len(set(metric_sigs))} unique metric signatures")
 
-    for n, s in zip(metric_names, metric_sigs):
+    for n, s in zip(metric_names, metric_sigs, strict=False):
         if "defaultdist0.0" in n:
             assert "default_distance:0.0" in s, f"{n}\n{s}"
 

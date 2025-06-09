@@ -1,5 +1,7 @@
-"""For dealing with evaluation score outputs, includes column names,
-and how to load the score CSVs such that e.g. "TRUE" gloss doesn't become a bool type"""
+"""
+For dealing with evaluation score outputs, includes column names, and how to
+load the score CSVs such that e.g. "TRUE" gloss doesn't become a bool type.
+"""
 
 import warnings
 from pathlib import Path
@@ -38,7 +40,9 @@ def load_score_csv(csv_file: Path):
     required_cols = [ScoreDFCol.METRIC, ScoreDFCol.SIGNATURE, ScoreDFCol.SCORE, ScoreDFCol.GLOSS_A, ScoreDFCol.GLOSS_B]
     missing_rows = scores_csv_df[scores_csv_df[required_cols].isnull().any(axis=1)]
     if not missing_rows.empty:
-        warnings.warn(f"{len(missing_rows)} malformed row(s) dropped from {csv_file}: missing required fields")
+        warnings.warn(
+            f"{len(missing_rows)} malformed row(s) dropped from {csv_file}: missing required fields", stacklevel=2
+        )
         print(missing_rows)
         scores_csv_df = scores_csv_df.drop(missing_rows.index)
 

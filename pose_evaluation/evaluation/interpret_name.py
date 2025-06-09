@@ -1,22 +1,26 @@
 import hashlib
 import re
-import warnings
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
 
 
 def extract_with_prefix(s: str, prefix: str, cast_fn=float):
-    """Extract value following a prefix ending with an underscore and followed by an underscore."""
+    """
+    Extract value following a prefix ending with an underscore and followed
+    by an underscore.
+    """
     match = re.search(rf"_{re.escape(prefix)}([0-9.]+)_", s)
     return cast_fn(match.group(1)) if match else None
 
 
 def extract_flagged_choice(s: str, options: list[str]):
-    """Return the first matching option found as a substring surrounded by underscores."""
+    """
+    Return the first matching option found as a substring surrounded by
+    underscores.
+    """
     for opt in options:
         if f"_{opt}_" in s:
             return opt
@@ -82,7 +86,6 @@ def interpret_name(metric_name: str):
 
 
 def shorten_metric_name(metric_name: str):
-
     abbrev = {
         "normalize": "n",
         "trim": "t",
@@ -111,9 +114,8 @@ def shorten_metric_name(metric_name: str):
         # e.g. "Return4Metric"
         return metric_name
     for choice_name, choice in choices.items():
-
         if isinstance(choice, bool):
-            if choice == True:
+            if choice:
                 choice = "y"
             else:
                 choice = "n"
@@ -267,7 +269,6 @@ if __name__ == "__main__":
         else:
             print(f"Total {col}:{len(interpretation[col]):,}, Unique:{len(uniques):,}")
         counts.append(len(uniques))
-    import random
 
     # for m in random.sample(metrics, k=5):
     #     print(m)

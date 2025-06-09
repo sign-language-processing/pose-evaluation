@@ -2,7 +2,6 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
 
 from tqdm import tqdm
 
@@ -16,14 +15,14 @@ class ScoresIndexDFCol:
 
 def index_scores(
     scores_folder: Path,
-    filter_metric: Optional[str] = None,
-    filter_gloss_a: Optional[str] = None,
+    filter_metric: str | None = None,
+    filter_gloss_a: str | None = None,
 ):
     analysis_folder = scores_folder.parent / "score_analysis"
     score_files_index_out = analysis_folder / "score_files_index.json"
 
     score_files = list(scores_folder.glob("*.csv"))
-    score_file_names = list(set([f.name for f in score_files]))
+    score_file_names = list({f.name for f in score_files})
     assert len(score_file_names) == len(score_files)
     print(f"We have {len(score_files)} score files")
     total_count = 0

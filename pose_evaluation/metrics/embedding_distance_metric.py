@@ -1,5 +1,5 @@
 import logging
-from typing import List, Literal, Optional, Union
+from typing import Literal, Union
 
 import numpy as np
 import torch
@@ -21,25 +21,26 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 ValidDistanceKinds = Literal["cosine", "euclidean", "manhattan", "dot"]
-TensorConvertableType = Union[List, np.ndarray, Tensor]
+TensorConvertableType = Union[list, np.ndarray, Tensor]
 
 
 class EmbeddingDistanceMetric(EmbeddingMetric):
     def __init__(
         self,
         model: str,
-        name: Optional[str] = None,
+        name: str | None = None,
         kind: ValidDistanceKinds = "cosine",
-        device: Optional[Union[torch.device, str]] = None,
+        device: torch.device | str | None = None,
         dtype=None,
     ):
         """
         Args:
-            kind (ValidDistanceKinds): The type of distance metric, e.g. "cosine", or "euclidean".
-            device:The device to use for computation.
-                If None, automatically detects.
-            dtype (torch.dtype): The data type to use for tensors.
-                If None, uses torch.get_default_dtype()
+        kind (ValidDistanceKinds): The type of distance metric, e.g. "cosine", or "euclidean".
+        device:The device to use for computation.
+            If None, automatically detects.
+        dtype (torch.dtype): The data type to use for tensors.
+            If None, uses torch.get_default_dtype()
+
         """
         if name is None:
             name = f"EmbeddingDistanceMetric_{model}_{kind}"
@@ -65,10 +66,8 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
             "manhattan": self.manhattan_distances,
         }
 
-    def to(self, device: Union[torch.device, str]) -> None:
-        """
-        Explicitly set the device used for tensors.
-        """
+    def to(self, device: torch.device | str) -> None:
+        """Explicitly set the device used for tensors."""
         self._device = torch.device(device)
         logger.info(f"Device set to: {self._device}")
         return self
@@ -79,6 +78,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
         Returns:
             Tensor: Batch tensor representation of the data on the specified device.
+
         """
         # better performance this way, see https://github.com/pytorch/pytorch/issues/13918
         if isinstance(data, list) and all(isinstance(x, np.ndarray) for x in data):
@@ -108,8 +108,8 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
     def score_all(
         self,
-        hypotheses: Union[List[TensorConvertableType], Tensor],
-        references: Union[List[TensorConvertableType], Tensor],
+        hypotheses: list[TensorConvertableType] | Tensor,
+        references: list[TensorConvertableType] | Tensor,
         progress_bar: bool = True,
     ) -> Tensor:
         """
@@ -124,6 +124,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         Raises:
             TypeError: If either hypotheses or references cannot be converted to a batch tensor
             ValueError: If the specified metric is unsupported.
+
         """
         try:
             hypotheses = self._to_batch_tensor_on_device(hypotheses)
@@ -131,15 +132,16 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         except RuntimeError as e:
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
-        assert (
-            hypotheses.ndim == 2 and references.ndim == 2
-        ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
+        assert hypotheses.ndim == 2 and references.ndim == 2, (
+            f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
+        )
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 
     def dot_product(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
         Compute the dot product between embeddings.
+
         Uses sentence_transformers.util.dot_score
         """
         # https://stackoverflow.com/questions/73924697/whats-the-difference-between-torch-mm-torch-matmul-and-torch-mul
@@ -147,30 +149,38 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
 
     def euclidean_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
-        Returns the negative L2 norm/euclidean distances, which is what sentence-transformers uses for similarities.
+        Returns the negative L2 norm/euclidean distances, which is what
+        sentence-transformers uses for similarities.
+
         Uses sentence_transformers.util.euclidean_sim
         """
         return st_util.euclidean_sim(hypotheses, references)
 
     def euclidean_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
-        Seeing as how sentence-transformers just negates the distances to get "similarities",
-        We can re-negate to get them positive again.
+        Seeing as how sentence-transformers just negates the distances to
+        get "similarities", We can re-negate to get them positive again.
+
         Uses sentence_transformers.util.euclidean_similarities
         """
         return -self.euclidean_similarities(hypotheses, references)
 
     def cosine_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
-        Calculates cosine similarities, which can be thought of as the angle between two embeddings.
-        The min value is -1 (least similar/pointing directly away), and the max is 1 (exactly the same angle).
-        Uses sentence_transformers.util.cos_sim
+        Calculates cosine similarities, which can be thought of as the angle
+        between two embeddings.
+
+        The min value is -1 (least similar/pointing directly away), and
+        the max is 1 (exactly the same angle). Uses
+        sentence_transformers.util.cos_sim
         """
         return st_util.cos_sim(hypotheses, references)
 
     def cosine_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
-        Converts cosine similarities to distances by simply subtracting from 1.
+        Converts cosine similarities to distances by simply subtracting from
+        1.
+
         Max distance is 2, min distance is 0.
         """
         return 1 - self.cosine_similarities(hypotheses, references)
@@ -178,6 +188,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     def manhattan_similarities(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
         Get the L1/Manhattan similarities, aka negative distances.
+
         Uses sentence_transformers.util.manhattan_sim
         """
         return st_util.manhattan_sim(hypotheses, references)
@@ -185,6 +196,7 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
     def manhattan_distances(self, hypotheses: TensorConvertableType, references: TensorConvertableType) -> Tensor:
         """
         Convert Manhattan similarities to distances.
+
         Sentence transformers defines similarity as negative distances.
         We can re-negate to recover the distances.
         """

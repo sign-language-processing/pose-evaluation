@@ -1,17 +1,20 @@
 import argparse
 import json
-import numpy as np
-import pandas as pd
 import re
-import torch
 from collections import defaultdict
 from pathlib import Path
-from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR, RetrievalPrecision, RetrievalRecall
-from tqdm import tqdm
-from typing import Optional, List, Dict, Tuple
 
-from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol, index_scores
-from pose_evaluation.evaluation.load_pyarrow_dataset import load_dataset, load_metric_dfs
+import numpy as np
+import pandas as pd
+import torch
+from torchmetrics.retrieval import RetrievalMAP, RetrievalMRR
+from tqdm import tqdm
+
+from pose_evaluation.evaluation.index_score_files import ScoresIndexDFCol
+from pose_evaluation.evaluation.load_pyarrow_dataset import (
+    load_dataset,
+    load_metric_dfs,
+)
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 _SIGNATURE_RE = re.compile(r"default_distance:([\d.]+)")
@@ -20,9 +23,11 @@ _DEFAULTDIST_RE = re.compile(r"defaultdist([\d.]+)")
 tqdm.pandas()
 
 
-def extract_metric_name_from_filename(stem: str) -> Optional[str]:
+def extract_metric_name_from_filename(stem: str) -> str | None:
     """
-    Extract everything between the first underscore and '_outgloss_' in the file stem.
+    Extract everything between the first underscore and '_outgloss_' in the
+    file stem.
+
     e.g., 'GLOSS_trimmed_normalized_defaultdist10.0_extra_outgloss_4x_score_results'
     returns 'trimmed_normalized_defaultdist10.0_extra'
     """
@@ -31,32 +36,35 @@ def extract_metric_name_from_filename(stem: str) -> Optional[str]:
         return None
     possible_gloss, rest = stem.split("_", 1)
     first_part = rest.split("_", 1)[0]
-    assert (
-        "Return4" in first_part or "trimmed" in first_part
-    ), f"Unexpected format: {rest}, possibly gloss has underscores? {possible_gloss}"
+    assert "Return4" in first_part or "trimmed" in first_part, (
+        f"Unexpected format: {rest}, possibly gloss has underscores? {possible_gloss}"
+    )
     metric, _ = rest.split("_outgloss_", 1)
     return metric
 
 
-def extract_filename_dist(filename: str) -> Optional[float]:
+def extract_filename_dist(filename: str) -> float | None:
     """
     From a filename, extract the float following 'defaultdist'.
+
     Returns None if not found.
     """
     m = _DEFAULTDIST_RE.search(filename)
     return float(m.group(1)) if m else None
 
 
-def extract_signature_distance(signature: str) -> Optional[str]:
+def extract_signature_distance(signature: str) -> str | None:
     """
-    From a signature string, extract the float following 'default_distance:'.
+    From a signature string, extract the float following
+    'default_distance:'.
+
     Returns None if not found.
     """
     m = _SIGNATURE_RE.search(signature)
     return float(m.group(1)) if m else None
 
 
-def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) -> dict:
+def calculate_retrieval_stats(df: pd.DataFrame, ks: list[int] | None = None) -> dict:
     if ks is None:
         ks = [1, 5, 10]
 
@@ -117,7 +125,7 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
         results["mean_average_precision"] = RetrievalMAP()(preds, targets, indexes).item()
         results["mean_reciprocal_rank"] = RetrievalMRR()(preds, targets, indexes).item()
 
-    print(f"Calculating @k-metrics")
+    print("Calculating @k-metrics")
     for k in tqdm(ks, desc="metrics at k"):
         results[f"precision@{k}"] = float(np.mean(per_k_stats[k]["precision"])) if per_k_stats[k]["precision"] else 0.0
         results[f"recall@{k}"] = float(np.mean(per_k_stats[k]["recall"])) if per_k_stats[k]["recall"] else 0.0
@@ -140,7 +148,10 @@ def calculate_retrieval_stats(df: pd.DataFrame, ks: Optional[List[int]] = None) 
 
 
 def standardize_path_order(df: pd.DataFrame) -> pd.DataFrame:
-    """Ensure `Gloss A Path` always contains the original query path if it exists in the dataset."""
+    """
+    Ensure `Gloss A Path` always contains the original query path if it
+    exists in the dataset.
+    """
     df = df.copy()
 
     # Create a mask for rows where `Gloss B Path` appears in `Gloss A Path`
@@ -157,7 +168,7 @@ def standardize_path_order(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: List[int], out_folder=None) -> Dict[str, any]:
+def analyze_metric(metric_name: str, metric_df: pd.DataFrame, ks: list[int], out_folder=None) -> dict[str, any]:
     result = {ScoreDFCol.METRIC: metric_name}
 
     # Shuffle to prevent bias in case of score ties
@@ -257,7 +268,8 @@ def load_score_parquet(parquet_file: Path) -> pd.DataFrame:
 
 def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"):
     """
-    Parses filenames to extract the metric name and loads/groups the corresponding data.
+    Parses filenames to extract the metric name and loads/groups the
+    corresponding data.
 
     Args:
         scores_folder: Path to the folder containing the score files.
@@ -265,12 +277,13 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
     Yields:
         A tuple containing the metric name and the combined DataFrame for that metric.
+
     """
     if file_format not in ["csv", "parquet"]:
         raise ValueError(f"Invalid file_format: {file_format}. Must be 'csv' or 'parquet'.")
 
     score_files = list(scores_folder.glob(f"*.{file_format}"))
-    metric_files: Dict[str, List[Path]] = defaultdict(list)
+    metric_files: dict[str, list[Path]] = defaultdict(list)
 
     for score_file in tqdm(score_files, f"Parsing {file_format} filenames"):
         metric_name = extract_metric_name_from_filename(score_file.stem)
@@ -324,9 +337,9 @@ def load_metric_dfs_from_filenames(scores_folder: Path, file_format: str = "csv"
 
                 all_dfs.append(scores_df)
 
-            assert (
-                len(signatures_set) == 1
-            ), f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
+            assert len(signatures_set) == 1, (
+                f"More than one signature found for {metric_name}, files: {len(processed_file_signatures)}"
+            )
 
         except AssertionError as e:
             debug_path = Path.cwd() / "debug_jsons"
@@ -369,7 +382,7 @@ if __name__ == "__main__":
     scores_folder = Path(args.scores_folder)
     gloss_list = None
     if args.query_gloss_list is not None:
-        gloss_list = list(set([s.strip() for s in args.query_gloss_list.split(",")]))
+        gloss_list = list({s.strip() for s in args.query_gloss_list.split(",")})
         # "SORRY,MOTHER,BEER,CALIFORNIA,DEAFSCHOOL,GOVERNMENT,FRIDAY,CHEW1,WEDNESDAY,REPLACE,THRILLED,MEETING,YOUR,SEVERAL,HAWAII,DRUG,DECIDE2,SHARK2,VOTE,HARDOFHEARING,OHISEE,PERFUME1,SCREWDRIVER3,LIBRARY,FORK4,LIVE2,CALM,SHAME,CAFETERIA,BANANA2,MOOSE,MAIL1,SANTA,BEAR,THANKSGIVING,TIE1,PAIR,SPECIALIST,ARIZONA,NECKLACE4,PRINT,DRINK2,THURSDAY,SIX,CASTLE2,TOSS,WEIGH,PRACTICE,STARS,LEAF1,HUSBAND,BEAK,CHALLENGE,BINOCULARS,DOLPHIN2,VAMPIRE,PUMPKIN,BRAINWASH,COMMITTEE,TEA,TURBAN,PREFER,EASTER,HUG,BATHROOM,RUIN,SNAKE,PHILADELPHIA,CONVINCE2,DONTKNOW,EIGHT,COOKIE,TELL,DEAF2,PIPE2,SATURDAY,SEVEN,SILVER,ROOF,DRIP,DUTY,COUNSELOR,NINE,RECORDING,RAT,SALAD,EVERYTHING,SNOWSUIT,EACH,CHICAGO,BAG2,PRESIDENT,GALLAUDET,CLOSE,FEW,CELERY,EARN,PEPSI,SOCKS,MICROPHONE,LUCKY,PJS,TRUE,ROSE,GOTHROUGH,RESTAURANT,WEATHER,STADIUM,FISHING2,PERCENT,KNITTING3,EXPERIMENT,TAKEOFF1,ACCENT,OPINION1,PIE,RUSSIA,WEIGHT,DONTCARE,ROCKINGCHAIR1,CANDY1,SPICY,ENOUGH,GLASSES,TUESDAY,WIFE,WASHDISHES,NEWSTOME,WEST,APPEAR,INTRODUCE,DONTMIND,HERE,LEND,PHONE,ERASE1,THREE,ADVERTISE,BERRY,DART,WINE,PILL,FRIENDLY,DIP3,TRADITION,TOP,ADULT,TASTE,DISRUPT,VACATION,SENATE,NEWSPAPER,FOCUS,DEER,INVITE,BRAG,BUFFALO,SHAVE5,BUT,CHILD,NEWYORK,WORKSHOP,FINGERSPELL,ALASKA,ONION,VOMIT,WEAR,THANKYOU,HIGHSCHOOL"
         print(f"Including results with the following {len(gloss_list)} query glosses: {gloss_list}")
 
@@ -408,28 +421,44 @@ if __name__ == "__main__":
         and score_files_index.get(ScoresIndexDFCol.SUMMARY, {}).get("total_scores")
         == previous_stats_by_metric["total_count"].sum()
     ):
-        print(f"Score count has not changed, no need to re-analyze. Quitting now.")
+        print("Score count has not changed, no need to re-analyze. Quitting now.")
         exit()
     else:
-        print(f"Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
+        print("Index and previous analysis score counts differ or no previous analysis found. Re-analysis needed")
         if score_files_index.get(ScoresIndexDFCol.SUMMARY):
             print("Index has")
-            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_metrics"]:,} metrics")
-            print(
-                f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_a"]:,} unique 'gloss a' (query/hyp) values"
-            )
-            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["unique_gloss_b"]:,} unique 'gloss b' (ref) values")
-            print(f"\t{score_files_index[ScoresIndexDFCol.SUMMARY]["total_scores"]:,} scores")
+
+            # Extract values to temporary variables for clarity and Black compatibility
+            summary_data = score_files_index[ScoresIndexDFCol.SUMMARY]
+
+            unique_metrics = summary_data["unique_metrics"]
+            unique_gloss_a = summary_data["unique_gloss_a"]
+            unique_gloss_b = summary_data["unique_gloss_b"]
+            total_scores = summary_data["total_scores"]
+
+            print(f"\t{unique_metrics:,} metrics")
+            print(f"\t{unique_gloss_a:,} unique 'gloss a' (query/hyp) values")
+            print(f"\t{unique_gloss_b:,} unique 'gloss b' (ref) values")
+            print(f"\t{total_scores:,} scores")
 
         if previous_stats_by_metric is not None:
             print()
             print("Previous analysis had")
-            print(f"*\t{len(previous_stats_by_metric)} metrics")
-            print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].max():,} 'gloss a' values (max)")
-            print(f"*\t{previous_stats_by_metric["hyp_gloss_count"].min():,} 'gloss a' values (min)")
-            print(f"*\t{previous_stats_by_metric["ref_gloss_count"].max():,} 'gloss b' values (max)")
-            print(f"*\t{previous_stats_by_metric["ref_gloss_count"].min():,} 'gloss b' values (min)")
-            print(f"*\t{previous_stats_by_metric["total_count"].sum():,} scores")
+
+            # Extract calculated values to temporary variables for clarity and Black compatibility
+            len_metrics = len(previous_stats_by_metric)
+            hyp_gloss_max = previous_stats_by_metric["hyp_gloss_count"].max()
+            hyp_gloss_min = previous_stats_by_metric["hyp_gloss_count"].min()
+            ref_gloss_max = previous_stats_by_metric["ref_gloss_count"].max()
+            ref_gloss_min = previous_stats_by_metric["ref_gloss_count"].min()
+            total_scores_sum = previous_stats_by_metric["total_count"].sum()
+
+            print(f"*\t{len_metrics} metrics")
+            print(f"*\t{hyp_gloss_max:,} 'gloss a' values (max)")
+            print(f"*\t{hyp_gloss_min:,} 'gloss a' values (min)")
+            print(f"*\t{ref_gloss_max:,} 'gloss b' values (max)")
+            print(f"*\t{ref_gloss_min:,} 'gloss b' values (min)")
+            print(f"*\t{total_scores_sum:,} scores")
 
     stats_by_metric = defaultdict(list)
     metrics_analyzed = set()
@@ -443,7 +472,6 @@ if __name__ == "__main__":
 
     analyzed = 0
     for i, (metric, metric_df) in enumerate(tqdm(metric_generator, desc="Analyzing metrics")):
-
         print("*" * 50)
         if metric in metrics_analyzed:
             print(f"Skipping already analyzed metric #{i}: {metric}")
@@ -474,7 +502,6 @@ if __name__ == "__main__":
             continue  # Skip actual re-analysis
 
         if gloss_list is not None:
-
             filtered_df = metric_df[metric_df["GLOSS_A"].isin(gloss_list)]
             print(f"Filtering scores to those in query gloss list: {len(metric_df)} before, {len(filtered_df)} after")
             metric_df = filtered_df
@@ -491,13 +518,13 @@ if __name__ == "__main__":
 
         if i % 10 == 0:
             stats_by_metric_df = pd.DataFrame(stats_by_metric)
-            print(f"$" * 60)
+            print("$" * 60)
             print(f"INCREMENTAL SAVE: {i}")
             print(
                 f"Saving {len(stats_by_metric_df)} to {metric_stats_out_temp}, of which {len(stats_by_metric_df) - analyzed} are reused"
             )
             stats_by_metric_df.to_csv(metric_stats_out_temp, index=False)
-            print(f"$" * 60)
+            print("$" * 60)
 
         analyzed += 1
         print("*" * 50)

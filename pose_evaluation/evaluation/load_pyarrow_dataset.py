@@ -3,8 +3,8 @@
 import argparse
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
 
+import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
@@ -35,8 +35,7 @@ def load_dataset(dataset_dir: Path):
 def get_metric_partition_names(dataset):
     for partition in dataset.partitioning.dictionaries:
         # partition should be a list of metrics, for example ['metric1', 'metric2', ...]
-        for metric in partition:
-            yield metric
+        yield from partition
 
 
 def load_metric_df(dataset, metric):
@@ -49,8 +48,7 @@ def load_metric_df(dataset, metric):
 def yield_metric_batches(dataset, metric):
     filter_expr = pc.equal(ds.field("METRIC"), metric)
     # Filter the dataset by this metric (partition)
-    for record_batch in dataset.to_batches(filter=filter_expr):
-        yield record_batch
+    yield from dataset.to_batches(filter=filter_expr)
 
 
 def load_metric_dfs(dataset):
@@ -81,12 +79,11 @@ def summarize_df(df):
         print(f"  - {col}: {unique_count} unique values")
     total_bytes = df.memory_usage(deep=True).sum()
     print(f"{total_bytes:,} b")
-    print(f"{total_bytes/1024:,} kb")
-    print(f"{total_bytes/(1024**2):,} mb")
+    print(f"{total_bytes / 1024:,} kb")
+    print(f"{total_bytes / (1024**2):,} mb")
 
 
-def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, sample_count=5):
-
+def summarize_dataset_with_batches(dataset, columns: list | None = None, sample_count=5):
     if columns is None:
         columns = ["METRIC", "GLOSS_A", "GLOSS_B", "GLOSS_A_PATH", "GLOSS_B_PATH"]
 
@@ -121,14 +118,18 @@ def summarize_dataset_with_batches(dataset, columns: Optional[List] = None, samp
 
 def summarize_metric_partitions(dataset_path):
     """
-    Summarizes number of rows per METRIC partition using pyarrow's count_rows().
-    Size is not included unless specifically required, as row count is most efficient.
+    Summarizes number of rows per METRIC partition using pyarrow's
+    count_rows(). Size is not included unless specifically required, as row
+    count is most efficient.
 
-    Parameters:
+    Parameters
+    ----------
         dataset_path (str or Path): Path to the dataset root.
 
-    Returns:
+    Returns
+    -------
         dict: {metric_value: {'num_rows': int}}
+
     """
     dataset = ds.dataset(dataset_path, format="parquet", partitioning="hive")
 
@@ -152,13 +153,16 @@ def get_unique_values_for_metric_column(dataset, metric: str, column: str) -> se
     """
     Efficiently loads unique values from a single column for a given metric.
 
-    Parameters:
+    Parameters
+    ----------
     - dataset: a pyarrow.dataset.Dataset object, already opened
     - metric: the metric name (partition value) to filter on
     - column: the name of the column to extract unique values from
 
-    Returns:
+    Returns
+    -------
     - A Python set of unique values in that column for the given metric
+
     """
     filter_expr = pc.equal(ds.field("METRIC"), metric)
     scanner = dataset.scanner(filter=filter_expr, columns=[column])
@@ -168,18 +172,21 @@ def get_unique_values_for_metric_column(dataset, metric: str, column: str) -> se
 
 def get_common_gloss_paths_across_metrics(
     dataset, column_a: str = "GLOSS_A_PATH", column_b: str = "GLOSS_B_PATH"
-) -> Tuple[Set[str], Set[str]]:
+) -> tuple[set[str], set[str]]:
     """
     Computes the intersection of unique GLOSS_A_PATH and GLOSS_B_PATH values
     across all metrics in the hive-partitioned dataset.
 
-    Parameters:
+    Parameters
+    ----------
     - dataset: pyarrow.dataset.Dataset object
     - column_a: name of the Gloss A column (default: 'GLOSS_A_PATH')
     - column_b: name of the Gloss B column (default: 'GLOSS_B_PATH')
 
-    Returns:
+    Returns
+    -------
     - (common_gloss_a_paths, common_gloss_b_paths): tuple of sets
+
     """
     common_a_paths = None
     common_b_paths = None
@@ -210,12 +217,13 @@ def load_filtered_metric_df(
     common_b_paths: set,
     column_a: str = "GLOSS_A_PATH",
     column_b: str = "GLOSS_B_PATH",
-) -> "pd.DataFrame":
+) -> pd.DataFrame:
     """
     Loads a filtered DataFrame for a given metric, including only rows where
     both GLOSS_A_PATH and GLOSS_B_PATH are in the common sets.
 
-    Parameters:
+    Parameters
+    ----------
     - dataset: pyarrow.dataset.Dataset object
     - metric: metric partition name
     - common_a_paths: set of allowed GLOSS_A_PATH values
@@ -223,10 +231,11 @@ def load_filtered_metric_df(
     - column_a: name of the Gloss A column (default: 'GLOSS_A_PATH')
     - column_b: name of the Gloss B column (default: 'GLOSS_B_PATH')
 
-    Returns:
+    Returns
+    -------
     - Filtered pandas DataFrame
-    """
 
+    """
     # Build filter expressions
     metric_filter = pc.equal(ds.field("METRIC"), metric)
     gloss_a_filter = ds.field(column_a).isin(pa.array(list(common_a_paths)))
@@ -244,7 +253,7 @@ def save_filtered_metrics(dataset, metric_names, out_path, common_a, common_b):
     out_path.mkdir(parents=True, exist_ok=True)
 
     for i, metric in enumerate(metric_names):
-        print(f"[{i+1}/{len(metric_names)}] Processing {metric}...")
+        print(f"[{i + 1}/{len(metric_names)}] Processing {metric}...")
 
         # Load filtered DataFrame
         metric_df = load_filtered_metric_df(dataset, metric, common_a, common_b)
@@ -296,8 +305,8 @@ def main():
     metric_names = list(get_metric_partition_names(dataset))
 
     if args.count_metrics:
-        metric_stats = summarize_metric_partitions(args.dataset_dir)
-        for metric, metric_stats in metric_stats.items():
+        metric_stats_summary = summarize_metric_partitions(args.dataset_dir)
+        for metric, metric_stats in metric_stats_summary.items():
             print(f"{metric}: {metric_stats['num_rows']} rows")
 
     # for i, metric in enumerate(metric_names):

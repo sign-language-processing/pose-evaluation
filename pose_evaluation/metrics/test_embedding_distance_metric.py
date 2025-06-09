@@ -1,7 +1,7 @@
 import itertools
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,7 +31,7 @@ def fixture_cosine_metric():
 
 
 @pytest.fixture(name="embeddings")
-def fixture_embeddings() -> List[torch.Tensor]:
+def fixture_embeddings() -> list[torch.Tensor]:
     """Fixture to create dummy embeddings for testing."""
     return [random_tensor(768) for _ in range(5)]
 
@@ -58,7 +58,7 @@ def call_and_call_with_inputs_swapped(
     hyps: torch.Tensor,
     refs: torch.Tensor,
     scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     score1 = scoring_function(hyps, refs)
     score2 = scoring_function(refs, hyps)
     return score1, score2
@@ -70,7 +70,7 @@ def call_with_both_input_orders_and_do_standard_checks(
     scoring_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     distance_range_checker,
     distance_matrix_shape_checker,
-    expected_shape: Optional[Tuple] = None,
+    expected_shape: tuple | None = None,
 ):
     scores, scores2 = call_and_call_with_inputs_swapped(hyps, refs, scoring_function)
     if expected_shape is not None:
@@ -88,7 +88,6 @@ def call_with_both_input_orders_and_do_standard_checks(
 
 def save_and_plot_distances(distances, matrix_name, num_points, dim):
     """Helper function to save distance matrix and plot distances."""
-
     distances = distances.cpu()
     test_artifacts_dir = Path(__file__).parent / "tests"
     output_path = test_artifacts_dir / f"distance_matrix_{matrix_name}_{num_points}_{dim}D.csv"
@@ -143,8 +142,8 @@ def generate_orthogonal_rows_with_repeats(num_rows: int, dim: int) -> torch.Tens
 
 def generate_orthogonal_rows_in_pairs(num_pairs: int, dim: int) -> torch.Tensor:
     """
-    Generates a tensor with orthogonal rows in pairs.
-    The first row of each pair is orthogonal to the second row of the same pair.
+    Generates a tensor with orthogonal rows in pairs. The first row of each
+    pair is orthogonal to the second row of the same pair.
 
     Args:
         num_pairs: The number of orthogonal pairs to generate.
@@ -152,8 +151,8 @@ def generate_orthogonal_rows_in_pairs(num_pairs: int, dim: int) -> torch.Tensor:
 
     Returns:
         A PyTorch tensor with orthogonal rows in pairs.
-    """
 
+    """
     orthogonal_rows = torch.empty(0, dim)
     for _ in range(num_pairs):
         # Generate the first vector of the pair
@@ -178,7 +177,8 @@ def generate_ones_tensor(rows: int, dims: int) -> torch.Tensor:
 
 def generate_identity_matrix_rows(rows, cols):
     """
-    Returns an identity matrix with the specified number of rows and columns.
+    Returns an identity matrix with the specified number of rows and
+    columns.
     """
     identity = torch.eye(max(rows, cols))
     return identity[:rows, :cols]
@@ -186,8 +186,8 @@ def generate_identity_matrix_rows(rows, cols):
 
 def create_increasing_rows_tensor(num_rows: int, num_cols: int) -> torch.Tensor:
     """
-    Creates a tensor where every row has identical values all the way across,
-    but increasing row by row.
+    Creates a tensor where every row has identical values all the way
+    across, but increasing row by row.
 
     Args:
         num_rows: The number of rows in the tensor.
@@ -195,8 +195,8 @@ def create_increasing_rows_tensor(num_rows: int, num_cols: int) -> torch.Tensor:
 
     Returns:
         A PyTorch tensor with the specified properties.
-    """
 
+    """
     tensor = torch.arange(1.0, num_rows + 1).unsqueeze(1).repeat(1, num_cols)
     return tensor
 
@@ -236,7 +236,7 @@ def test_score_with_path(cosine_metric: EmbeddingDistanceMetric, tmp_path: Path)
 
 def test_score_all_against_self(
     cosine_metric: EmbeddingDistanceMetric,
-    embeddings: List[torch.Tensor],
+    embeddings: list[torch.Tensor],
     distance_range_checker,
     distance_matrix_shape_checker,
 ) -> None:
@@ -334,7 +334,7 @@ def test_score_with_invalid_input_empty_containers(
 ) -> None:
     """Test the metric with invalid inputs."""
     emb1 = random_tensor(768)
-    invalid_inputs = ["", [], {}, tuple(), set()]
+    invalid_inputs = ["", [], {}, (), set()]
 
     for invalid_input in invalid_inputs:
         with pytest.raises((RuntimeError, TypeError, IndexError)):
@@ -486,9 +486,9 @@ def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
                 expected_pattern[i, j] = 1
 
     # We expect 0 1 0  across and down
-    assert torch.allclose(
-        distances, expected_pattern, atol=1e-6
-    ), "Output does not match the expected alternating pattern"
+    assert torch.allclose(distances, expected_pattern, atol=1e-6), (
+        "Output does not match the expected alternating pattern"
+    )
 
 
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])

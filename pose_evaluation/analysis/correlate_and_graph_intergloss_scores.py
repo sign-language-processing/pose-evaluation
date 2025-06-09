@@ -5,12 +5,9 @@ import math
 from datetime import datetime
 from itertools import combinations
 from pathlib import Path
-from typing import Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 import seaborn as sns
 from scipy.stats import kendalltau, pearsonr, spearmanr, ttest_rel
 from tqdm import tqdm
@@ -34,7 +31,7 @@ def plot_metric_boxplot(
     col: str,
     metric: str,
     show: bool = False,
-    out_path: Optional[Path] = None,
+    out_path: Path | None = None,
 ):
     df_filtered = df[df["METRIC"] == metric]
 
@@ -70,14 +67,16 @@ def plot_metric_histogram(
     bins: int = 10,
     kde: bool = True,
     show: bool = False,
-    out_path: Optional[Path] = None,
+    out_path: Path | None = None,
     overlay_by_relation: bool = False,  # NEW
 ):
     """
-    Plots a histogram of the specified column, filtering the dataframe by the specified 'metric'.
-    Optionally overlays histograms by 'relation_type' if available.
+    Plots a histogram of the specified column, filtering the dataframe by
+    the specified 'metric'. Optionally overlays histograms by 'relation_type'
+    if available.
 
-    Parameters:
+    Parameters
+    ----------
         df (pd.DataFrame): The input dataframe.
         col (str): The column to plot.
         metric (str): The metric value to filter the dataframe.
@@ -86,6 +85,7 @@ def plot_metric_histogram(
         show (bool): Whether to show the plot immediately.
         out_path (Optional[Path]): Where to save the plot if specified.
         overlay_by_relation (bool): If True, overlay histograms by relation type.
+
     """
     # Filter dataframe by metric
     df_filtered = df[df["METRIC"] == metric]
@@ -97,7 +97,7 @@ def plot_metric_histogram(
     plt.figure(figsize=(8, 5))
 
     if overlay_by_relation and "relation_type" in df_filtered.columns:
-        colors = ({"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"},)
+        colors = {"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"}
         labels = ["Lookalike", "Semantic", "Neither", "Both"]
 
         for relation in labels:
@@ -145,7 +145,7 @@ def plot_metric_scatter(
     metric_x: str,
     metric_y: str,
     show: bool = False,
-    png_path: Optional[Path] = None,
+    png_path: Path | None = None,
 ):
     # Filter for the two specified metrics
     df_x = df[df["METRIC"] == metric_x].rename(columns={"mean": "score_x"})
@@ -161,8 +161,8 @@ def plot_metric_scatter(
     palette = {"Lookalike": "red", "Semantic": "blue", "Neither": "gray", "Both": "green"}
 
     # Generate shortened names and hash
-    metric_x_short = metric_x[:15]
-    metric_y_short = metric_y[:15]
+    # metric_x_short = metric_x[:15]
+    # metric_y_short = metric_y[:15]
     metric_x_hash = hashlib.md5(f"{metric_x}".encode()).hexdigest()[:8]
     metric_y_hash = hashlib.md5(f"{metric_y}".encode()).hexdigest()[:8]
     name_hash = hashlib.md5(f"{metric_x}|{metric_y}".encode()).hexdigest()[:8]
@@ -233,7 +233,7 @@ def plot_metric_scatter(
 
 
 def plot_overlay_histograms(
-    df_metric: pd.DataFrame, metric: str, save_plot_path: Optional[Path] = None, show_plot: bool = True
+    df_metric: pd.DataFrame, metric: str, save_plot_path: Path | None = None, show_plot: bool = True
 ) -> None:
     plt.figure(figsize=(8, 5))
 
@@ -274,7 +274,7 @@ def analyze_metric_relationships(
     metric_x: str,
     metric_y: str,
     show_plot: bool = True,
-    save_plot_path: Optional[Path] = None,
+    save_plot_path: Path | None = None,
 ) -> pd.DataFrame:
     """
     Analyze correlation and distance tendencies between two metrics.
@@ -288,10 +288,11 @@ def analyze_metric_relationships(
 
     Returns:
         summary_df: DataFrame summarizing correlations, means, and t-tests.
+
     """
     # Generate shortened names and hash
-    metric_x_short = metric_x[:15]
-    metric_y_short = metric_y[:15]
+    # metric_x_short = metric_x[:15]
+    # metric_y_short = metric_y[:15]
     metric_x_hash = hashlib.md5(f"{metric_x}".encode()).hexdigest()[:8]
     metric_y_hash = hashlib.md5(f"{metric_y}".encode()).hexdigest()[:8]
     name_hash = hashlib.md5(f"{metric_x}|{metric_y}".encode()).hexdigest()[:8]
@@ -386,16 +387,46 @@ def create_gloss_tuple_known_lookalikes(row):
 
 
 def normalize_gloss_tuple(val):
+    """
+    Normalizes a value to a tuple, attempting to parse string
+    representations.
+
+    Args:
+        val: The input value, which can be a tuple, or a string
+             representing a Python literal tuple (e.g., "(1, 'two')")
+             or a simplified tuple-like string (e.g., "(ITEM_ONE, ITEM_TWO)").
+
+    Returns:
+        A tuple representation of the input value.
+
+    Raises:
+        TypeError: If the input 'val' is not a tuple or a string.
+        (Other exceptions from ast.literal_eval if a string is provided
+         that is not a valid Python literal and also doesn't fit the
+         manual parsing format, though the manual parsing is quite permissive.)
+
+    """
     if isinstance(val, tuple):
         return val
+
+    # If it's not a tuple, it *must* be a string for the subsequent parsing logic.
+    # Otherwise, it's an unsupported input type for this function.
+    if not isinstance(val, str):
+        raise TypeError(f"Expected a tuple or string, but received type {type(val).__name__} for value: {val}")
+
     try:
-        # Try literal_eval first
+        # First, try to evaluate the string as a safe Python literal.
+        # This handles strings like "(1, 'two')", "[3, 4]", "('a', 'b')"
         return ast.literal_eval(val)
-    except:
-        # Fall back to manually parsing something like (AIRPLANE, HOME)
-        val = val.strip("() ")
-        parts = [part.strip().strip("'\"") for part in val.split(",")]
+    except (ValueError, SyntaxError):
+        # If literal_eval fails due to an invalid literal format (e.g., "(AIRPLANE, HOME)"
+        # where AIRPLANE is not a valid Python literal), fall back to manual parsing.
+        # This handles cases where identifiers are not quoted or are not standard literals.
+        val_stripped = val.strip("() ")  # Remove outer parentheses and leading/trailing spaces
+        parts = [part.strip().strip("'\"") for part in val_stripped.split(",")]
         return tuple(parts)
+    # Any other exception (e.g., MemoryError, RecursionError) from ast.literal_eval
+    # would indicate a more severe or unexpected issue and should not be caught here.
 
 
 def interpret_correlation(coef: float) -> str:
@@ -412,7 +443,6 @@ def interpret_correlation(coef: float) -> str:
 
 
 if __name__ == "__main__":
-
     # score_analysis_folder = Path("metric_results/4_22_2025_csvcount_17187_score_analysis_with_updated_MAP")
     # score_analysis_folder = Path(
     #     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_2/4_23_2025_score_analysis_3300_trials"
@@ -460,14 +490,14 @@ if __name__ == "__main__":
     print(asl_knowledge_graph_df.info())
     print(asl_knowledge_graph_df.head())
 
-    print(f"ASL KNOWLEDGE GRAPH HEAD:")
+    print("ASL KNOWLEDGE GRAPH HEAD:")
     asl_knowledge_graph_df["gloss_tuple"] = asl_knowledge_graph_df["gloss_tuple"].apply(normalize_gloss_tuple)
     # print(asl_knowledge_graph_df["gloss_tuple"].head())
     print(asl_knowledge_graph_df.head())
     # print(asl_knowledge_graph_df.info())
     print()
 
-    print(f"SCORES BY GLOSS HEAD")
+    print("SCORES BY GLOSS HEAD")
     scores_by_gloss_df["gloss_tuple"] = scores_by_gloss_df["gloss_tuple"].apply(normalize_gloss_tuple)
     # print(scores_by_gloss_df["gloss_tuple"].head())
     print(scores_by_gloss_df.head())
@@ -480,7 +510,7 @@ if __name__ == "__main__":
     print(set(asl_knowledge_graph_df["gloss_tuple"]).intersection(set(scores_by_gloss_df["gloss_tuple"])))
 
     print("*" * 50)
-    print(scores_by_gloss_df[scores_by_gloss_df["semantically_related"] == True])
+    print(scores_by_gloss_df[scores_by_gloss_df["semantically_related"]])
 
     #############################################
     # Lookalikes
@@ -493,8 +523,8 @@ if __name__ == "__main__":
         set(known_lookalikes_df["gloss_tuple"])
     )
 
-    print(f"KNOWN LOOKALIKES")
-    print(scores_by_gloss_df[scores_by_gloss_df["known_lookalikes"] == True])
+    print("KNOWN LOOKALIKES")
+    print(scores_by_gloss_df[scores_by_gloss_df["known_lookalikes"]])
     print("*" * 50)
 
     scores_by_gloss_df["relation_type"] = scores_by_gloss_df.apply(classify_relation, axis=1)

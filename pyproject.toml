@@ -32,34 +32,91 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pylint",
-    "black",
     # to plot metric evaluation results
     "matplotlib",
     "pytest-cov",
     "coverage-lcov",
-    "isort",
-    "docformatter",
-    "ruff",
-    "autoflake"
+    "ruff"
 ]
 
-[tool.yapf]
-based_on_style = "google"
-column_limit = 120
-
-[tool.pylint]
-max-line-length = 120
-disable = [
-    "C0114", # Missing module docstring
-    "C0115", # Missing class docstring
-    "C0116", # Missing function or method docstring
-    "W0511", # TODO
-    "W1203", # use lazy % formatting in logging functions
-]
-
-[tool.black]
+[tool.ruff]
+# The `line-length` argument is for both formatter and linter.
+# Set to 120 to match your previous Black/Pylint configuration.
 line-length = 120
+
+# Target Python version. Ruff will use this to enable/disable rules.
+# Adjust to your project's Python version (e.g., "py38", "py39", "py310", "py311")
+target-version = "py312" # Example: adjust this to your actual Python version
+
+[tool.ruff.lint] 
+# List of linter rules to enable.
+# "I" is for isort-compatible import sorting.
+# "D" is for pydocstyle (docstring style). You might need to refine 'ignore'
+# or disable specific 'D' rules if they conflict with 'docformatter' or your style.
+# See [https://docs.astral.sh/ruff/rules/](https://docs.astral.sh/ruff/rules/) for a full list and descriptions.
+select = [
+    "E",   # Error
+    "F",   # Pyflakes
+    "I",   # isort (import sorting)
+    "W",   # Warning
+    "C",   # Complexity
+    "N",   # Naming conventions
+    "D",   # pydocstyle (docstring style)
+    "UP",  # pyupgrade
+    "B",   # Bugbear
+    "A",   # flake8-builtins
+    "T",   # flake8-bandit
+    "Q",   # flake8-quotes
+    # "ANN", # flake8-annotations
+    # "ERA", # eradicate (commented out code)
+    "RUF", # Ruff specific rules
+]
+
+
+
+# Set specific rule ignores or per-file ignores if needed.
+# This replaces the Pylint 'disable' list.
+ignore = [
+    "D100", # Missing module docstring (C0114 in Pylint)
+    "D101", # Missing class docstring (C0115 in Pylint)
+    "D102", # Missing docstring in public method
+    "D103", # Missing function or method docstring (C0116 in Pylint)
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in `__init__`
+    "TD001", # TODO found (W0511 in Pylint - Ruff uses T for todo)
+    "G004", # Logging call uses f-string (W1203 in Pylint)
+    "D203", # If you prefer D211 (no blank line before class)
+    "D205", # 1 blank line required between summary line and description
+    "D212", # If you prefer D213 (summary on second line)
+    "D400", # First line should end with a period
+    "D401", # First line of docstring should be in imperative mood:
+    "D415", # First line should end with a period, question mark, or exclamation point
+    "D417", # Missing argument descriptions in the docstring
+    "T201", # `print` found
+    "UP007", # Use `X | Y` for type annotations
+    "E501", # Line too long
+    "B008", # Do not perform function call `typer.Option` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
+    "C901", # `run_metrics_full_distance_matrix_batched_parallel` is too complex (12 > 10)
+]
+
+# This tells Ruff about your project's top-level modules
+# so it can correctly group imports (e.g., your own code vs. third-party libs).
+# Make sure to add "pose_evaluation" here.
+[tool.ruff.lint.isort]
+known-first-party = ["pose_evaluation"]
+# You can add other isort-specific configurations here if you had them previously, e.g.:
+# lines-after-imports = 2
+# force-single-line = false
+
+[tool.ruff.format]
+# This section configures Ruff's integrated formatter.
+# It should produce output highly compatible with Black.
+# No specific settings are usually needed here unless you have particular preferences
+# like quote-style (e.g., `quote-style = "single"` or `"double"`).
+# docstring-code-format = true # If you want Ruff to format code examples in docstrings
+# docstring-code-line-length = "dynamic" # or an integer like 88
+
 
 [tool.setuptools]
 packages = ["pose_evaluation", "pose_evaluation.metrics"]

@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import numpy.ma as ma
@@ -23,8 +22,8 @@ from pose_evaluation.utils.pose_utils import (
 
 
 def test_load_poses_mediapipe(
-    mediapipe_poses_test_data_paths: List[Path],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data_paths: list[Path],
+    standard_mediapipe_components_dict: dict[str, list[str]],
 ):
     poses = [load_pose_file(pose_path) for pose_path in mediapipe_poses_test_data_paths]
 
@@ -51,8 +50,8 @@ def test_load_poses_mediapipe(
 
 
 def test_remove_specific_landmarks_mediapipe(
-    mediapipe_poses_test_data: List[Pose],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data: list[Pose],
+    standard_mediapipe_components_dict: dict[str, list[str]],
 ):
     for pose in mediapipe_poses_test_data:
         component_count = len(pose.header.components)
@@ -63,7 +62,7 @@ def test_remove_specific_landmarks_mediapipe(
             assert len(pose_with_component_removed.header.components) == component_count - 1
 
 
-def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
+def test_pose_copy(mediapipe_poses_test_data: list[Pose]):
     for pose in mediapipe_poses_test_data:
         copy = pose.copy()
 
@@ -72,13 +71,13 @@ def test_pose_copy(mediapipe_poses_test_data: List[Pose]):
         assert np.array_equal(copy.body.data, pose.body.data)  # the data should have the same values
 
         #
-        assert sorted([c.name for c in pose.header.components]) == sorted(
-            [c.name for c in copy.header.components]
-        ), "should have the same components"
+        assert sorted([c.name for c in pose.header.components]) == sorted([c.name for c in copy.header.components]), (
+            "should have the same components"
+        )
         assert copy.header.total_points() == pose.header.total_points(), "should have the same number of points"
 
 
-def test_pose_remove_legs(mediapipe_poses_test_data: List[Pose]):
+def test_pose_remove_legs(mediapipe_poses_test_data: list[Pose]):
     points_that_should_be_removed = [
         "LEFT_KNEE",
         "LEFT_HEEL",
@@ -124,15 +123,15 @@ def test_pose_remove_legs_openpose(fake_openpose_poses):
         pose_with_legs_removed = pose_hide_legs(pose, remove=True)
 
         for component in pose_with_legs_removed.header.components:
-            point_names = list(point for point in component.points)
+            point_names = list(component.points)
             for point_name in point_names:
                 for point_that_should_be_hidden in points_that_should_be_removed:
                     assert point_that_should_be_hidden not in point_name, f"{component.name}: {point_names}"
 
 
 def test_reduce_pose_components_to_intersection(
-    mediapipe_poses_test_data: List[Pose],
-    standard_mediapipe_components_dict: Dict[str, List[str]],
+    mediapipe_poses_test_data: list[Pose],
+    standard_mediapipe_components_dict: dict[str, list[str]],
 ):
     test_poses_with_one_reduced = [pose.copy() for pose in mediapipe_poses_test_data]
 
@@ -170,7 +169,6 @@ def test_reduce_pose_components_to_intersection(
 
 
 def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_data_mixed_shapes):
-
     # they should be sorted alphabetically by name
     assert mediapipe_poses_test_data_mixed_shapes[0].body.data.shape == (
         37,
@@ -200,7 +198,7 @@ def test_reduce_pose_components_to_intersection_mixed_pair(mediapipe_poses_test_
     assert keypoint_shapes == [543, 543, 543]
 
 
-def test_remove_world_landmarks(mediapipe_poses_test_data: List[Pose]):
+def test_remove_world_landmarks(mediapipe_poses_test_data: list[Pose]):
     for pose in mediapipe_poses_test_data:
         component_names = [c.name for c in pose.header.components]
         starting_component_count = len(pose.header.components)
@@ -214,7 +212,7 @@ def test_remove_world_landmarks(mediapipe_poses_test_data: List[Pose]):
         assert ending_component_count == starting_component_count - 1
 
 
-def test_remove_one_point_and_one_component(mediapipe_poses_test_data: List[Pose]):
+def test_remove_one_point_and_one_component(mediapipe_poses_test_data: list[Pose]):
     component_to_drop = "POSE_WORLD_LANDMARKS"
     point_to_drop = "LEFT_KNEE"
     for pose in mediapipe_poses_test_data:
@@ -251,15 +249,15 @@ def test_detect_format(fake_openpose_poses, fake_openpose_135_poses, mediapipe_p
             detect_known_pose_format(pose)
 
 
-def test_hide_low_conf(mediapipe_poses_test_data: List[Pose]):
+def test_hide_low_conf(mediapipe_poses_test_data: list[Pose]):
     copies = [pose.copy() for pose in mediapipe_poses_test_data]
-    for pose, copy in zip(mediapipe_poses_test_data, copies):
+    for pose, copy in zip(mediapipe_poses_test_data, copies, strict=False):
         pose_hide_low_conf(pose, 1.0)
 
         assert np.array_equal(pose.body.confidence, copy.body.confidence) is False
 
 
-def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
+def test_zero_pad_shorter_poses(mediapipe_poses_test_data: list[Pose]):
     copies = [pose.copy() for pose in mediapipe_poses_test_data]
 
     max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
@@ -277,7 +275,7 @@ def test_zero_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
 
 
-def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
+def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: list[Pose]):
     copies = [pose.copy() for pose in mediapipe_poses_test_data]
     max_len = max(len(pose.body.data) for pose in mediapipe_poses_test_data)
 
@@ -307,12 +305,12 @@ def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
                 assert ma.allclose(c, expected_conf), "Padding confidence should match original first frame"
 
             # Remaining frames should be the original pose data
-            assert ma.allclose(
-                padded_pose.body.data[pad_count:], original_pose.body.data
-            ), "Original frames should be unchanged after padding"
-            assert ma.allclose(
-                padded_pose.body.confidence[pad_count:], original_pose.body.confidence
-            ), "Original confidence should be unchanged after padding"
+            assert ma.allclose(padded_pose.body.data[pad_count:], original_pose.body.data), (
+                "Original frames should be unchanged after padding"
+            )
+            assert ma.allclose(padded_pose.body.confidence[pad_count:], original_pose.body.confidence), (
+                "Original confidence should be unchanged after padding"
+            )
         else:
             assert old_length == max_len
 
@@ -320,7 +318,7 @@ def test_firstframe_pad_shorter_poses(mediapipe_poses_test_data: List[Pose]):
         assert padded_pose.body.confidence.shape == padded_pose.body.data.shape[:-1]
 
 
-def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe_poses_test_data_mixed_shapes):
+def test_fill_masked_or_invalid(mediapipe_poses_test_data: list[Pose], mediapipe_poses_test_data_mixed_shapes):
     poses = mediapipe_poses_test_data
     poses.extend(mediapipe_poses_test_data_mixed_shapes)
 
@@ -336,9 +334,8 @@ def test_fill_masked_or_invalid(mediapipe_poses_test_data: List[Pose], mediapipe
 
 
 def test_youtube_points(
-    mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data: List[Pose], fake_openpose_135_poses
+    mediapipe_poses_test_data_refined: list[Pose], mediapipe_poses_test_data: list[Pose], fake_openpose_135_poses
 ):
-
     for pose in mediapipe_poses_test_data_refined:
         processed = get_youtube_asl_mediapipe_keypoints(pose)
         assert processed.body.data.shape[2] == 85
@@ -352,16 +349,9 @@ def test_youtube_points(
         assert pose.body.data.shape[2] == processed.body.data.shape[2]
 
 
-from typing import List
-
-import numpy as np
-import numpy.ma as ma
-import pytest
-
-
 @pytest.mark.parametrize("speed_multiplier", [0.0, 0.5, 1.0, 2.0, "match_fps"])
 def test_add_z_offsets_to_pose_varied_speeds(
-    speed_multiplier, mediapipe_poses_test_data_refined: List[Pose], mediapipe_poses_test_data: List[Pose]
+    speed_multiplier, mediapipe_poses_test_data_refined: list[Pose], mediapipe_poses_test_data: list[Pose]
 ):
     all_poses = mediapipe_poses_test_data_refined + mediapipe_poses_test_data
 
@@ -387,20 +377,20 @@ def test_add_z_offsets_to_pose_varied_speeds(
             updated_z = updated_data[frame_idx, :, :, 2]
 
             # Only test unmasked values
-            mask = ma.getmaskarray(original_z)
+            ma.getmaskarray(original_z)
             delta = (updated_z - original_z).compressed()
 
-            assert np.allclose(
-                delta, expected_offset
-            ), f"Speed {speed}, frame {frame_idx}: expected offset {expected_offset}, got {delta}"
+            assert np.allclose(delta, expected_offset), (
+                f"Speed {speed}, frame {frame_idx}: expected offset {expected_offset}, got {delta}"
+            )
 
         # X and Y axes should be unchanged
         for axis in [0, 1]:
-            assert np.allclose(
-                updated_data[:, :, :, axis], original_data[:, :, :, axis], equal_nan=True
-            ), f"Speed {speed}: axis {axis} (X/Y) changed unexpectedly"
+            assert np.allclose(updated_data[:, :, :, axis], original_data[:, :, :, axis], equal_nan=True), (
+                f"Speed {speed}: axis {axis} (X/Y) changed unexpectedly"
+            )
 
         # Mask should be preserved
-        assert np.array_equal(
-            ma.getmaskarray(updated_data), ma.getmaskarray(original_data)
-        ), f"Speed {speed}: mask was modified"
+        assert np.array_equal(ma.getmaskarray(updated_data), ma.getmaskarray(original_data)), (
+            f"Speed {speed}: mask was modified"
+        )

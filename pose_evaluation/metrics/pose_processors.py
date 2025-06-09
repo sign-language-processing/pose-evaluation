@@ -1,6 +1,6 @@
-from typing import Any, Callable, Iterable, List, Union
+from collections.abc import Callable, Iterable
+from typing import Any
 
-from numpy import ma
 from pose_format import Pose
 from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs, reduce_holistic
 from spoken_to_signed.gloss_to_pose.concatenate import trim_pose
@@ -17,7 +17,7 @@ from pose_evaluation.utils.pose_utils import (
     zero_pad_shorter_poses,
 )
 
-PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
+PosesTransformerFunctionType = Callable[[Iterable[Pose]], list[Pose]]
 
 
 class PoseProcessor:
@@ -26,7 +26,7 @@ class PoseProcessor:
     def __init__(self, name="PoseProcessor") -> None:
         self.name = name
 
-    def __call__(self, pose_or_poses: Union[Iterable[Pose], Pose]) -> Any:
+    def __call__(self, pose_or_poses: Iterable[Pose] | Pose) -> Any:
         if isinstance(pose_or_poses, Iterable):
             return self.process_poses(pose_or_poses)
 
@@ -41,7 +41,7 @@ class PoseProcessor:
     def process_pose(self, pose: Pose) -> Pose:
         raise NotImplementedError(f"process_pose not implemented for {self.name}")
 
-    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> list[Pose]:
         return [self.process_pose(pose) for pose in tqdm(poses, desc=f"{self.name}", disable=not progress)]
 
     def get_signature(self) -> Signature:
@@ -99,7 +99,7 @@ class ReducePosesToCommonComponentsProcessor(PoseProcessor):
     def process_pose(self, pose: Pose) -> Pose:
         return self.process_poses([pose])[0]
 
-    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> list[Pose]:
         return reduce_poses_to_intersection(poses, progress=progress)
 
 
@@ -110,7 +110,7 @@ class ZeroPadShorterPosesProcessor(PoseProcessor):
     def process_pose(self, pose: Pose) -> Pose:
         return pose
 
-    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> list[Pose]:
         return zero_pad_shorter_poses(poses)
 
 
@@ -121,7 +121,7 @@ class FirstFramePadShorterPosesProcessor(PoseProcessor):
     def process_pose(self, pose: Pose) -> Pose:
         return pose
 
-    def process_poses(self, poses: Iterable[Pose], progress=False) -> List[Pose]:
+    def process_poses(self, poses: Iterable[Pose], progress=False) -> list[Pose]:
         return first_frame_pad_shorter_poses(poses)
 
 
@@ -168,7 +168,6 @@ class TrimMeaninglessFramesPoseProcessor(PoseProcessor):
 
     def process_pose(self, pose):
         if detect_known_pose_format(pose) == "holistic":
-
             return trim_pose(pose.copy(), start=self.start, end=self.end)
         # not supported
         return pose
@@ -195,7 +194,6 @@ class InterpolateAllToSetFPSPoseProcessor(PoseProcessor):
 
 
 class AddTOffsetsToZPoseProcessor(PoseProcessor):
-
     def __init__(self, name="add_z_offsets", speed=1.0) -> None:
         super().__init__(name)
         self.speed = speed
@@ -213,7 +211,7 @@ def get_standard_pose_processors(
     reduce_holistic_to_face_and_upper_body=False,
     zero_fill_masked=False,
     zero_pad_shorter=True,
-) -> List[PoseProcessor]:
+) -> list[PoseProcessor]:
     pose_processors = []
 
     # remove leading/trailing frames with no hands in frame.

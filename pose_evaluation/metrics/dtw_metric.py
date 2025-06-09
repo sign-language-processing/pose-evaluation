@@ -91,7 +91,8 @@ class DTWAggregatedScipyDistanceMeasure(DTWAggregatedDistanceMeasure):
 
 
 class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
-    """Optimized according to https://github.com/slaypni/fastdtw/blob/master/fastdtw/_fastdtw.pyx#L71-L76
+    """
+    Optimized according to https://github.com/slaypni/fastdtw/blob/master/fastdtw/_fastdtw.pyx#L71-L76
     This function runs fastest if the following conditions are satisfied:
             1) x and y are either 1 or 2d numpy arrays whose dtype is a
                subtype of np.float
@@ -141,7 +142,6 @@ class DTWOptimizedDistanceMeasure(DTWAggregatedDistanceMeasure):
 
 # https://forecastegy.com/posts/dynamic-time-warping-dtw-libraries-python-examples/
 class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
-
     def __init__(  # pylint: disable=too-many-arguments, too-many-positional-arguments
         self,
         name="dtaiDTWAggregatedDistanceMeasure",
@@ -189,8 +189,12 @@ class DTWDTAIImplementationDistanceMeasure(AggregatedDistanceMeasure):
         distance = self._aggregate(trajectory_distances)
         if distance is None or np.isnan(distance) or np.isinf(distance):
             warnings.warn(
-                f"Invalid distance calculated, setting to default value {self.default_distance}, hyp shape: {hyp_data.shape} with {np.isnan(hyp_data).sum()} nans and {ma.count_masked(hyp_data)} masked, ref shape: {ref_data.shape} with {np.isnan(ref_data).sum()} nans and {ma.count_masked(ref_data)} masked",
+                f"Invalid distance calculated, setting to default value {self.default_distance},"
+                f" hyp shape: {hyp_data.shape} with {np.isnan(hyp_data).sum()} nans and "
+                f"{ma.count_masked(hyp_data)} masked, ref shape: {ref_data.shape} with "
+                f"{np.isnan(ref_data).sum()} nans and {ma.count_masked(ref_data)} masked",
                 category=RuntimeWarning,
+                stacklevel=2,
             )
             distance = self.default_distance
 

@@ -3,11 +3,8 @@ import argparse
 import random
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Optional, Union
 
-import pandas as pd
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from tqdm import tqdm
@@ -28,26 +25,27 @@ def parse_dataset_split(folder_name: str):
 
 
 def merge_parquet_files(
-    input_paths: Union[str, Path, List[Union[str, Path]]],
-    output_dir: Union[str, Path],
-    partition_columns: Optional[List[str]] = None,
+    input_paths: str | Path | list[str | Path],
+    output_dir: str | Path,
+    partition_columns: list[str] | None = None,
     parse_parent_for_datasets_and_splits: bool = True,
 ) -> None:
     """
-    Merge one or more Parquet files into a new dataset directory,
-    optionally partitioned by given column names.
+    Merge one or more Parquet files into a new dataset directory, optionally
+    partitioned by given column names.
 
     Args:
         input_paths (str | Path | list): Parquet file path(s) or directory.
         output_dir (str | Path): Output directory for merged dataset.
         partition_columns (list, optional): Column names to partition by.
+
     """
-    print(f"** MERGE TO PYARROW DATASET **")
+    print("** MERGE TO PYARROW DATASET **")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Normalize input paths
-    if isinstance(input_paths, (str, Path)):
+    if isinstance(input_paths, str | Path):
         input_path = Path(input_paths)
         if input_path.is_dir():
             input_paths = list(input_path.rglob("*.parquet"))
@@ -70,7 +68,6 @@ def merge_parquet_files(
 
     # Iterate over grouped splits and write each
     for (dataset, split), files in grouped_paths.items():
-
         print(f"Preparing dataset object for dataset={dataset}, split={split}, ({len(files)} files...)")
         dataset_obj = ds.dataset(files, format="parquet")
 
@@ -106,24 +103,25 @@ def merge_parquet_files(
 
 
 def count_rows(parquets: list[Path]):
-    print(f"** COUNTING ROWS **")
+    print("** COUNTING ROWS **")
     row_count = 0
     for i, p in enumerate(tqdm(parquets, desc="loading files")):
         row_count += pq.ParquetFile(p).metadata.num_rows
         if (i + 1) % 1000 == 0 and i > 0:
-            print(f"Read {i+1:,} files, counted {row_count:,} rows so far, or {row_count/(i+1):,} on average")
+            print(f"Read {i + 1:,} files, counted {row_count:,} rows so far, or {row_count / (i + 1):,} on average")
 
-    print(f"Total row count: {row_count:,}, or on average {row_count/len(parquets):,} across {len(parquets)} files")
+    print(f"Total row count: {row_count:,}, or on average {row_count / len(parquets):,} across {len(parquets)} files")
 
 
 def load_and_merge(
-    parquets: List[Path],
+    parquets: list[Path],
     dedupe: bool = True,
-    output_path: Optional[Path] = None,
+    output_path: Path | None = None,
 ) -> pa.Table:
     """
-    Load and merge multiple Parquet files into a single in-memory pyarrow Table.
-    Optionally deduplicate the rows and save the result to a Parquet file.
+    Load and merge multiple Parquet files into a single in-memory pyarrow
+    Table. Optionally deduplicate the rows and save the result to a Parquet
+    file.
 
     Args:
         parquets (List[Path]): List of Parquet file paths.
@@ -132,13 +130,14 @@ def load_and_merge(
 
     Returns:
         pyarrow.Table: Merged (and optionally deduplicated) in-memory table.
+
     """
     # NOTE: dies if you do 6k parquet files...
-    print(f"** LOAD AND MERGE **")
+    print("** LOAD AND MERGE **")
     print(f"[INFO] Loading {len(parquets)} parquet file(s)...")
     tables = []
 
-    for i, path in tqdm(enumerate(parquets), desc="Reading parquet files", total=len(parquets)):
+    for _, path in tqdm(enumerate(parquets), desc="Reading parquet files", total=len(parquets)):
         table = pq.read_table(path)
         # cast to float for consistency
         if ScoreDFCol.SCORE in table.column_names:
@@ -179,16 +178,20 @@ def load_and_merge(
     return merged_table
 
 
-def get_unique_values(input_paths: List[Union[str, Path]], column_names: Optional[List[str]] = None) -> dict:
+def get_unique_values(input_paths: list[str | Path], column_names: list[str] | None = None) -> dict:
     """
-    Returns a dictionary of unique values for each specified column across the given Parquet files.
+    Returns a dictionary of unique values for each specified column across
+    the given Parquet files.
 
-    Parameters:
+    Parameters
+    ----------
         input_paths (List[Union[str, Path]]): List of paths to Parquet files.
         column_names (List[str]): List of column names to extract unique values from.
 
-    Returns:
+    Returns
+    -------
         dict: A dictionary where each key is a column name and the value is a set of unique values.
+
     """
     unique_values = defaultdict(set)
     dataset = ds.dataset([str(p) for p in input_paths], format="parquet")
@@ -263,7 +266,6 @@ def head(input_paths, n=100, column_names=None):
 
 
 def main():
-
     default_score_columns = ",".join(
         [value for name, value in vars(ScoreDFCol).items() if not name.startswith("__") and not callable(value)]
     )
@@ -333,7 +335,6 @@ def main():
         print(f"Error: File not found at {filepath}")
         return
 
-    row_count = 0
     parquets = []
     print(f"Loading Path: {filepath} with name {filepath.name}")
     if filepath.name.endswith(".parquet"):

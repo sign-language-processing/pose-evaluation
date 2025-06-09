@@ -5,7 +5,7 @@ import time
 from collections import defaultdict
 from itertools import product
 from pathlib import Path
-from typing import Annotated, List, Optional
+from typing import Annotated
 
 import numpy as np
 import pandas as pd
@@ -22,7 +22,7 @@ from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceM
 app = typer.Typer()
 
 
-def combine_dataset_dfs(dataset_df_files: List[Path], splits: List[str], filter_en_vocab: bool = False):
+def combine_dataset_dfs(dataset_df_files: list[Path], splits: list[str], filter_en_vocab: bool = False):
     dfs = []
     for file_path in dataset_df_files:
         if file_path.exists():
@@ -65,13 +65,15 @@ def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH, progress=False):
 
 def load_embedding(file_path: Path) -> np.ndarray:
     """
-    Load a SignCLIP embedding from a .npy file, ensuring it has the correct shape.
+    Load a SignCLIP embedding from a .npy file, ensuring it has the correct
+    shape.
 
     Args:
         file_path (Path): Path to the .npy file.
 
     Returns:
         np.ndarray: The embedding with shape (768,).
+
     """
     embedding = np.load(file_path)
     if embedding.ndim == 2 and embedding.shape[0] == 1:
@@ -90,15 +92,15 @@ def load_embedding_for_pose(df, model, pose_file_path):
 def run_metrics_in_out_trials(
     df: pd.DataFrame,
     out_path: Path,
-    metrics: List["DistanceMetric"],
-    gloss_count: Optional[int] = 5,
+    metrics: list["DistanceMetric"],
+    gloss_count: int | None = 5,
     out_gloss_multiplier=4,
     shuffle_metrics=True,
-    metric_count: Optional[int] = 10,
-    additional_glosses: Optional[List[str]] = None,
+    metric_count: int | None = 10,
+    additional_glosses: list[str] | None = None,
     shuffle_query_glosses=False,
-    skip_glosses_with_more_than_this_many: Optional[int] = None,
-    gloss_dfs_folder: Optional[Path] = None,
+    skip_glosses_with_more_than_this_many: int | None = None,
+    gloss_dfs_folder: Path | None = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
     typer.echo(f"The number of possible unique glosses to pick from is {len(query_gloss_vocabulary)}")
@@ -129,7 +131,7 @@ def run_metrics_in_out_trials(
 
     if skip_glosses_with_more_than_this_many is not None:
         filtered_gloss_vocabulary = []
-        print(f"GLOSS,SAMPLES")
+        print("GLOSS,SAMPLES")
         for gloss in query_gloss_vocabulary:
             in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
             # TODO: this crashes if it's a new gloss without an in_gloss CSV. BUT there's some metric_inputs_df filtering with embeddings to think about later... a new function perhaps?
@@ -150,13 +152,12 @@ def run_metrics_in_out_trials(
 
     # filter glosses that will cause issues #TODO: A better solution upstream, and maybe don't use glosses in filenames
     # Also, the load_parquets script can handle the weird filenames no problem, and convert to pyarrow.
-    removed_glosses = []
     for punc in ["/", " ", "\\", ".", "_"]:
         query_gloss_vocabulary = [g for g in query_gloss_vocabulary if punc not in g]
         print(f"Filtered out glosses with {punc}: there are now {len(query_gloss_vocabulary)}")
 
     typer.echo(f"{query_gloss_vocabulary}")
-    # All gloss–metric combinations
+    # All gloss-metric combinations
     gloss_metric_combos = list(product(query_gloss_vocabulary, metrics))
 
     if shuffle_metrics and shuffle_query_glosses:
@@ -170,7 +171,7 @@ def run_metrics_in_out_trials(
     scores_path.mkdir(exist_ok=True, parents=True)
 
     for g_index, (gloss, metric) in enumerate(
-        tqdm(gloss_metric_combos, desc="Running evaluations for gloss–metric combinations")
+        tqdm(gloss_metric_combos, desc="Running evaluations for gloss-metric combinations")
     ):
         if isinstance(metric, EmbeddingDistanceMetric):
             typer.echo(f"{metric} is an Embedding Metric")
@@ -253,7 +254,7 @@ def run_metrics_in_out_trials(
                     try:
                         hyp = load_embedding_for_pose(metric_inputs_df, model=metric.model, pose_file_path=hyp_path)
                         ref = load_embedding_for_pose(metric_inputs_df, model=metric.model, pose_file_path=ref_path)
-                    except ValueError as e:
+                    except ValueError:
                         # typer.echo(f"ValueError on hyp_path {hyp_path}, ref_path {ref_path}: {e}")
                         continue
 
@@ -337,7 +338,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
     max_workers: int = 4,
     merge=False,
     intersplit: bool = True,
-    max_hyp: Optional[int] = None,
+    max_hyp: int | None = None,
 ):
     typer.echo(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
@@ -387,11 +388,11 @@ def run_metrics_full_distance_matrix_batched_parallel(
         typer.echo(f"Metric #{i + 1}/{len(metrics)}: {metric.name}")
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
-        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size*batch_size} distances per.")
+        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size * batch_size} distances per.")
         typer.echo(f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})")
         if max_hyp is not None:
             typer.echo(
-                f"With max hyp {max_hyp}: like, {(max_hyp+batch_size)//batch_size}x{batches_ref} = {(max_hyp//batch_size)*batches_ref}?"
+                f"With max hyp {max_hyp}: like, {(max_hyp + batch_size) // batch_size}x{batches_ref} = {(max_hyp // batch_size) * batches_ref}?"
             )
 
         metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
@@ -426,7 +427,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
         typer.echo(f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})")
         for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="Waiting for workers"):
             batch_filename = futures.pop(future)
-            result_path = future.result()
+            future.result()
             # typer.echo(f"💾 Worker saved: {Path(result_path).name}")
 
         if merge:
@@ -444,14 +445,9 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
 def get_filtered_metrics(
     metrics,
-    top10=False,
-    top10_nohands_nointerp=False,
-    top10_nohands_nodtw_nointerp=False,
-    top50_nointerp=False,
-    get_top_10_nointerp_default10_fillmasked10=False,
     return4=False,
-    include_keywords: List[str] | None = None,
-    exclude_keywords: List[str] | None = None,
+    include_keywords: list[str] | None = None,
+    exclude_keywords: list[str] | None = None,
     specific_metrics: str | list[str] | None = None,
     csv_path: Path | None = None,
 ):
@@ -462,196 +458,14 @@ def get_filtered_metrics(
     print(f"Include: {include_keywords}")
     print(f"Exclude: {exclude_keywords}")
 
-    # top 10
-    top_10_metrics_by_map = [
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        # "Return4Metric",
-    ]
-
-    # top_10_by_map excluding hands,interp15,interp120
-    top_10_by_map_excluding_hands_interp = [
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-    ]
-
-    # top 10 excluding hands, dtw, interp15,interp120
-    top_10_by_map_excluding_hands_interp_and_dtw = [
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked1.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_youtubeaslkeypoints_defaultdist0.0_nointerp_padwithfirstframe_fillmasked0.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_removelegsandworld_defaultdist1.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
-        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
-        "untrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked0.0_AggregatedPowerDistanceMetric",
-    ]
-
-    # top 50 by MAP
-    top_50_by_map = [
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist0.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_interp15_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_interp15_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist0.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_interp120_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_interp15_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_interp120_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-    ]
-
-    # top 50 of 677 metrics excluding interp15,interp120
-    top_50_by_map_excluding_interp = [
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_youtubeaslkeypoints_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_zeropad_fillmasked1.0_AggregatedPowerDistanceMetric",
-        "untrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_hands_defaultdist0.0_nointerp_dtw_fillmasked1.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist1.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked0.0_dtaiDTWAggregatedDistanceMetricFast",
-    ]
-
-    # top 10 from round 1 and 2 by MAP, with the same default and fillmasked as the top metric and without interp
-    # aka excluding defaultdist1.0,defaultdist0.0,fillmasked1.0,fillmasked0.0,interp120,interp15,
-    top_10_nointerp_default10_fillmasked10 = [
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_hands_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_unnormalized_reduceholistic_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_hands_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
-        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_zeropad_fillmasked10.0_AggregatedPowerDistanceMetric",
-        "untrimmed_unnormalized_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "untrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-        "startendtrimmed_normalizedbyshoulders_removelegsandworld_defaultdist10.0_nointerp_dtw_fillmasked10.0_dtaiDTWAggregatedDistanceMetricFast",
-    ]
-
     # Get a set of target names for efficient lookup
     metrics_to_use = []
     if specific_metrics is not None:
         typer.echo(f"Adding specific metric: {specific_metrics}")
         metrics_to_use.extend(specific_metrics)
 
-    if top10:
-        metrics_to_use.extend(top_10_metrics_by_map)
-
-    if top10_nohands_nointerp:
-        metrics_to_use.extend(top_10_by_map_excluding_hands_interp)
-    if top10_nohands_nodtw_nointerp:
-        metrics_to_use.extend(top_10_by_map_excluding_hands_interp_and_dtw)
-
-    if top50_nointerp:
-        metrics_to_use.extend(top_50_by_map_excluding_interp)
-
-    if get_top_10_nointerp_default10_fillmasked10:
-        typer.echo(f"Adding {len(top_10_nointerp_default10_fillmasked10)} from top_10_nointerp_default10_fillmasked10")
-        metrics_to_use.extend(top_10_nointerp_default10_fillmasked10)
-
     if return4:
-        typer.echo(f"Adding Return4 Metric")
+        typer.echo("Adding Return4 Metric")
         metrics_to_use.append("Return4Metric_defaultdist4.0")
 
     if csv_path is not None:
@@ -693,18 +507,18 @@ def get_filtered_metrics(
 @app.command()
 def main(
     dataset_df_files: Annotated[
-        List[Path], typer.Argument(help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID")
+        list[Path], typer.Argument(help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID")
     ],
-    splits: Optional[str] = typer.Option(
+    splits: str | None = typer.Option(
         None, help="Comma-separated list of splits to process (e.g., 'train,val,test'), default is 'test' only"
     ),
-    gloss_count: Optional[int] = typer.Option(83, help="Number of glosses to select"),
-    additional_glosses: Optional[str] = typer.Option(
+    gloss_count: int | None = typer.Option(83, help="Number of glosses to select"),
+    additional_glosses: str | None = typer.Option(
         None,
         help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
     ),
-    out_gloss_multiplier: Optional[int] = typer.Option(4, help="Number of out-of-gloss items to sample"),
-    metric_count: Optional[int] = typer.Option(None, help="Number of metrics to sample"),
+    out_gloss_multiplier: int | None = typer.Option(4, help="Number of out-of-gloss items to sample"),
+    metric_count: int | None = typer.Option(None, help="Number of metrics to sample"),
     filter_en_vocab: Annotated[
         bool,
         typer.Option(
@@ -714,40 +528,36 @@ def main(
     out: Path = typer.Option(
         "metric_results_full_matrix", exists=False, file_okay=False, help="Folder to save the results"
     ),
-    full: Optional[bool] = typer.Option(
-        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
-    ),
-    full_intersplit: Optional[bool] = typer.Option(
+    full: bool | None = typer.Option(False, help="Whether to run FULL distance matrix with the specified dataset dfs"),
+    full_intersplit: bool | None = typer.Option(
         True, help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits"
     ),
-    max_workers: Optional[int] = typer.Option(4, help="How many workers to use for the full distance matrix?"),
-    full_matrix_max_hyp: Optional[int] = typer.Option(
+    max_workers: int | None = typer.Option(4, help="How many workers to use for the full distance matrix?"),
+    full_matrix_max_hyp: int | None = typer.Option(
         None, help="Don't calculate rows of the full distance matrix past batches starting with this index"
     ),
-    batch_size: Optional[int] = typer.Option(
+    batch_size: int | None = typer.Option(
         100, help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared"
     ),
     filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
     embedding_metrics: bool = typer.Option(False, help="whether to add in embedding metric"),
-    specific_metrics: List[str] = typer.Option(
+    specific_metrics: list[str] = typer.Option(
         None, help="If specified, will add these metrics to the list of filtered metrics"
     ),
     specific_metrics_csv: Path = typer.Option(
         None, help="If specified, will read the metrics from this CSV and add those"
     ),
-    include_keywords: List[str] = typer.Option(
+    include_keywords: list[str] = typer.Option(
         None, help="Will filter metrics to only those that include any of these"
     ),
-    exclude_keywords: List[str] = typer.Option(
+    exclude_keywords: list[str] = typer.Option(
         None, help="Will filter metrics to only those that include none of these"
     ),
     skip_glosses_with_more_than_this_many: int = typer.Option(
         None, help="skip long glosses with more than this many items/samples"
     ),
 ):
-    """
-    Accept a list of dataset DataFrame file paths.
-    """
+    """Accept a list of dataset DataFrame file paths."""
     if splits is None:
         splits = ["test"]
     else:
@@ -784,9 +594,7 @@ def main(
             exclude_keywords=exclude_keywords,
         )
     else:
-
         if filter_metrics:
-
             metrics = get_filtered_metrics(
                 metrics,
                 top10=False,

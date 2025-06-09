@@ -2,7 +2,6 @@ import os
 import re
 from itertools import combinations
 from pathlib import Path
-from typing import List, Tuple
 
 import pandas as pd
 import plotly.express as px
@@ -10,6 +9,12 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 import torch
+
+from pose_evaluation.evaluation.interpret_name import (
+    descriptive_name,
+    interpret_name,
+    shorten_metric_name,
+)
 
 # pio.templates.default = "plotly"
 
@@ -19,7 +24,6 @@ torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import descriptive_name, interpret_name, shorten_metric_name
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"
@@ -63,32 +67,6 @@ def plot_pareto_frontier(df: pd.DataFrame):
 
     frontier = get_pareto_frontier(plot_df, col1, col2, maximize_col1, maximize_col2)
 
-    if st.checkbox("Show data table for Pareto Frontier?"):
-        # Drop overlapping columns (except "METRIC") from df before merge
-        cols_to_drop = [col for col in df.columns if col in frontier.columns and col != "METRIC"]
-
-        df_trimmed = df.drop(columns=cols_to_drop)
-
-        # Merge without causing _x/_y suffixes
-        frontier_download = frontier.merge(df_trimmed, on="METRIC", how="left")
-
-        first_cols = [DESCRIPTIVE_NAME_COL, col1, col2]
-        rest_cols = [c for c in frontier_download.columns if c not in first_cols]
-        frontier_download = frontier_download[first_cols + rest_cols]
-        cols_to_drop = {"RANK", "data_labels", "_metric_lower", "highlight"}
-        frontier_download = frontier_download[[col for col in frontier_download.columns if col not in cols_to_drop]]
-
-        st.dataframe(frontier_download)
-
-        # Create and offer CSV for download
-        frontier_csv_data = frontier_download.to_csv(index=False)
-        st.download_button(
-            label="Download Pareto Frontier Data Table CSV",
-            data=frontier_csv_data,
-            file_name=f"pareto_frontier_{len(frontier)}of{len(df)}_metrics.csv",
-            mime="text/csv",
-        )
-
     fig = go.Figure()
 
     # Plot all points (grouped by highlight if available)
@@ -100,7 +78,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
                     y=group[col2],
                     mode="markers",
                     name=label,
-                    marker=dict(size=6, opacity=0.7),
+                    marker={"size": 6, "opacity": 0.7},
                     customdata=(
                         group[
                             [
@@ -123,7 +101,7 @@ def plot_pareto_frontier(df: pd.DataFrame):
                 y=plot_df[col2],
                 mode="markers",
                 name="All Points",
-                marker=dict(size=6, opacity=0.5),
+                marker={"size": 6, "opacity": 0.5},
                 customdata=plot_df[[DESCRIPTIVE_NAME_COL]],
                 hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
             )
@@ -136,15 +114,15 @@ def plot_pareto_frontier(df: pd.DataFrame):
             y=frontier[col2],
             mode="lines+markers",
             name="Pareto Frontier",
-            line=dict(color="red", width=1),
-            marker=dict(
-                size=12,
-                color="rgba(0,0,0,0)",  # Transparent fill
-                line=dict(
-                    width=1,
+            line={"color": "red", "width": 1},
+            marker={
+                "size": 12,
+                "color": "rgba(0,0,0,0)",  # Transparent fill
+                "line": {
+                    "width": 1,
                     # color='blue'  # Border color
-                ),
-            ),
+                },
+            },
             customdata=(
                 frontier[[DESCRIPTIVE_NAME_COL, METRIC_COL]] if METRIC_COL in frontier else frontier[[SHORT_COL]]
             ),
@@ -200,7 +178,7 @@ def get_pareto_frontier(
     return df.loc[frontier_df.index]
 
 
-def find_single_token_diff_pairs(df: pd.DataFrame) -> List[Tuple[str, str, int]]:
+def find_single_token_diff_pairs(df: pd.DataFrame) -> list[tuple[str, str, int]]:
     results = []
     metric_tokens = df["METRIC"].apply(lambda x: x.lower().split("_"))
 
@@ -208,7 +186,7 @@ def find_single_token_diff_pairs(df: pd.DataFrame) -> List[Tuple[str, str, int]]
         if len(tokens1) != len(tokens2):
             continue  # Can't compare if lengths differ
 
-        diffs = [i for i, (a, b) in enumerate(zip(tokens1, tokens2)) if a != b]
+        diffs = [i for i, (a, b) in enumerate(zip(tokens1, tokens2, strict=False)) if a != b]
 
         if len(diffs) == 1:
             idx = diffs[0]
@@ -217,61 +195,25 @@ def find_single_token_diff_pairs(df: pd.DataFrame) -> List[Tuple[str, str, int]]
     return results
 
 
-def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", mode="auto", verbose=False):
-    if mode not in {"auto", "positional", "presence_absence"}:
-        raise ValueError(f"Invalid mode: {mode}. Must be 'auto', 'positional', or 'presence_absence'.")
+def find_keyword_difference_pairs(df, keywords, metric_col="METRIC", verbose=True):
+    """
+    df: a pandas DataFrame containing metric strings
+    keywords: list of keywords to identify differing positions
+    metric_col: the name of the column in df containing metric strings
+    verbose: whether to print debug info
+    """
+    if metric_col not in df.columns:
+        raise ValueError(f"Column '{metric_col}' not found in DataFrame.")
 
-    if mode in ("presence_absence", "auto"):
-        results = find_optional_keyword_differences(df, keywords, metric_col, verbose)
-        if results or mode == "presence_absence":
-            return results
-
-    # Fallback or explicit request
-    return find_positional_keyword_differences(df, keywords, metric_col, verbose)
-
-
-def find_optional_keyword_differences(df, keywords, metric_col="METRIC", verbose=False):
-    metrics = df[metric_col].tolist()
-    keywords = [kw.lower() for kw in keywords]
-    results = []
-
-    processed = []
-    for m in metrics:
-        tokens = m.split("_")
-        lowered = [t.lower() for t in tokens]
-        keyword_tokens = [t for t in lowered if any(kw in t for kw in keywords)]
-        stripped_tokens = tuple(t for t in lowered if all(kw not in t for kw in keywords))
-        processed.append(
-            {
-                "original": m,
-                "tokens": tokens,
-                "lowered": lowered,
-                "keyword_tokens": keyword_tokens,
-                "stripped": stripped_tokens,
-            }
-        )
-
-    for i, p1 in enumerate(processed):
-        for j, p2 in enumerate(processed):
-            if i == j:
-                continue
-            if p1["keyword_tokens"] and not p2["keyword_tokens"] and p1["stripped"] == p2["stripped"]:
-                if verbose:
-                    print(f"[presence_absence] Match: {p1['original']} ↔ {p2['original']}")
-                results.append((p1["original"], p2["original"]))
-    return results
-
-
-def find_positional_keyword_differences(df, keywords, metric_col="METRIC", verbose=False):
     metrics = df[metric_col].tolist()
     keywords = [kw.lower() for kw in keywords]
     results = []
 
     split_metrics = [(m, m.lower().split("_")) for m in metrics]
 
-    for i, (m1, m1_parts) in enumerate(split_metrics):
+    for i, (_m1, m1_parts) in enumerate(split_metrics):
         if verbose:
-            print(f"\n[Positional] Base metric[{i}]: {m1}")
+            print(f"\nExamining base metric[{i}]: {metrics[i]}")
 
         kw_indices = []
         for kw in keywords:
@@ -280,10 +222,15 @@ def find_positional_keyword_differences(df, keywords, metric_col="METRIC", verbo
                     kw_indices.append(idx)
                     break
 
+        if verbose:
+            print(f"  Found keyword indices: {kw_indices}")
+
         if len(kw_indices) != len(keywords):
+            if verbose:
+                print("  Skipping — not all keywords found in this metric.")
             continue
 
-        for j, (m2, m2_parts) in enumerate(split_metrics):
+        for j, (_m2, m2_parts) in enumerate(split_metrics):
             if i == j or len(m1_parts) != len(m2_parts):
                 continue
 
@@ -291,16 +238,22 @@ def find_positional_keyword_differences(df, keywords, metric_col="METRIC", verbo
             for idx in range(len(m1_parts)):
                 if idx in kw_indices:
                     if m1_parts[idx] == m2_parts[idx]:
+                        if verbose:
+                            print(f"    At index {idx}, expected difference but got match: {m1_parts[idx]}")
                         all_match = False
                         break
                 else:
                     if m1_parts[idx] != m2_parts[idx]:
+                        if verbose:
+                            print(
+                                f"    At index {idx}, expected match but got diff: {m1_parts[idx]} vs {m2_parts[idx]}"
+                            )
                         all_match = False
                         break
 
             if all_match:
                 if verbose:
-                    print(f"  [positional] Match: {metrics[i]} ↔ {metrics[j]}")
+                    print(f"  --> Match found: {metrics[i]} vs {metrics[j]}")
                 results.append((metrics[i], metrics[j]))
 
     return results
@@ -311,7 +264,6 @@ def prettify_axis_label(label: str) -> str:
 
 
 def apply_minimal_layout(fig: go.Figure, size: int = 600) -> None:
-
     # fig.update_layout(
     #     title=None,
     #     xaxis=dict(visible=False),
@@ -342,37 +294,37 @@ def apply_minimal_layout(fig: go.Figure, size: int = 600) -> None:
 
     fig.update_layout(
         showlegend=True,
-        legend=dict(
-            title=None,
-            orientation="h",
-            yanchor="bottom",
-            y=-0.25,
-            xanchor="center",
-            x=0.5,
-            bgcolor="rgba(255, 255, 255, 0.8)",
-            bordercolor="black",
-            borderwidth=1,
-            font=dict(size=40, color="black"),
-        ),
-        xaxis=dict(
-            visible=True,  # set this True if you had it off earlier
-            title=dict(
+        legend={
+            "title": None,
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": -0.25,
+            "xanchor": "center",
+            "x": 0.5,
+            "bgcolor": "rgba(255, 255, 255, 0.8)",
+            "bordercolor": "black",
+            "borderwidth": 1,
+            "font": {"size": 40, "color": "black"},
+        },
+        xaxis={
+            "visible": True,  # set this True if you had it off earlier
+            "title": {
                 # text="New X Label",
-                font=dict(size=18)
-            ),  # your desired label
-            tickfont=dict(size=14),  # optional: tick label font size
-        ),
-        yaxis=dict(
-            visible=True,  # set this True if you had it off earlier
-            title=dict(
+                "font": {"size": 18}
+            },  # your desired label
+            "tickfont": {"size": 14},
+        },
+        yaxis={
+            "visible": True,  # set this True if you had it off earlier
+            "title": {
                 # text="New X Label",
-                font=dict(size=18)
-            ),  # your desired label
-            tickfont=dict(size=14),  # optional: tick label font size
-        ),
+                "font": {"size": 18}
+            },  # your desired label
+            "tickfont": {"size": 14},
+        },
         paper_bgcolor="white",
         plot_bgcolor="white",
-        margin=dict(l=0, r=0, t=0, b=40),  # leave space for legend if it's below
+        margin={"l": 0, "r": 0, "t": 0, "b": 40},
         template="plotly_white",
         width=size,
         height=size,
@@ -479,7 +431,6 @@ csv_paths_default = [
     # /opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_19_score_analysis_48_and_2_and_6embedding_metrics_169_glosses/stats_by_metric.csv",
     "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/5_21_score_analysis_1206metrics_169glosses/stats_by_metric.csv",
-    "/opt/home/cleong/projects/pose-evaluation/metric_results_round_4_pruned_to_match_embeddings/2025-06-05_2887_metrics_169_glosses_comparable_score_analysis/stats_by_metric.csv",
 ]
 csv_paths_input = st.text_input(
     "Enter paths to your CSV files (comma-separated)",
@@ -487,7 +438,7 @@ csv_paths_input = st.text_input(
 )
 
 csv_path_options = [p.strip() for p in csv_paths_input.split(",")]
-csv_paths = st.multiselect(f"Which of these CSVs to load?", options=csv_path_options, default=csv_path_options)
+csv_paths = st.multiselect("Which of these CSVs to load?", options=csv_path_options, default=csv_path_options)
 
 if csv_paths_input:
     try:
@@ -716,7 +667,7 @@ if csv_paths_input:
         category_orders={SHORT_COL: df[SHORT_COL].tolist()},
     )
     if legend_title:
-        fig.update_layout(legend=dict(title=legend_title))
+        fig.update_layout(legend={"title": legend_title})
 
     if show_data_labels:
         fig.update_traces(textposition="auto", textfont_size=12)
@@ -742,7 +693,7 @@ if csv_paths_input:
         st.download_button(
             label="Download Full Data Table CSV",
             data=df_csv_data,
-            file_name=f"combined_metric_stats.csv",
+            file_name="combined_metric_stats.csv",
             mime="text/csv",
         )
         markdown_output = ""
@@ -805,7 +756,7 @@ if csv_paths_input:
                 # f"\n% {interpret_name(metric)}",
                 f"\n% {descriptive_name(metric)}",
                 f"\n% {metric} &\t{metric_row['mean_average_precision']:.2f} &\t{metric_row['precision@10']:.2f}\t\\\\",
-                f"\n{descriptive_name(metric).split()[0]} & {dd} & {fm} & {trim} & {norm} & {seq_align} & {kp} &\t{metric_row['mean_average_precision']*100:.0f}\\% &\t{metric_row['precision@10']*100:.0f}\\%\t\\\\",
+                f"\n{descriptive_name(metric).split()[0]} & {dd} & {fm} & {trim} & {norm} & {seq_align} & {kp} &\t{metric_row['mean_average_precision'] * 100:.0f}\\% &\t{metric_row['precision@10'] * 100:.0f}\\%\t\\\\",
             ]
 
             for mdl in markdown_lines:
@@ -886,89 +837,86 @@ if csv_paths_input:
         # effect_keywords = [effect_keyword]
 
     summary_data = []
-    if st.checkbox(f"Show Keyword Effects for {effect_keywords}?"):
-        for effect_keyword in effect_keywords:
-            kw = effect_keyword.strip().lower()
-            df["_metric_lower"] = df[METRIC_COL].str.lower()
+    for effect_keyword in effect_keywords:
+        kw = effect_keyword.strip().lower()
+        df["_metric_lower"] = df[METRIC_COL].str.lower()
 
-            has_kw = df[df["_metric_lower"].str.contains(kw)]
-            no_kw = df[~df["_metric_lower"].str.contains(kw)]
+        has_kw = df[df["_metric_lower"].str.contains(kw)]
+        no_kw = df[~df["_metric_lower"].str.contains(kw)]
 
-            if len(has_kw) == 0:
-                st.warning(f"No metrics contain keyword '{kw}'")
-            elif len(no_kw) == 0:
-                st.warning(f"All metrics contain keyword '{kw}'")
-            else:
-                avg_with = has_kw[sort_col].mean()
-                max_with = has_kw[sort_col].max()
-                min_with = has_kw[sort_col].min()
-                avg_rank = has_kw["RANK"].mean()
-                avg_without = no_kw[sort_col].mean()
-                max_without = no_kw[sort_col].max()
-                min_without = no_kw[sort_col].min()
-                delta = avg_with - avg_without
+        if len(has_kw) == 0:
+            st.warning(f"No metrics contain keyword '{kw}'")
+        elif len(no_kw) == 0:
+            st.warning(f"All metrics contain keyword '{kw}'")
+        else:
+            avg_with = has_kw[sort_col].mean()
+            max_with = has_kw[sort_col].max()
+            min_with = has_kw[sort_col].min()
+            avg_rank = has_kw["RANK"].mean()
+            avg_without = no_kw[sort_col].mean()
+            max_without = no_kw[sort_col].max()
+            min_without = no_kw[sort_col].min()
+            delta = avg_with - avg_without
 
-                summary_data.append(
-                    {
-                        "keyword": kw,
-                        f"Δ {sort_col}": round(delta, 4),
-                        f"count within {top_or_bottom} 100": (has_kw["RANK"] <= 100).sum(),
-                        f"count within {top_or_bottom} 10": (has_kw["RANK"] <= 10).sum(),
-                        f"count within {top_or_bottom} 5": (has_kw["RANK"] <= 5).sum(),
-                        "mean (with kw)": round(avg_with, 4),
-                        "mean (without kw)": round(avg_without, 4),
-                        "n (with)": len(has_kw),
-                        "n (without)": len(no_kw),
-                        "mean metric rank": avg_rank,
-                    }
+            summary_data.append(
+                {
+                    "keyword": kw,
+                    f"Δ {sort_col}": round(delta, 4),
+                    f"count within {top_or_bottom} 100": (has_kw["RANK"] <= 100).sum(),
+                    f"count within {top_or_bottom} 10": (has_kw["RANK"] <= 10).sum(),
+                    f"count within {top_or_bottom} 5": (has_kw["RANK"] <= 5).sum(),
+                    "mean (with kw)": round(avg_with, 4),
+                    "mean (without kw)": round(avg_without, 4),
+                    "n (with)": len(has_kw),
+                    "n (without)": len(no_kw),
+                    "mean metric rank": avg_rank,
+                }
+            )
+
+            st.write(f"#### Effect of `{kw}`")
+            st.write(f"Compared `{len(has_kw)}` metrics **with** '`{kw}`' vs `{len(no_kw)}` **without**.")
+            st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
+            st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
+            st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
+            st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK'] <= 10).sum()}")
+            st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
+
+            if st.checkbox(f"Show distributions for {kw}?"):
+                fig = go.Figure()
+
+                fig.add_trace(
+                    go.Histogram(
+                        x=has_kw[sort_col],
+                        name=f"Has '{kw}'",
+                        marker_color="blue",
+                        opacity=0.6,
+                        histnorm="probability density",
+                    )
                 )
 
-                st.write(f"#### Effect of `{kw}`")
-                st.write(f"Compared `{len(has_kw)}` metrics **with** '`{kw}`' vs `{len(no_kw)}` **without**.")
-                st.write(f"**Average on '{sort_col}' with '{kw}':** `{avg_with:.4f}`")
-                st.write(f"**Average on '{sort_col}' without '{kw}':** `{avg_without:.4f}`")
-                st.write(f"**Estimated effect on '{sort_col}' of '{kw}':** `{delta:+.4f}`")
-                st.write(f"{kw} count within {top_or_bottom} 100 by {sort_col}: {(has_kw['RANK'] <= 100).sum()}")
-                st.write(f"{kw} count within {top_or_bottom} 10 by {sort_col}: {(has_kw['RANK']<= 10).sum()}")
-                st.write(f"{kw} count within {top_or_bottom} 5 by {sort_col}: {(has_kw['RANK'] <= 5).sum()}")
-
-                if st.checkbox(f"Show distributions for {kw}?"):
-
-                    fig = go.Figure()
-
-                    fig.add_trace(
-                        go.Histogram(
-                            x=has_kw[sort_col],
-                            name=f"Has '{kw}'",
-                            marker_color="blue",
-                            opacity=0.6,
-                            histnorm="probability density",
-                        )
+                fig.add_trace(
+                    go.Histogram(
+                        x=no_kw[sort_col],
+                        name=f"No '{kw}'",
+                        marker_color="orange",
+                        opacity=0.6,
+                        histnorm="probability density",
                     )
+                )
 
-                    fig.add_trace(
-                        go.Histogram(
-                            x=no_kw[sort_col],
-                            name=f"No '{kw}'",
-                            marker_color="orange",
-                            opacity=0.6,
-                            histnorm="probability density",
-                        )
-                    )
+                fig.update_layout(
+                    barmode="overlay",
+                    title=f"Distribution of '{sort_col}' by presence of '{kw}'",
+                    xaxis_title=sort_col,
+                    yaxis_title="Density",
+                    legend={"x": 0.7, "y": 0.95},
+                )
 
-                    fig.update_layout(
-                        barmode="overlay",
-                        title=f"Distribution of '{sort_col}' by presence of '{kw}'",
-                        xaxis_title=sort_col,
-                        yaxis_title="Density",
-                        legend=dict(x=0.7, y=0.95),
-                    )
-
-                    st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
     if st.checkbox(f"Pairwise comparisons for {effect_keywords}"):
         pairwise_effect_rows = []
         for effect_keywords_pairwise in effect_keywords:
-
             effect_keywords_pairwise = [k.strip() for k in effect_keywords_pairwise.split(",")]
             st.write(f"#### {effect_keywords_pairwise}")
             pairs = find_keyword_difference_pairs(df, effect_keywords_pairwise, metric_col="METRIC")
@@ -993,8 +941,8 @@ if csv_paths_input:
 
             # Compute and display the average effect
             if pairwise_keyword_effects:
-                count_with = len(set(pair[0] for pair in pairs))
-                count_without = len(set(pair[1] for pair in pairs))
+                count_with = len({pair[0] for pair in pairs})
+                count_without = len({pair[1] for pair in pairs})
                 average_keyword_effect = sum(pairwise_keyword_effects) / len(pairwise_keyword_effects)
                 st.write(f"Found {len(pairs)}, with {count_with} having and {count_without} not.")
                 st.write(f"Average effect of {effect_keywords_pairwise} on '{sort_col}': {average_keyword_effect:.4f}")
@@ -1010,7 +958,7 @@ if csv_paths_input:
 
                 # Build the table data
                 effect_rows = []
-                for (metric_with_kw, metric_without_kw), effect in zip(pairs, pairwise_keyword_effects):
+                for (metric_with_kw, metric_without_kw), effect in zip(pairs, pairwise_keyword_effects, strict=False):
                     effect_rows.append(
                         {
                             "Metric With Keyword(s)": metric_with_kw,
@@ -1032,7 +980,7 @@ if csv_paths_input:
             if missing_metric_pairs:
                 st.warning(f"Some metric pairs were not found in the DataFrame: {missing_metric_pairs}")
 
-        st.write(f"### Pairwise Keyword Effects")
+        st.write("### Pairwise Keyword Effects")
         pairwise_effect_df = pd.DataFrame(pairwise_effect_rows)
         pairwise_effect_df = pairwise_effect_df.sort_values(by=f"Average Pairwise Effect ({sort_col_capitalized})")
         st.dataframe(pairwise_effect_df)
@@ -1044,7 +992,7 @@ if csv_paths_input:
             file_name=f"pairwise_keyword_effects_on_{sort_col}.csv",
             mime="text/csv",
         )
-        if st.checkbox(f"LaTeX version?"):
+        if st.checkbox("LaTeX version?"):
             latex_str = pairwise_effect_df.to_latex(
                 index=False,
                 caption=f"Average pairwise effect of various options on {sort_col_capitalized}",
@@ -1078,6 +1026,5 @@ if csv_paths_input:
         plot_grouped_bar_chart(df)
     else:
         plot_pareto_frontier(df)
-
 
 # conda activate /opt/home/cleong/envs/pose_eval_src && streamlit run pose_evaluation/evaluation/explore_metric_stats.py

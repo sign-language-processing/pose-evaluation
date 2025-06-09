@@ -7,7 +7,10 @@ from pose_evaluation.metrics.distance_measure import DistanceMeasure
 
 
 class DistanceMetric(PoseMetric):
-    """Computes the distance between two poses using the provided distance measure."""
+    """
+    Computes the distance between two poses using the provided distance
+    measure.
+    """
 
     def __init__(
         self,
