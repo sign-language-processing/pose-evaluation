@@ -1,9 +1,10 @@
 import shutil
 from pathlib import Path
 from typing import Callable, List, Union
-import torch
+
 import numpy as np
 import pytest
+import torch
 from pose_format import Pose
 
 

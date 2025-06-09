@@ -1,12 +1,10 @@
-from pathlib import Path
 import hashlib
 import re
-
 import warnings
+from pathlib import Path
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
 

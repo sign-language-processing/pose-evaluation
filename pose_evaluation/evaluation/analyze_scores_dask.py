@@ -1,16 +1,16 @@
-from pathlib import Path
 import argparse
 
+#         client.close()
+#         cluster.close()
+from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
-import pyarrow.dataset as ds
-
-import dask.dataframe as dd
 import dask.array as da
 import dask.bag as db
-
+import dask.dataframe as dd
+import numpy as np
+import pandas as pd
+import pyarrow.dataset as ds
+from dask.distributed import LocalCluster
 
 # # https://docs.dask.org/en/latest/dataframe-hive.html#reading-parquet-data-with-hive-partitioning
 # # https://docs.dask.org/en/stable/deploying.html?utm_source=tds&utm_medium=pyarrow-in-pandas-and-dask
@@ -55,12 +55,6 @@ import dask.bag as db
 #         print(f"Error during computation: {e}")
 #     finally:
 
-#         client.close()
-#         cluster.close()
-from pathlib import Path
-import argparse
-import dask.dataframe as dd
-from dask.distributed import LocalCluster
 
 if __name__ == "__main__":
     cluster = LocalCluster()

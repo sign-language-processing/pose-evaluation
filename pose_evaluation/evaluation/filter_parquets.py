@@ -1,11 +1,12 @@
-import shutil
 import json
-from pathlib import Path
-from datetime import datetime
+import shutil
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
+from datetime import datetime
+from pathlib import Path
+
 import typer
+from tqdm import tqdm
 
 app = typer.Typer()
 

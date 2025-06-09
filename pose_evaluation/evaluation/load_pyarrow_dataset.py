@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
-from pathlib import Path
-import pyarrow as pa
-import pyarrow.dataset as ds
-import pyarrow.compute as pc
-import pyarrow.parquet as pq
-
-from tqdm import tqdm
-
-from typing import Optional, List, Tuple, Set
 from collections import defaultdict
+from pathlib import Path
+from typing import List, Optional, Set, Tuple
+
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+from tqdm import tqdm
 
 
 def load_dataset(dataset_dir: Path):

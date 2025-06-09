@@ -1,5 +1,6 @@
-from typing import List
 from pathlib import Path
+from typing import List
+
 from pose_format import Pose
 
 from pose_evaluation.metrics.pose_processors import TrimMeaninglessFramesPoseProcessor

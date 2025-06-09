@@ -1,20 +1,20 @@
-import pytest
 import itertools
-from typing import List
 import unittest
+from typing import List
 
 import numpy as np
 import numpy.ma as ma
-
+import pytest
 from pose_format import Pose
+
 from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 from pose_evaluation.metrics.pose_processors import (
-    get_standard_pose_processors,
     FillMaskedOrInvalidValuesPoseProcessor,
     ReducePosesToCommonComponentsProcessor,
+    get_standard_pose_processors,
 )
 from pose_evaluation.metrics.test_distance_metric import get_poses
-from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 
 
 class TestDTWMetricL1(unittest.TestCase):

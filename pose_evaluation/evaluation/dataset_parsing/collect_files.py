@@ -1,6 +1,7 @@
-from pathlib import Path
 import fnmatch
-from typing import Optional, List, Dict
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import typer
 
 app = typer.Typer()

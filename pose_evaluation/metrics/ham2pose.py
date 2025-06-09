@@ -1,8 +1,8 @@
 # https://github.com/sign-language-processing/pose-evaluation/issues/31
-from pose_evaluation.metrics.distance_measure import DistanceMeasure, AggregatedDistanceMeasure
-from pose_evaluation.metrics.distance_metric import DistanceMetric
 from fastdtw import fastdtw  # type: ignore
 
+from pose_evaluation.metrics.distance_measure import AggregatedDistanceMeasure, DistanceMeasure
+from pose_evaluation.metrics.distance_metric import DistanceMetric
 
 # class Ham2Pose_MSE(AggregatedDistanceMetric):
 #     pass

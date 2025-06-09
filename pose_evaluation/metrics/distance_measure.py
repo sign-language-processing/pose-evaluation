@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Literal, Dict, Any
+from typing import Any, Dict, Literal
 
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
 

@@ -1,10 +1,10 @@
 from pathlib import Path
+
 import pandas as pd
-from tqdm import tqdm
 from pose_format import Pose
+from tqdm import tqdm
 
 from pose_evaluation.evaluation.create_metrics import get_metrics
-
 from pose_evaluation.evaluation.load_splits_and_run_metrics import get_filtered_metrics
 
 

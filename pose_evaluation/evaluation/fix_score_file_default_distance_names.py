@@ -3,11 +3,12 @@ import argparse
 import logging
 import re
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
+
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol, load_score_csv
 
 # --- Constants & Regexes ------------------------------------------------

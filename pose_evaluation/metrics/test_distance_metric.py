@@ -7,7 +7,6 @@ from pose_format.numpy import NumPyPoseBody
 
 from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance
 from pose_evaluation.metrics.distance_metric import DistanceMetric
-
 from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
 
 

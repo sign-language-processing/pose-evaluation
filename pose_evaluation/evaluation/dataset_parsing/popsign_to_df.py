@@ -4,13 +4,12 @@ from typing import Optional
 import pandas as pd
 import typer
 
-
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
-    file_paths_list_to_df,
-    df_to_standardized_df,
     DatasetDFCol,
     convert_eng_to_ase_gloss_translations,
+    df_to_standardized_df,
+    file_paths_list_to_df,
 )
 
 app = typer.Typer()

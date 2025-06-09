@@ -1,8 +1,9 @@
-import streamlit as st
-import pandas as pd
-from pathlib import Path
-from tqdm import tqdm
 import random
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+from tqdm import tqdm
 
 
 def display_video_for_gloss(rows: pd.DataFrame, gloss_label: str, key_prefix: str):

@@ -1,6 +1,7 @@
-from pathlib import Path
-import pandas as pd
 from io import StringIO
+from pathlib import Path
+
+import pandas as pd
 
 """Trying to combine Sem-Lex, ASL Citizen, ASL Knowledge Graph and "Known Lookalikes" from 
 """

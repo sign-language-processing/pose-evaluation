@@ -2,44 +2,43 @@
 
 They are given names based on the settings. E.g. 'trimmed_dtw' would be dynamic time warping with trimming."""
 
-import itertools
-from typing import Literal, Optional, List
-from pathlib import Path
 import copy
+import itertools
 import re
+from pathlib import Path
+from typing import List, Literal, Optional
 
 import pandas as pd
 
+from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
+from pose_evaluation.metrics.distance_measure import AggregatedPowerDistance, DistanceMeasure
 from pose_evaluation.metrics.distance_metric import DistanceMetric
-from pose_evaluation.metrics.distance_measure import DistanceMeasure, AggregatedPowerDistance
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-from pose_evaluation.metrics.nonsense_measures import Return4Measure
 from pose_evaluation.metrics.dtw_metric import (
-    DTWDTAIImplementationDistanceMeasure,
-    DTWAggregatedScipyDistanceMeasure,
-    DTWOptimizedDistanceMeasure,
     DTWAggregatedDistanceMeasure,
     DTWAggregatedPowerDistanceMeasure,
+    DTWAggregatedScipyDistanceMeasure,
+    DTWDTAIImplementationDistanceMeasure,
+    DTWOptimizedDistanceMeasure,
 )
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+from pose_evaluation.metrics.nonsense_measures import Return4Measure
 from pose_evaluation.metrics.pose_processors import (
-    RemoveWorldLandmarksProcessor,
-    HideLegsPosesProcessor,
-    ReducePosesToCommonComponentsProcessor,
-    TrimMeaninglessFramesPoseProcessor,
-    NormalizePosesProcessor,
+    AddTOffsetsToZPoseProcessor,
+    FillMaskedOrInvalidValuesPoseProcessor,
+    FirstFramePadShorterPosesProcessor,
     GetHandsOnlyHolisticPoseProcessor,
+    GetYoutubeASLKeypointsPoseProcessor,
+    HideLegsPosesProcessor,
     InterpolateAllToSetFPSPoseProcessor,
+    MaskInvalidValuesPoseProcessor,
+    NormalizePosesProcessor,
     ReduceHolisticPoseProcessor,
+    ReducePosesToCommonComponentsProcessor,
+    RemoveWorldLandmarksProcessor,
+    TrimMeaninglessFramesPoseProcessor,
     ZeroPadShorterPosesProcessor,
     get_standard_pose_processors,
-    FillMaskedOrInvalidValuesPoseProcessor,
-    MaskInvalidValuesPoseProcessor,
-    GetYoutubeASLKeypointsPoseProcessor,
-    FirstFramePadShorterPosesProcessor,
-    AddTOffsetsToZPoseProcessor,
 )
-from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
-
 
 # --- Constants & Regexes ------------------------------------------------
 # Signature: default_distance:<float>

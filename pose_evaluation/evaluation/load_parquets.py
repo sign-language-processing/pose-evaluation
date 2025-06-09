@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 import argparse
-from collections import defaultdict
-from typing import List, Optional, Union
-from pathlib import Path
 import random
+from collections import defaultdict
+from pathlib import Path
+from typing import List, Optional, Union
 
 import pandas as pd
-from tqdm import tqdm
 import pyarrow as pa
-import pyarrow.parquet as pq
-import pyarrow.dataset as ds
 import pyarrow.compute as pc
-
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+from tqdm import tqdm
 
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
 

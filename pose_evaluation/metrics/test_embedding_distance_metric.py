@@ -1,7 +1,7 @@
 import itertools
 import logging
 from pathlib import Path
-from typing import List, Callable, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np

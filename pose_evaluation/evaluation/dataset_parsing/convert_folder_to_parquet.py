@@ -2,8 +2,8 @@
 
 import argparse
 from pathlib import Path
-import pandas as pd
 
+import pandas as pd
 from tqdm import tqdm
 
 from pose_evaluation.evaluation.score_dataframe_format import load_score_csv

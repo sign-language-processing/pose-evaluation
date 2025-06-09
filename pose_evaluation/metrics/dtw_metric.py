@@ -1,9 +1,10 @@
 import warnings
-from fastdtw import fastdtw  # type: ignore
-from dtaidistance import dtw_ndim
-from scipy.spatial.distance import cdist
+
 import numpy as np
 import numpy.ma as ma  # pylint: disable=consider-using-from-import
+from dtaidistance import dtw_ndim
+from fastdtw import fastdtw  # type: ignore
+from scipy.spatial.distance import cdist
 from tqdm import tqdm
 
 from pose_evaluation.metrics.distance_measure import (

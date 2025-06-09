@@ -1,23 +1,22 @@
 import concurrent.futures
+import math
+import random
+import time
 from collections import defaultdict
 from itertools import product
-import math
-import time
-from typing import List, Optional, Annotated
 from pathlib import Path
-import random
+from typing import Annotated, List, Optional
 
-from tqdm import tqdm
-from pose_format import Pose
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import typer
+from pose_format import Pose
+from tqdm import tqdm
 
-from pose_evaluation.evaluation.create_metrics import get_metrics, get_embedding_metrics
-from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.evaluation.create_metrics import get_embedding_metrics, get_metrics
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol
 from pose_evaluation.evaluation.score_dataframe_format import ScoreDFCol
+from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
 
 app = typer.Typer()

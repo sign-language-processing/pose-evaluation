@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Iterable, List, Sequence, cast, Union
-from tqdm import tqdm
+from typing import Iterable, List, Sequence, Union, cast
 
 from pose_format import Pose
+from tqdm import tqdm
 
-from pose_evaluation.metrics.base import BaseMetric, Signature, Score
-from pose_evaluation.metrics.pose_processors import PoseProcessor
-from pose_evaluation.metrics.pose_processors import get_standard_pose_processors
+from pose_evaluation.metrics.base import BaseMetric, Score, Signature
+from pose_evaluation.metrics.pose_processors import PoseProcessor, get_standard_pose_processors
 
 
 class PoseMetricSignature(Signature):

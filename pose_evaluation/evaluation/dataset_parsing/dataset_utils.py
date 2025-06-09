@@ -1,6 +1,6 @@
 from collections import defaultdict
-from typing import List
 from pathlib import Path
+from typing import List
 
 import pandas as pd
 

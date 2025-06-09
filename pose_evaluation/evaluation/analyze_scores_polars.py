@@ -1,16 +1,11 @@
-import polars as pl
-from pathlib import Path
 import argparse
-import polars as pl
-from pathlib import Path
-
-import polars as pl
-
-
-import time
-import psutil
 import os
 import statistics
+import time
+from pathlib import Path
+
+import polars as pl
+import psutil
 
 
 def run_experiments(path: Path, limit_rows: int = 100_000_000, runs: int = 10):
@@ -326,9 +321,10 @@ def compute_map_by_metric_safe_chunked(
     return result_df
 
 
-import polars as pl
 import time
 from pathlib import Path
+
+import polars as pl
 
 
 def compute_map_by_metric_memory_efficient(lf: pl.LazyFrame, limit_rows: None | int = None) -> pl.LazyFrame:

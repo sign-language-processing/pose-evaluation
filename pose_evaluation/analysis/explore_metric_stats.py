@@ -19,11 +19,7 @@ torch.classes.__path__ = [os.path.join(torch.__path__[0], torch.classes.__file__
 # # or simply:
 # torch.classes.__path__ = []
 
-from pose_evaluation.evaluation.interpret_name import (
-    descriptive_name,
-    interpret_name,
-    shorten_metric_name,
-)
+from pose_evaluation.evaluation.interpret_name import descriptive_name, interpret_name, shorten_metric_name
 
 METRIC_COL = "METRIC"
 SIGNATURE_COL = "SIGNATURE"

@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 import numpy as np
 import torch

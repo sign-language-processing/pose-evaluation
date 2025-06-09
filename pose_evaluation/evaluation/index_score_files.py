@@ -1,8 +1,8 @@
-from typing import Optional
 import argparse
-from pathlib import Path
-from collections import defaultdict
 import json
+from collections import defaultdict
+from pathlib import Path
+from typing import Optional
 
 from tqdm import tqdm
 

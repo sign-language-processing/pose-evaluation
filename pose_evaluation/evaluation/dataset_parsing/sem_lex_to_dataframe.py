@@ -6,12 +6,11 @@ import typer
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import collect_files_main
 from pose_evaluation.evaluation.dataset_parsing.dataset_utils import (
-    file_paths_list_to_df,
+    DatasetDFCol,
     deduplicate_by_video_id,
     df_to_standardized_df,
-    DatasetDFCol,
+    file_paths_list_to_df,
 )
-
 
 app = typer.Typer()
 

@@ -1,8 +1,10 @@
-from typing import List
-import typer
-import pandas as pd
-from pose_format import Pose
 from pathlib import Path
+from typing import List
+
+import pandas as pd
+import typer
+from pose_format import Pose
+
 from pose_evaluation.evaluation.create_metrics import get_metrics
 from pose_evaluation.evaluation.load_splits_and_run_metrics import get_filtered_metrics
 

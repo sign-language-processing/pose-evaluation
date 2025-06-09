@@ -1,10 +1,10 @@
-import typer
 from pathlib import Path
 
 import pandas as pd
+import typer
 
 from pose_evaluation.evaluation.dataset_parsing.collect_files import parse_id_and_model_name_from_embedding_file
-from pose_evaluation.evaluation.dataset_parsing.dataset_utils import file_paths_list_to_df, DatasetDFCol
+from pose_evaluation.evaluation.dataset_parsing.dataset_utils import DatasetDFCol, file_paths_list_to_df
 
 app = typer.Typer()
 

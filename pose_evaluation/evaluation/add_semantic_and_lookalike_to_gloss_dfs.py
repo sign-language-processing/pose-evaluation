@@ -1,10 +1,11 @@
 """WIP script to try and add relations to dataset_dfs, depends on fixing gloss/vocabulary matching problems"""
 
 from pathlib import Path
+
 import pandas as pd
 
-from pose_evaluation.evaluation.load_splits_and_run_metrics import combine_dataset_dfs
 from pose_evaluation.evaluation.combine_semantic_and_lookalike import create_gloss_tuple
+from pose_evaluation.evaluation.load_splits_and_run_metrics import combine_dataset_dfs
 
 # /opt/home/cleong/projects/pose-evaluation/pose_evaluation/evaluation/combine_semantic_and_lookalike.py
 

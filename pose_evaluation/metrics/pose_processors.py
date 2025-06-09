@@ -1,24 +1,21 @@
-from typing import Any, List, Union, Iterable, Callable
+from typing import Any, Callable, Iterable, List, Union
 
-
-from tqdm import tqdm
 from numpy import ma
-
 from pose_format import Pose
-from pose_format.utils.generic import pose_hide_legs, reduce_holistic, detect_known_pose_format
+from pose_format.utils.generic import detect_known_pose_format, pose_hide_legs, reduce_holistic
 from spoken_to_signed.gloss_to_pose.concatenate import trim_pose
+from tqdm import tqdm
 
 from pose_evaluation.metrics.base import Signature
 from pose_evaluation.utils.pose_utils import (
-    zero_pad_shorter_poses,
-    reduce_poses_to_intersection,
-    pose_fill_masked_or_invalid,
-    pose_mask_invalid_values,
+    add_z_offsets_to_pose,
     first_frame_pad_shorter_poses,
     get_youtube_asl_mediapipe_keypoints,
-    add_z_offsets_to_pose,
+    pose_fill_masked_or_invalid,
+    pose_mask_invalid_values,
+    reduce_poses_to_intersection,
+    zero_pad_shorter_poses,
 )
-
 
 PosesTransformerFunctionType = Callable[[Iterable[Pose]], List[Pose]]
 

@@ -9,18 +9,16 @@ from pose_evaluation.metrics.dtw_metric import (
     DTWAggregatedScipyDistanceMeasure,
     DTWDTAIImplementationDistanceMeasure,
 )
-from pose_evaluation.metrics.test_distance_metric import get_poses
+from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
+from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
 from pose_evaluation.metrics.pose_processors import (
-    NormalizePosesProcessor,
-    ZeroPadShorterPosesProcessor,
     HideLegsPosesProcessor,
+    NormalizePosesProcessor,
     ReduceHolisticPoseProcessor,
+    ZeroPadShorterPosesProcessor,
     get_standard_pose_processors,
 )
-
-from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceMetric
-
-from pose_evaluation.metrics.ham2pose import Ham2Pose_nMSE
+from pose_evaluation.metrics.test_distance_metric import get_poses
 
 if __name__ == "__main__":
     # Define file paths for test pose data
