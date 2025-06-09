@@ -6,4 +6,10 @@ repos:
       - id: ruff
         args: [--fix] # This includes formatting and many linting fixes
 
-  # - repo: lruf
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest pose_evaluation
+        language: system
+        types: [python]
