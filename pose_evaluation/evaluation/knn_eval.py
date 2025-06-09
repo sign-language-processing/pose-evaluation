@@ -199,9 +199,9 @@ def get_metric_filtered_datasets(
         else:
             try:
                 selected_metrics = [metric_values[int(choice) - 1]]
-            except (ValueError, IndexError) as e: # Catch the original exception as 'e' (or 'err')
+            except (ValueError, IndexError) as e:  # Catch the original exception as 'e' (or 'err')
                 typer.echo("Invalid selection.")
-                raise typer.Exit(code=1) from e # Chain the new exception to the original one
+                raise typer.Exit(code=1) from e  # Chain the new exception to the original one
     else:
         if metric == "all":
             selected_metrics = metric_values

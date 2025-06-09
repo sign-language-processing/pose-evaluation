@@ -18,7 +18,7 @@ def filter_parquet_files(
     glosses_to_include: str = typer.Option(..., help="Comma-separated list of glosses to include"),
     report_path: Path = typer.Option(None, help="Optional path to save a JSON report"),
 ):
-    glosses_set = set(g.strip().upper() for g in glosses_to_include.split(","))
+    glosses_set = {g.strip().upper() for g in glosses_to_include.split(",")}
     typer.echo(f"📂 Input path: {in_path}")
     typer.echo(f"📁 Output path: {out_path}")
     typer.echo(f"📌 Glosses to include: {len(glosses_set)}")
@@ -27,7 +27,7 @@ def filter_parquet_files(
     parquet_files = sorted(in_path.glob("*.parquet"))
     typer.echo(f"📁 Parquets found: {len(parquet_files)}")
 
-    # 1–3: Build metric → set of glosses
+    # 1-3: Build metric → set of glosses
     metric_to_glosses = defaultdict(set)
     gloss_to_files = defaultdict(list)
 

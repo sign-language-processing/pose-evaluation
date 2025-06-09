@@ -10,7 +10,7 @@ import copy
 import itertools
 import re
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import pandas as pd
 
@@ -123,9 +123,9 @@ def construct_metric(
     # Default Distances
     name_pieces.append(f"defaultdist{default_distance}")
     distance_measure.set_default_distance(default_distance)
-    assert (
-        f"default_distance:{default_distance}" in distance_measure.get_signature().format()
-    ), f"{distance_measure.default_distance}, {default_distance}"
+    assert f"default_distance:{default_distance}" in distance_measure.get_signature().format(), (
+        f"{distance_measure.default_distance}, {default_distance}"
+    )
 
     ##########################################
     # FPS Strategy
@@ -182,7 +182,7 @@ def get_embedding_metrics(df: pd.DataFrame) -> list:
 def get_metrics(
     measures: list[DistanceMeasure] | None = None,
     include_return4=True,
-    metrics_out: Optional[Path] = None,
+    metrics_out: Path | None = None,
     include_masked: bool | None = False,
 ):
     metrics = []

@@ -1,15 +1,20 @@
 files: ^pose_evaluation/
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.13 # Or the latest stable version
+    # Ruff version.
+    rev: v0.11.13
     hooks:
-      - id: ruff
-        args: [--fix] # This includes formatting and many linting fixes
+      # Run the linter.
+      - id: ruff-check
+        args: [--fix]
+      # Run the formatter.
+      - id: ruff-format
 
   - repo: local
     hooks:
       - id: pytest
         name: pytest
-        entry: pytest pose_evaluation
+        entry: pytest # Just 'pytest'
         language: system
         types: [python]
+        pass_filenames: false

@@ -79,14 +79,14 @@ def test_get_metrics_uniqueness_and_consistency(include_return4, include_masked)
     distance_measure_ids = [id(m.distance_measure) for m in metrics]
 
     # 1. All names are unique
-    assert len(metric_names) == len(
-        set(metric_names)
-    ), f"Duplicate metric names found for include_return4={include_return4}, include_masked={include_masked}"
+    assert len(metric_names) == len(set(metric_names)), (
+        f"Duplicate metric names found for include_return4={include_return4}, include_masked={include_masked}"
+    )
 
     # 2. All signatures are unique
-    assert len(metric_sigs) == len(
-        set(metric_sigs)
-    ), f"Duplicate metric signatures found for include_return4={include_return4}, include_masked={include_masked}"
+    assert len(metric_sigs) == len(set(metric_sigs)), (
+        f"Duplicate metric signatures found for include_return4={include_return4}, include_masked={include_masked}"
+    )
 
     # 3. No reused DistanceMeasure objects
     assert len(distance_measure_ids) == len(set(distance_measure_ids)), (

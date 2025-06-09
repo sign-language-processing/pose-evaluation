@@ -1,26 +1,30 @@
 name: Test
 
-
 on:
   push:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
 
-
 jobs:
   test:
-    name: Test
+    name: Run Tests
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4 # Recommended: uses latest stable v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5 # Recommended: uses latest stable v5
         with:
           python-version: '3.12'
+          cache: 'pip' # Enable pip caching
 
-      - name: Install Requirements
+      - name: Install Dependencies
+        # This will install your project in editable mode and its dev dependencies,
+        # leveraging the pip cache if available.
         run: pip install .[dev]
 
-      - name: Test Code
+      - name: Run Pytest on pose_evaluation
         run: pytest pose_evaluation

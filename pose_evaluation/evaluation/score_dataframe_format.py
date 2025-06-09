@@ -49,10 +49,10 @@ def load_score_csv(csv_file: Path):
     scores_csv_df[ScoreDFCol.SIGNATURE] = scores_csv_df[ScoreDFCol.SIGNATURE].apply(
         lambda x: x.split("=")[0].strip() if "=" in x else x.strip()
     )
-    assert (
-        len(scores_csv_df[ScoreDFCol.METRIC].unique()) == 1
-    ), f"csv_file {csv_file} has multiple metric names: {scores_csv_df[ScoreDFCol.METRIC].unique()} "
-    assert (
-        len(scores_csv_df[ScoreDFCol.SIGNATURE].unique()) == 1
-    ), f"More than one signature! {csv_file}, {scores_csv_df[ScoreDFCol.SIGNATURE].unique()}"
+    assert len(scores_csv_df[ScoreDFCol.METRIC].unique()) == 1, (
+        f"csv_file {csv_file} has multiple metric names: {scores_csv_df[ScoreDFCol.METRIC].unique()} "
+    )
+    assert len(scores_csv_df[ScoreDFCol.SIGNATURE].unique()) == 1, (
+        f"More than one signature! {csv_file}, {scores_csv_df[ScoreDFCol.SIGNATURE].unique()}"
+    )
     return scores_csv_df

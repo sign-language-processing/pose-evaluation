@@ -94,17 +94,13 @@ if __name__ == "__main__":
     # ASL-Lex Vocabulary for compatibility
     # Remove underscores unless they are immediately before digits at the end
     sem_related_df["subject"] = (
-        sem_related_df["subject"]
-        .str.replace("asllex:", "", regex=False)
-        .str.replace("#", "", regex=False)
+        sem_related_df["subject"].str.replace("asllex:", "", regex=False).str.replace("#", "", regex=False)
         # .str.upper()
         # .str.replace(r"_(?!\d+$)", "", regex=True)
     )
 
     sem_related_df["object"] = (
-        sem_related_df["object"]
-        .str.replace("asllex:", "", regex=False)
-        .str.replace("#", "", regex=False)
+        sem_related_df["object"].str.replace("asllex:", "", regex=False).str.replace("#", "", regex=False)
         # .str.upper()
         # .str.replace(r"_(?!\d+$)", "", regex=True)  # oh_i_see -> ohisee, but FISHING_2 left unchanged
     )

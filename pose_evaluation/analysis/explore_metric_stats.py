@@ -91,7 +91,8 @@ def plot_pareto_frontier(df: pd.DataFrame):
                     ),
                     hovertemplate=f"{DESCRIPTIVE_NAME_COL}: %{{customdata[0]}}<br>"
                     #   f"{'METRIC: %{{customdata[1]}}<br>' if METRIC_COL in group else ''}"
-                    f"{METRIC_COL}: %{{customdata[1]}}<br>" f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
+                    f"{METRIC_COL}: %{{customdata[1]}}<br>"
+                    f"{col1}: %{{x:.3f}}<br>{col2}: %{{y:.3f}}<extra></extra>",
                 )
             )
     else:

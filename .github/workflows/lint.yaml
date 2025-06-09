@@ -1,5 +1,4 @@
-name: Lint
-
+name: Lint and Format
 
 on:
   push:
@@ -7,20 +6,27 @@ on:
   pull_request:
     branches: [ master, main ]
 
-
 jobs:
-  test:
-    name: Lint
+  lint-and-format:
+    name: Lint and Format Check
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4 # Use the latest stable version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5 # Use the latest stable version
         with:
-          python-version: '3.12'
+          python-version: '3.12' # Specify your Python version
 
-      - name: Install Requirements
-        run: pip install .[dev]
+      - name: Install Ruff
+        run: pip install ruff
 
-      - name: Lint Code
-        run: pylint pose_evaluation
+      - name: Run Ruff Checks (Linting)
+        run: ruff check pose_evaluation
+
+      - name: Run Ruff Format Check
+        # The --check flag makes 'ruff format' exit with a non-zero code if files are not formatted,
+        # ensuring the CI pipeline fails.
+        run: ruff format pose_evaluation --check

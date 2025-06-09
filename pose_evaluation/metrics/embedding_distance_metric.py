@@ -1,5 +1,5 @@
 import logging
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 ValidDistanceKinds = Literal["cosine", "euclidean", "manhattan", "dot"]
-TensorConvertableType = Union[list, np.ndarray, Tensor]
+TensorConvertableType = list | np.ndarray | Tensor
 
 
 class EmbeddingDistanceMetric(EmbeddingMetric):
@@ -132,9 +132,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         except RuntimeError as e:
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
-        assert hypotheses.ndim == 2 and references.ndim == 2, (
-            f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
-        )
+        assert (
+            hypotheses.ndim == 2 and references.ndim == 2
+        ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 
