@@ -16,13 +16,17 @@ and our methods reflect this differentiation.
 
 ---
 
-<!-- ## Usage
+## Usage
 
-```bash
-# (TODO) pip install the package
-# (TODO) how to construct a metric
-# Metric signatures, preprocessors
-``` -->
+
+For a demonstration of how to use the package, see https://colab.research.google.com/drive/1Hd7dQ93GO1shCMbKORwpiG0MEsj7dtC3?usp=sharing
+
+Demonstrates:
+* How to reconstruct the metrics from our paper.
+* How to use them to score poses, with signatures.
+* How to score poses with different lengths, missing/undetected keypoints, or different keypoint formats.
+
+
 
 ## Quantitative Evaluation
 
