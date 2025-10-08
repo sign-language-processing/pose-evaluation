@@ -1,69 +1,69 @@
 # Pose Evaluation
 
-The lack of automatic pose evaluation metrics is a major obstacle in the development of
-sign language generation models.
+This repository provides tools and metrics for the automatic evaluation of pose sequences,
+specifically designed for sign language applications.
 
-![Distribution of scores](assets/pose-eval-title-picture.png)
-
-## Goals
-
-The primary objective of this repository is to house a suite of
-automatic evaluation metrics specifically tailored for sign language poses.
-This includes metrics proposed by Ham2Pose[^1]
-as well as custom-developed metrics unique to our approach.
+This includes metrics proposed by Ham2Pose[^1] as well as custom-developed metrics unique to our approach.
 We recognize the distinct challenges in evaluating single signs versus continuous signing,
 and our methods reflect this differentiation.
 
----
+<img src="assets/pose-eval-title-picture.png" alt="Distribution of scores" width="500" style="display: block; margin: auto;"/>
 
-<!-- ## Usage
+## Usage
 
+Install the package:
 ```bash
-# (TODO) pip install the package
-# (TODO) how to construct a metric
-# Metric signatures, preprocessors
-``` -->
+pip install git+https://github.com/sign-language-processing/pose-evaluation.git
+```
 
-## Quantitative Evaluation
+Create a metric:
+```python
+from pose_evaluation.metrics.distance_metric import DistanceMetric
+from pose_evaluation.metrics.dtw_metric import DTWDTAIImplementationDistanceMeasure
+from pose_evaluation.metrics.pose_processors import *
 
-### Isolated Sign Evaluation
+DTWp = DistanceMetric(
+    name="DTWp",
+    # Select distance measure
+    distance_measure=DTWDTAIImplementationDistanceMeasure(),
+    # Provide pose processing pipeline
+    pose_preprocessors=[
+        TrimMeaninglessFramesPoseProcessor(),
+        GetHandsOnlyHolisticPoseProcessor(), # select only the hands
+        FillMaskedOrInvalidValuesPoseProcessor(masked_fill_value=10.0), # fill masked values with 10.0
+        ReducePosesToCommonComponentsProcessor() # reduce pairs of poses to common components
+    ],
+)
+```
 
-Given an isolated sign corpus such as ASL Citizen[^2], we repeat the evaluation of Ham2Pose[^1] on our metrics, ranking distance metrics by retrieval performance.
+Evaluate two pose sequences:
+```python
+from pose_format import Pose
 
-Evaluation is conducted on a combined dataset of ASL Citizen, Sem-Lex[^3], and PopSign ASL[^4].
+with open("hypothesis.pose", "rb") as f:
+    hypothesis = Pose.read(f)
+    
+with open("reference.pose", "rb") as f:
+    reference = Pose.read(f)
 
-For each sign class, we use all available samples as targets and sample four times as many distractors, yielding a 1:4 target-to-distractor ratio.
-
-For instance, for the sign _HOUSE_ with 40 samples (11 from ASL Citizen, 29 from Sem-Lex), we add 160 distractors and compute pairwise metrics from each target to all 199 other examples (We consistently discard scores for pose files where either the target or distractor could not be embedded with SignCLIP.).
-
-Retrieval quality is measured using Mean Average Precision (`mAP↑`) and Precision@10 (`P@10↑`). The complete evaluation covers 5,362 unique sign classes and 82,099 pose sequences.
-
-After several pilot runs, we finalized a subset of 169 sign classes with at most 20 samples each, ensuring consistent metric coverage. We evaluated 1200 distance-based variants and SignCLIP models with different checkpoints provided by the authors on this subset.
-
-The overall results show that DTW-based metrics outperform padding-based baselines. Embedding-based methods, particularly SignCLIP models fine-tuned on in-domain ASL data, achieve the strongest retrieval scores.
-
-<!-- Atwell style evaluations didn't get done. Nor did AUTSL -->
-
-## Evaluation Metrics
-
-For the study, we evaluated over 1200 Pose distance metrics, recording mAP and other retrieval performance characteristics.
-
-We find that the top metric
+DTWp.score(hypothesis, reference)
+```
 
 ### Contributing
 
-Please make sure to run `black pose_evaluation` before submitting a pull request.
+Please make sure to run `make format` before submitting a pull request.
 
 ## Cite
 
 If you use our toolkit in your research or projects, please consider citing the work.
 
 ```bib
-@misc{pose-evaluation2025,
-    title={Meaningful Pose-Based Sign Language Evaluation},
-    author={Zifan Jiang, Colin Leong, Amit Moryossef, Anne Göhring, Annette Rios, Oliver Cory, Maksym Ivashechkin, Neha Tarigopula, Biao Zhang, Rico Sennrich, Sarah Ebling},
-    howpublished={\url{https://github.com/sign-language-processing/pose-evaluation}},
-    year={2025}
+@inproceedings{Jiang2025PoseEvaluation,
+  title={Meaningful Pose-Based Sign Language Evaluation},
+  author={Zifan Jiang, Colin Leong, Amit Moryossef, Oliver Cory, Maksym Ivashechkin, Neha Tarigopula, Biao Zhang, Anne Göhring, Annette Rios, Rico Sennrich, Sarah Ebling},
+  booktitle={Conference on Machine Translation},
+  year={2025},
+  url={https://github.com/sign-language-processing/pose-evaluation}
 }
 ```
 

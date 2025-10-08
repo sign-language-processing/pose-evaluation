@@ -67,8 +67,6 @@ select = [
     "A",   # flake8-builtins
     "T",   # flake8-bandit
     "Q",   # flake8-quotes
-    # "ANN", # flake8-annotations
-    # "ERA", # eradicate (commented out code)
     "RUF", # Ruff specific rules
 ]
 
@@ -108,15 +106,6 @@ known-first-party = ["pose_evaluation"]
 # You can add other isort-specific configurations here if you had them previously, e.g.:
 # lines-after-imports = 2
 # force-single-line = false
-
-[tool.ruff.format]
-# This section configures Ruff's integrated formatter.
-# It should produce output highly compatible with Black.
-# No specific settings are usually needed here unless you have particular preferences
-# like quote-style (e.g., `quote-style = "single"` or `"double"`).
-# docstring-code-format = true # If you want Ruff to format code examples in docstrings
-# docstring-code-line-length = "dynamic" # or an integer like 88
-
 
 [tool.setuptools]
 packages = ["pose_evaluation", "pose_evaluation.metrics"]

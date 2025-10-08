@@ -24,7 +24,7 @@ jobs:
         run: pip install ruff
 
       - name: Run Ruff Checks (Linting)
-        run: ruff check pose_evaluation
+        run: ruff check .
 
       - name: Run Ruff Format Check
         # The --check flag makes 'ruff format' exit with a non-zero code if files are not formatted,
