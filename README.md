@@ -12,7 +12,8 @@ and our methods reflect this differentiation.
 ## Usage
 
 Install the package:
-```bash
+
+```shell
 pip install git+https://github.com/sign-language-processing/pose-evaluation.git
 ```
 

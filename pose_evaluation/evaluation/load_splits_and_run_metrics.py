@@ -22,9 +22,7 @@ from pose_evaluation.metrics.embedding_distance_metric import EmbeddingDistanceM
 app = typer.Typer()
 
 
-def combine_dataset_dfs(
-    dataset_df_files: list[Path], splits: list[str], filter_en_vocab: bool = False
-):
+def combine_dataset_dfs(dataset_df_files: list[Path], splits: list[str], filter_en_vocab: bool = False):
     dfs = []
     for file_path in dataset_df_files:
         if file_path.exists():
@@ -42,9 +40,7 @@ def combine_dataset_dfs(
             df = df[df[DatasetDFCol.SPLIT].isin(splits)]
             df[DatasetDFCol.DATASET] = file_path.stem
             typer.echo(f"Loaded {len(df)} rows from splits: {splits}")
-            typer.echo(
-                f"There are {len(df[DatasetDFCol.GLOSS].unique())} unique glosses"
-            )
+            typer.echo(f"There are {len(df[DatasetDFCol.GLOSS].unique())} unique glosses")
             dfs.append(df)
         else:
             typer.echo(f"❌ Missing: {file_path}")
@@ -63,8 +59,7 @@ def combine_dataset_dfs(
 def load_pose_files(df, path_col=DatasetDFCol.POSE_FILE_PATH, progress=False):
     paths = df[path_col].unique()
     return {
-        path: Pose.read(Path(path).read_bytes())
-        for path in tqdm(paths, desc="Loading poses", disable=not progress)
+        path: Pose.read(Path(path).read_bytes()) for path in tqdm(paths, desc="Loading poses", disable=not progress)
     }
 
 
@@ -87,14 +82,9 @@ def load_embedding(file_path: Path) -> np.ndarray:
 
 
 def load_embedding_for_pose(df, model, pose_file_path):
-    row = df[
-        (df[DatasetDFCol.POSE_FILE_PATH] == pose_file_path)
-        & (df[DatasetDFCol.EMBEDDING_MODEL] == model)
-    ]
+    row = df[(df[DatasetDFCol.POSE_FILE_PATH] == pose_file_path) & (df[DatasetDFCol.EMBEDDING_MODEL] == model)]
     if len(row) != 1:
-        raise ValueError(
-            f"Expected exactly one match for {pose_file_path}, model{model}: found {len(row)} rows."
-        )
+        raise ValueError(f"Expected exactly one match for {pose_file_path}, model{model}: found {len(row)} rows.")
     embedding_path = row.iloc[0][DatasetDFCol.EMBEDDING_FILE_PATH]
     return load_embedding(embedding_path)
 
@@ -113,9 +103,7 @@ def run_metrics_in_out_trials(
     gloss_dfs_folder: Path | None = None,
 ):
     query_gloss_vocabulary = df[DatasetDFCol.GLOSS].unique().tolist()
-    typer.echo(
-        f"The number of possible unique glosses to pick from is {len(query_gloss_vocabulary)}"
-    )
+    typer.echo(f"The number of possible unique glosses to pick from is {len(query_gloss_vocabulary)}")
 
     if gloss_dfs_folder is None:
         gloss_dfs_folder = out_path.parent / "gloss_dfs"
@@ -132,9 +120,7 @@ def run_metrics_in_out_trials(
         typer.echo(f"Prepending additional query glosses {additional_glosses}")
         combined = additional_glosses + query_gloss_vocabulary
         query_gloss_vocabulary = list(dict.fromkeys(combined))
-        typer.echo(
-            f"Query gloss vocabulary is now length {len(query_gloss_vocabulary)}"
-        )
+        typer.echo(f"Query gloss vocabulary is now length {len(query_gloss_vocabulary)}")
         typer.echo(f"Query gloss vocabulary: {query_gloss_vocabulary}")
 
     if shuffle_metrics:
@@ -149,9 +135,7 @@ def run_metrics_in_out_trials(
         for gloss in query_gloss_vocabulary:
             in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
             # TODO: this crashes if it's a new gloss without an in_gloss CSV. BUT there's some metric_inputs_df filtering with embeddings to think about later... a new function perhaps?
-            in_gloss_df = pd.read_csv(
-                in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str}
-            )
+            in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
             if len(in_gloss_df) <= skip_glosses_with_more_than_this_many:
                 typer.echo(
                     f"{gloss}, {len(in_gloss_df)}: less than or equal to the threshold {skip_glosses_with_more_than_this_many}. Adding to the gloss vocabulary"
@@ -170,9 +154,7 @@ def run_metrics_in_out_trials(
     # Also, the load_parquets script can handle the weird filenames no problem, and convert to pyarrow.
     for punc in ["/", " ", "\\", ".", "_"]:
         query_gloss_vocabulary = [g for g in query_gloss_vocabulary if punc not in g]
-        print(
-            f"Filtered out glosses with {punc}: there are now {len(query_gloss_vocabulary)}"
-        )
+        print(f"Filtered out glosses with {punc}: there are now {len(query_gloss_vocabulary)}")
 
     typer.echo(f"{query_gloss_vocabulary}")
     # All gloss-metric combinations
@@ -182,9 +164,7 @@ def run_metrics_in_out_trials(
         random.shuffle(gloss_metric_combos)
 
     if metric_count is not None:
-        typer.echo(
-            f"Selecting {metric_count} of {len(gloss_metric_combos)} gloss-metric combinations"
-        )
+        typer.echo(f"Selecting {metric_count} of {len(gloss_metric_combos)} gloss-metric combinations")
         gloss_metric_combos = gloss_metric_combos[:metric_count]
 
     scores_path = out_path / "scores"
@@ -200,9 +180,7 @@ def run_metrics_in_out_trials(
             typer.echo(f"{metric} is an Embedding Metric")
             if DatasetDFCol.EMBEDDING_MODEL in df.columns:
                 metric_inputs_df = df[df[DatasetDFCol.EMBEDDING_MODEL] == metric.model]
-                typer.echo(
-                    f"Found {len(metric_inputs_df)} embedding rows matching model {metric.model}"
-                )
+                typer.echo(f"Found {len(metric_inputs_df)} embedding rows matching model {metric.model}")
             else:
                 typer.echo(f"No {DatasetDFCol.EMBEDDING_MODEL} in dataframe. Skipping!")
                 continue
@@ -230,10 +208,7 @@ def run_metrics_in_out_trials(
         #     print(Path("gloss_counts.csv").resolve())
         #     exit()
         results = defaultdict(list)
-        results_path = (
-            scores_path
-            / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
-        )
+        results_path = scores_path / f"{gloss}_{metric.name}_outgloss_{out_gloss_multiplier}x_score_results.parquet"
         if results_path.exists():
             typer.echo(f"*** Results for {results_path} already exist. Skipping! ***")
             continue
@@ -241,14 +216,10 @@ def run_metrics_in_out_trials(
         in_gloss_df_path = gloss_dfs_folder / f"{gloss}_in.csv"
         if in_gloss_df_path.is_file():
             typer.echo(f"Reading in-gloss df from {in_gloss_df_path}")
-            in_gloss_df = pd.read_csv(
-                in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str}
-            )
+            in_gloss_df = pd.read_csv(in_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             typer.echo(f"Writing in-gloss df to {in_gloss_df_path}")
-            in_gloss_df = metric_inputs_df[
-                metric_inputs_df[DatasetDFCol.GLOSS] == gloss
-            ]
+            in_gloss_df = metric_inputs_df[metric_inputs_df[DatasetDFCol.GLOSS] == gloss]
             in_gloss_df.to_csv(in_gloss_df_path)
 
         if (
@@ -263,14 +234,10 @@ def run_metrics_in_out_trials(
         out_gloss_df_path = gloss_dfs_folder / f"{gloss}_out.csv"
         if out_gloss_df_path.is_file():
             typer.echo(f"Reading out-gloss df from {out_gloss_df_path}")
-            out_gloss_df = pd.read_csv(
-                out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str}
-            )
+            out_gloss_df = pd.read_csv(out_gloss_df_path, index_col=0, dtype={DatasetDFCol.GLOSS: str})
         else:
             typer.echo(f"Writing out-gloss df to {out_gloss_df_path}")
-            out_gloss_df = metric_inputs_df[
-                metric_inputs_df[DatasetDFCol.GLOSS] != gloss
-            ]
+            out_gloss_df = metric_inputs_df[metric_inputs_df[DatasetDFCol.GLOSS] != gloss]
             other_class_count = len(in_gloss_df) * out_gloss_multiplier
             out_gloss_df = out_gloss_df.sample(n=other_class_count, random_state=42)
             out_gloss_df.to_csv(out_gloss_df_path)
@@ -320,9 +287,7 @@ def run_metrics_in_out_trials(
                 end_time = time.perf_counter()
 
                 if score is None or score.score is None or np.isnan(score.score):
-                    typer.echo(
-                        f"⚠️ Invalid score for {hyp_path} vs {ref_path}: {score.score}"
-                    )
+                    typer.echo(f"⚠️ Invalid score for {hyp_path} vs {ref_path}: {score.score}")
                     typer.echo(metric.get_signature().format())
                     typer.echo(metric.pose_preprocessors)
 
@@ -341,9 +306,7 @@ def run_metrics_in_out_trials(
 
         typer.echo("\n")
         typer.echo("*" * 50)
-    typer.echo(
-        f"Query glosses had {len(query_gloss_vocabulary)}: {query_gloss_vocabulary}"
-    )
+    typer.echo(f"Query glosses had {len(query_gloss_vocabulary)}: {query_gloss_vocabulary}")
     typer.echo(f"Scores saved to {scores_path}")
 
 
@@ -368,9 +331,7 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
             result_rows.append(
                 {
                     ScoreDFCol.METRIC: metric.name,
-                    ScoreDFCol.SCORE: (
-                        score.score if score and score.score is not None else np.nan
-                    ),
+                    ScoreDFCol.SCORE: (score.score if score and score.score is not None else np.nan),
                     ScoreDFCol.GLOSS_A: hyp_row[DatasetDFCol.GLOSS],
                     ScoreDFCol.GLOSS_B: ref_row[DatasetDFCol.GLOSS],
                     ScoreDFCol.SIGNATURE: signature,
@@ -380,9 +341,7 @@ def compute_batch_pairs(hyp_chunk, ref_chunk, metric, signature, batch_filename)
                 }
             )
 
-    pd.DataFrame(result_rows).to_parquet(
-        batch_filename, index=False, compression="snappy"
-    )
+    pd.DataFrame(result_rows).to_parquet(batch_filename, index=False, compression="snappy")
     del hyp_pose_data
     del ref_pose_data
     del hyp_chunk
@@ -405,20 +364,14 @@ def run_metrics_full_distance_matrix_batched_parallel(
         f"Calculating {'intersplit' if intersplit else 'full'} distance matrix on {len(df)} poses "
         f"from {len(df[DatasetDFCol.DATASET].unique())} datasets, for {len(metrics)} metrics"
     )
-    typer.echo(
-        f"max_hyp is set to {max_hyp}, limiting number of hyp chunks if not None"
-    )
+    typer.echo(f"max_hyp is set to {max_hyp}, limiting number of hyp chunks if not None")
 
     if intersplit:
         splits = df[DatasetDFCol.SPLIT].unique().tolist()
         if len(splits) != 2:
-            raise ValueError(
-                f"Expected exactly two splits for intersplit comparison, got: {splits}"
-            )
+            raise ValueError(f"Expected exactly two splits for intersplit comparison, got: {splits}")
         else:
-            typer.echo(
-                f"Using {splits} from {df[DatasetDFCol.DATASET].unique()} datasets"
-            )
+            typer.echo(f"Using {splits} from {df[DatasetDFCol.DATASET].unique()} datasets")
 
         split_a, split_b = splits
         df_a = df[df[DatasetDFCol.SPLIT] == split_a].reset_index(drop=True)
@@ -450,44 +403,30 @@ def run_metrics_full_distance_matrix_batched_parallel(
     else:
         split_names = "+".join(df[DatasetDFCol.SPLIT].unique().tolist())
 
-    for i, metric in tqdm(
-        enumerate(metrics), total=len(metrics), desc="Iterating over metrics"
-    ):
+    for i, metric in tqdm(enumerate(metrics), total=len(metrics), desc="Iterating over metrics"):
         typer.echo("*" * 60)
         typer.echo(f"Metric #{i + 1}/{len(metrics)}: {metric.name}")
         signature = metric.get_signature().format()
         typer.echo(f"Metric Signature: {signature}")
-        typer.echo(
-            f"Batch Size: {batch_size}, so that's {batch_size * batch_size} distances per."
-        )
-        typer.echo(
-            f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})"
-        )
+        typer.echo(f"Batch Size: {batch_size}, so that's {batch_size * batch_size} distances per.")
+        typer.echo(f"For metric {i}: {total_batches} total batches expected ({batches_hyp}x{batches_ref})")
         if max_hyp is not None:
             typer.echo(
                 f"With max hyp {max_hyp}: like, {(max_hyp + batch_size) // batch_size}x{batches_ref} = {(max_hyp // batch_size) * batches_ref}?"
             )
 
-        metric_results_path = (
-            scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
-        )
+        metric_results_path = scores_path / f"batches_{metric.name}_{dataset_names}_{split_names}"
         metric_results_path.mkdir(parents=True, exist_ok=True)
         typer.echo(f"Saving batches to {metric_results_path}")
 
         existing_results = list(metric_results_path.glob("*.parquet"))
-        typer.echo(
-            f"{len(existing_results)} batches already exist; {total_batches - len(existing_results)} remaining."
-        )
+        typer.echo(f"{len(existing_results)} batches already exist; {total_batches - len(existing_results)} remaining.")
 
         futures = {}
         batch_id = 0
 
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=max_workers
-        ) as executor:
-            for hyp_start in tqdm(
-                range(0, len(df_a), batch_size), desc=f"Hyp batching for Metric {i}"
-            ):
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            for hyp_start in tqdm(range(0, len(df_a), batch_size), desc=f"Hyp batching for Metric {i}"):
                 if max_hyp is not None and hyp_start > max_hyp:
                     # typer.echo(f"Skipping hyp_start {hyp_start} due to max_hyp={max_hyp}")
                     continue
@@ -496,10 +435,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
 
                 for ref_start in range(0, len(df_b), batch_size):
                     ref_chunk = df_b.iloc[ref_start : ref_start + batch_size].copy()
-                    batch_filename = (
-                        metric_results_path
-                        / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
-                    )
+                    batch_filename = metric_results_path / f"batch_{batch_id:06d}_hyp{hyp_start}_ref{ref_start}.parquet"
 
                     if not batch_filename.exists():
                         future = executor.submit(
@@ -513,9 +449,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
                         futures[future] = batch_filename
 
                     batch_id += 1
-        typer.echo(
-            f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})"
-        )
+        typer.echo(f"Expecting {total_batches} total batches ({batches_hyp}x{batches_ref})")
         for future in tqdm(
             concurrent.futures.as_completed(futures),
             total=len(futures),
@@ -532,8 +466,7 @@ def run_metrics_full_distance_matrix_batched_parallel(
             merged_df = pd.concat(all_dfs, ignore_index=True)
 
             final_path = (
-                scores_path
-                / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
+                scores_path / f"full_matrix_{metric.name}_on_{dataset_names}_{split_names}_score_results.parquet"
             )
             merged_df.to_parquet(final_path, index=False, compression="snappy")
             typer.echo(f"✅ Final results written to {final_path}\n")
@@ -571,26 +504,14 @@ def get_filtered_metrics(
         metrics_to_use.extend(csv_metrics)
 
     if include_keywords is not None:
-        include_list = [
-            m.name
-            for m in metrics
-            if all(k.lower() in m.name.lower() for k in include_keywords)
-        ]
-        typer.echo(
-            f"Adding {len(include_list)} metrics that include all of: {include_keywords}"
-        )
+        include_list = [m.name for m in metrics if all(k.lower() in m.name.lower() for k in include_keywords)]
+        typer.echo(f"Adding {len(include_list)} metrics that include all of: {include_keywords}")
         metrics_to_use.extend(include_list)
         typer.echo(f"There are now {len(metrics_to_use)} metrics")
 
     if exclude_keywords is not None:
-        typer.echo(
-            f"Filtering metrics to those that exclude all of: {exclude_keywords}"
-        )
-        metrics_to_use = [
-            m
-            for m in metrics_to_use
-            if not any(k.lower() in m.lower() for k in exclude_keywords)
-        ]
+        typer.echo(f"Filtering metrics to those that exclude all of: {exclude_keywords}")
+        metrics_to_use = [m for m in metrics_to_use if not any(k.lower() in m.lower() for k in exclude_keywords)]
         typer.echo(f"There are now {len(metrics_to_use)} metrics")
 
     metrics_to_use_set = set(metrics_to_use)
@@ -604,9 +525,7 @@ def get_filtered_metrics(
     unmatched_metrics = [m for m in metrics_to_use if m not in metric_names]
 
     typer.echo(specific_metrics)
-    typer.echo(
-        f"{len(unmatched_metrics)} Unmatched metrics_to_use: {unmatched_metrics}"
-    )
+    typer.echo(f"{len(unmatched_metrics)} Unmatched metrics_to_use: {unmatched_metrics}")
     typer.echo(
         f"{len(filtered_metrics)} Filtered metrics, here are the first few: {[m.name for m in filtered_metrics[:10]]}"
     )
@@ -618,9 +537,7 @@ def get_filtered_metrics(
 def main(
     dataset_df_files: Annotated[
         list[Path],
-        typer.Argument(
-            help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID"
-        ),
+        typer.Argument(help="List of dataset csvs, with columns POSE_FILE_PATH, SPLIT, and VIDEO_ID"),
     ],
     splits: str | None = typer.Option(
         None,
@@ -631,9 +548,7 @@ def main(
         None,
         help="Comma-separated list of additional glosses to use for testing in addition to the ones selected by gloss_count",
     ),
-    out_gloss_multiplier: int | None = typer.Option(
-        4, help="Number of out-of-gloss items to sample"
-    ),
+    out_gloss_multiplier: int | None = typer.Option(4, help="Number of out-of-gloss items to sample"),
     metric_count: int | None = typer.Option(None, help="Number of metrics to sample"),
     filter_en_vocab: Annotated[
         bool,
@@ -647,16 +562,12 @@ def main(
         file_okay=False,
         help="Folder to save the results",
     ),
-    full: bool | None = typer.Option(
-        False, help="Whether to run FULL distance matrix with the specified dataset dfs"
-    ),
+    full: bool | None = typer.Option(False, help="Whether to run FULL distance matrix with the specified dataset dfs"),
     full_intersplit: bool | None = typer.Option(
         True,
         help="Whether to run FULL distance matrix with the specified dataset dfs, but between two splits",
     ),
-    max_workers: int | None = typer.Option(
-        4, help="How many workers to use for the full distance matrix?"
-    ),
+    max_workers: int | None = typer.Option(4, help="How many workers to use for the full distance matrix?"),
     full_matrix_max_hyp: int | None = typer.Option(
         None,
         help="Don't calculate rows of the full distance matrix past batches starting with this index",
@@ -665,12 +576,8 @@ def main(
         100,
         help="Batch size for the workers. This is the number of hyps, so distances per batch will be this squared",
     ),
-    filter_metrics: bool = typer.Option(
-        True, help="whether to use the filtered set of metrics"
-    ),
-    embedding_metrics: bool = typer.Option(
-        False, help="whether to add in embedding metric"
-    ),
+    filter_metrics: bool = typer.Option(True, help="whether to use the filtered set of metrics"),
+    embedding_metrics: bool = typer.Option(False, help="whether to add in embedding metric"),
     specific_metrics: list[str] = typer.Option(
         None,
         help="If specified, will add these metrics to the list of filtered metrics",

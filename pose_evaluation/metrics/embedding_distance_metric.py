@@ -132,9 +132,9 @@ class EmbeddingDistanceMetric(EmbeddingMetric):
         except RuntimeError as e:
             raise TypeError(f"Inputs must support conversion to device tensors: {e}") from e
 
-        assert (
-            hypotheses.ndim == 2 and references.ndim == 2
-        ), f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
+        assert hypotheses.ndim == 2 and references.ndim == 2, (
+            f"score_all received non-2D input: hypotheses: {hypotheses.shape}, references: {references.shape}"
+        )
 
         return self._metric_dispatch[self.kind](hypotheses, references)
 

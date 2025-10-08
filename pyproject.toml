@@ -12,7 +12,7 @@ dependencies = [
     "pose-format",
     "scipy",
     "torch",
-    "numpy",       # possibly could replace all with torch
+    "numpy", # possibly could replace all with torch
     # for various vector/tensor similarities and distances in torch
     "sentence-transformers",
     # For reading .csv files, etc
@@ -39,34 +39,35 @@ dev = [
     "ruff"
 ]
 
+[tool.black]
+line-length = 120
+
 [tool.ruff]
-# The `line-length` argument is for both formatter and linter.
-# Set to 120 to match your previous Black/Pylint configuration.
 line-length = 120
 
 # Target Python version. Ruff will use this to enable/disable rules.
 # Adjust to your project's Python version (e.g., "py38", "py39", "py310", "py311")
 target-version = "py312" # Example: adjust this to your actual Python version
 
-[tool.ruff.lint] 
+[tool.ruff.lint]
 # List of linter rules to enable.
 # "I" is for isort-compatible import sorting.
 # "D" is for pydocstyle (docstring style). You might need to refine 'ignore'
 # or disable specific 'D' rules if they conflict with 'docformatter' or your style.
 # See [https://docs.astral.sh/ruff/rules/](https://docs.astral.sh/ruff/rules/) for a full list and descriptions.
 select = [
-    "E",   # Error
-    "F",   # Pyflakes
-    "I",   # isort (import sorting)
-    "W",   # Warning
-    "C",   # Complexity
-    "N",   # Naming conventions
-    "D",   # pydocstyle (docstring style)
-    "UP",  # pyupgrade
-    "B",   # Bugbear
-    "A",   # flake8-builtins
-    "T",   # flake8-bandit
-    "Q",   # flake8-quotes
+    "E", # Error
+    "F", # Pyflakes
+    "I", # isort (import sorting)
+    "W", # Warning
+    "C", # Complexity
+    "N", # Naming conventions
+    "D", # pydocstyle (docstring style)
+    "UP", # pyupgrade
+    "B", # Bugbear
+    "A", # flake8-builtins
+    "T", # flake8-bandit
+    "Q", # flake8-quotes
     "RUF", # Ruff specific rules
 ]
 
@@ -116,8 +117,8 @@ testpaths = ["pose_evaluation"]
 
 [tool.coverage.run]
 omit = [
-  "pose_evaluation/*/test_*.py",
-  "pose_evaluation/*/conftest.py"
+    "pose_evaluation/*/test_*.py",
+    "pose_evaluation/*/conftest.py"
 ]
 
 
