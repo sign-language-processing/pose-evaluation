@@ -18,6 +18,7 @@ pip install git+https://github.com/sign-language-processing/pose-evaluation.git
 ```
 
 Create a metric:
+
 ```python
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.dtw_metric import DTWDTAIImplementationDistanceMeasure
@@ -38,17 +39,31 @@ DTWp = DistanceMetric(
 ```
 
 Evaluate two pose sequences:
+
 ```python
 from pose_format import Pose
 
 with open("hypothesis.pose", "rb") as f:
     hypothesis = Pose.read(f)
-    
+
 with open("reference.pose", "rb") as f:
     reference = Pose.read(f)
 
 DTWp.score(hypothesis, reference)
 ```
+
+### Demo Notebook
+
+For a demonstration of how to use the package, see the [demo notebook](datasets_to_dataframes_branch\examples\Pose_Evaluation_Example.ipynb)
+<a target="_blank" href="https://colab.research.google.com/github/github.com/sign-language-processing/pose-evaluation/examples/Pose_Evaluation_Example.ipynb">
+<img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
+
+Demonstrates:
+
+- How to reconstruct the metrics from our paper.
+- How to use them to score poses, with signatures.
+- How to score poses with different lengths, missing/undetected keypoints, or different keypoint formats.
 
 ### Contributing
 
