@@ -54,7 +54,7 @@ DTWp.score(hypothesis, reference)
 
 ### Demo Notebook
 
-For a demonstration of how to use the package, see the [demo notebook](datasets_to_dataframes_branch\examples\Pose_Evaluation_Example.ipynb)
+For a demonstration of how to use the package, see the [demo notebook](examples\Pose_Evaluation_Example.ipynb)
 <a target="_blank" href="https://colab.research.google.com/github/github.com/sign-language-processing/pose-evaluation/examples/Pose_Evaluation_Example.ipynb">
 <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
