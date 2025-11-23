@@ -109,7 +109,11 @@ known-first-party = ["pose_evaluation"]
 # force-single-line = false
 
 [tool.setuptools]
-packages = ["pose_evaluation", "pose_evaluation.metrics"]
+packages = [
+    "pose_evaluation",
+    "pose_evaluation.metrics",
+    "pose_evaluation.utils",
+]
 
 [tool.pytest.ini_options]
 addopts = "-v --cov=pose_evaluation --cov-report=term --cov-report=xml --cov-report=lcov --cov-report=html"
