@@ -97,7 +97,7 @@ class Score:
         return self.format()
 
 
-class BaseMetric(Generic[T], ABC):
+class BaseMetric(Generic[T], ABC):  # noqa: UP046
     """Base class for all metrics."""
 
     _SIGNATURE_TYPE = Signature
