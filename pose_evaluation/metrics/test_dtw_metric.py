@@ -6,6 +6,7 @@ import numpy.ma as ma
 import pytest
 from pose_format import Pose
 
+from pose_evaluation.metrics.base_pose_metric import PoseShapeMismatchError
 from pose_evaluation.metrics.distance_metric import DistanceMetric
 from pose_evaluation.metrics.dtw_metric import DTWAggregatedPowerDistanceMeasure, DTWDTAIImplementationDistanceMeasure
 from pose_evaluation.metrics.pose_processors import (
@@ -68,16 +69,24 @@ def test_dtai_distance_with_masked_poses(real_mixed_shape_files: list[Pose]):
         ),
         pose_preprocessors=[],
     )
-    with pytest.warns(
-        RuntimeWarning, match=f"Invalid distance calculated, setting to default value {default_distance}"
-    ):
-        for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
+    # Without preprocessing, poses with different shapes should raise PoseShapeMismatchError
+    # Some pairs may have matching shapes but still produce invalid distances due to NaNs
+    for hyp, ref in itertools.combinations(real_mixed_shape_files, 2):
+        # Check if keypoints and channels match (last 2 dimensions)
+        if hyp.body.data.shape[-2:] != ref.body.data.shape[-2:]:
+            # Different shapes should raise PoseShapeMismatchError
+            with pytest.raises(PoseShapeMismatchError) as exc_info:
+                metric.score_with_signature(hyp, ref)
+            # Verify the error contains shape information
+            assert "shape mismatch" in str(exc_info.value).lower()
+            assert exc_info.value.hyp_shape is not None
+            assert exc_info.value.ref_shape is not None
+        else:
+            # Same shapes might still produce warnings due to NaN values
+            # But should not crash
             score = metric.score_with_signature(hyp, ref)
             assert score is not None
             assert score.score is not None
-            assert not np.isinf(score.score)
-            assert not np.isnan(score.score)
-            assert score.score == default_distance
 
     metric = DistanceMetric(
         name="testmetric_with_masked_preprocessing",

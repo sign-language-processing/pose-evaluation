@@ -12,7 +12,10 @@ from pose_evaluation.metrics.pose_processors import PoseProcessor
 
 def make_fake_pose():
     """Returns a mocked Pose object."""
-    return MagicMock(spec=Pose)
+    pose = MagicMock()
+    # Mock the body.data.shape attribute for shape validation
+    pose.body.data.shape = (10, 1, 50, 3)  # (frames, persons, keypoints, channels)
+    return pose
 
 
 class DummyPoseMetric(PoseMetric):

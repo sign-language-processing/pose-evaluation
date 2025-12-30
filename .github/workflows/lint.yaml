@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5 # Use the latest stable version
         with:
-          python-version: '3.12' # Specify your Python version
+          python-version: '3.9' # Specify your Python version
 
       - name: Install Ruff
         run: pip install ruff

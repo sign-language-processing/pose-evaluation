@@ -9,6 +9,18 @@ from pose_evaluation.metrics.base import BaseMetric, Score, Signature
 from pose_evaluation.metrics.pose_processors import PoseProcessor, get_standard_pose_processors
 
 
+class PoseShapeMismatchError(ValueError):
+    """Raised when hypothesis and reference poses have mismatched shapes."""
+
+    def __init__(self, hyp_shape: tuple, ref_shape: tuple):
+        self.hyp_shape = hyp_shape
+        self.ref_shape = ref_shape
+        super().__init__(
+            f"Pose shape mismatch: hypothesis shape {hyp_shape} does not match reference shape {ref_shape}. "
+            f"Consider using pose preprocessors like ReducePosesToCommonComponentsProcessor to align shapes."
+        )
+
+
 class PoseMetricSignature(Signature):
     def __init__(self, name: str, args: dict):
         super().__init__(name, args)
@@ -38,6 +50,19 @@ class PoseMetric(BaseMetric[Pose], ABC):
     def score(self, hypothesis: Pose, reference: Pose):
         """For PoseMetrics, preprocessors are called before scoring."""
         hypothesis, reference = self.process_poses([hypothesis, reference])
+
+        # Validate that poses have compatible shapes
+        # Shape is (frames, persons, keypoints, channels)
+        # We only care that keypoints and channels match (last 2 dimensions)
+        hyp_shape = hypothesis.body.data.shape
+        ref_shape = reference.body.data.shape
+
+        if len(hyp_shape) != len(ref_shape):
+            raise PoseShapeMismatchError(hyp_shape=hyp_shape, ref_shape=ref_shape)
+
+        if hyp_shape[-2:] != ref_shape[-2:]:
+            raise PoseShapeMismatchError(hyp_shape=hyp_shape, ref_shape=ref_shape)
+
         return self._pose_score(hypothesis, reference)
 
     def score_all(

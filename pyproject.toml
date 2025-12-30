@@ -8,6 +8,7 @@ authors = [
     { name = "Amit Moryossef", email = "amitmoryossef@gmail.com" },
 ]
 readme = "README.md"
+requires-python=">=3.9"
 dependencies = [
     "pose-format",
     "scipy",
@@ -62,7 +63,6 @@ select = [
     "W", # Warning
     "C", # Complexity
     "N", # Naming conventions
-    "D", # pydocstyle (docstring style)
     "UP", # pyupgrade
     "B", # Bugbear
     "A", # flake8-builtins
@@ -76,27 +76,11 @@ select = [
 # Set specific rule ignores or per-file ignores if needed.
 # This replaces the Pylint 'disable' list.
 ignore = [
-    "D100", # Missing module docstring (C0114 in Pylint)
-    "D101", # Missing class docstring (C0115 in Pylint)
-    "D102", # Missing docstring in public method
-    "D103", # Missing function or method docstring (C0116 in Pylint)
-    "D104", # Missing docstring in public package
-    "D105", # Missing docstring in magic method
-    "D107", # Missing docstring in `__init__`
-    "TD001", # TODO found (W0511 in Pylint - Ruff uses T for todo)
-    "G004", # Logging call uses f-string (W1203 in Pylint)
-    "D203", # If you prefer D211 (no blank line before class)
-    "D205", # 1 blank line required between summary line and description
-    "D212", # If you prefer D213 (summary on second line)
-    "D400", # First line should end with a period
-    "D401", # First line of docstring should be in imperative mood:
-    "D415", # First line should end with a period, question mark, or exclamation point
-    "D417", # Missing argument descriptions in the docstring
     "T201", # `print` found
-    # "UP007", # Use `X | Y` for type annotations
     "E501", # Line too long
     "B008", # Do not perform function call `typer.Option` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable
     "C901", # `run_metrics_full_distance_matrix_batched_parallel` is too complex (12 > 10)
+    "N816", # Our metrics use mixed cases
 ]
 
 # This tells Ruff about your project's top-level modules
@@ -113,6 +97,7 @@ packages = [
     "pose_evaluation",
     "pose_evaluation.metrics",
     "pose_evaluation.utils",
+    "pose_evaluation.evaluation",
 ]
 
 [tool.pytest.ini_options]

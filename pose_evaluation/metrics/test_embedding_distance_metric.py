@@ -241,7 +241,7 @@ def test_score_all_against_self(
     distance_matrix_shape_checker,
 ) -> None:
     """Test the score_all function."""
-    scores = cosine_metric.score_all(embeddings, embeddings)
+    scores = cosine_metric.score_all(embeddings, embeddings).cpu()
     distance_matrix_shape_checker(len(embeddings), len(embeddings), scores)
     distance_range_checker(scores, min_val=0, max_val=2)
 
@@ -416,12 +416,10 @@ def test_score_all_list_of_ndarray_input(cosine_metric, distance_range_checker, 
 
 def test_device_handling(cosine_metric):  # pylint: disable=protected-access
     """Test device handling for the metric."""
-    assert cosine_metric.get_device().type in [
-        "cuda",
-        "cpu",
-    ], "Device should be either 'cuda' or 'cpu'."
     if torch.cuda.is_available():
         assert cosine_metric.get_device().type == "cuda", "Should use 'cuda' when available."
+    elif torch.mps.is_available():
+        assert cosine_metric.get_device().type == "mps", "Should use 'mps' when available."
     else:
         assert cosine_metric.get_device().type == "cpu", "Should use 'cpu' when CUDA is unavailable."
 
@@ -470,7 +468,7 @@ def test_unit_circle_points(
 @pytest.mark.parametrize("num_points, dim", [(20, 2)])
 def test_orthogonal_rows_with_repeats_2d(cosine_metric, num_points, dim):
     embeddings = generate_orthogonal_rows_with_repeats(num_points, dim)
-    distances = cosine_metric.score_all(embeddings, embeddings)
+    distances = cosine_metric.score_all(embeddings, embeddings).cpu()
     save_and_plot_distances(
         distances=distances,
         matrix_name="Orthogonal Rows (with repeats)",

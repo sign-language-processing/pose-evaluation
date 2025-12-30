@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5 # Recommended: uses latest stable v5
         with:
-          python-version: '3.12'
+          python-version: '3.9'
           cache: 'pip' # Enable pip caching
 
       - name: Install Dependencies

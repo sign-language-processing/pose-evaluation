@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from tqdm import tqdm
 
@@ -97,7 +97,7 @@ class Score:
         return self.format()
 
 
-class BaseMetric[T](ABC):  # Ensure it extends ABC
+class BaseMetric(Generic[T], ABC):
     """Base class for all metrics."""
 
     _SIGNATURE_TYPE = Signature
