@@ -8,7 +8,7 @@ authors = [
     { name = "Amit Moryossef", email = "amitmoryossef@gmail.com" },
 ]
 readme = "README.md"
-requires-python=">=3.9"
+requires-python=">=3.10"
 dependencies = [
     "pose-format",
     "scipy",
